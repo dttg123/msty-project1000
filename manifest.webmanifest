@@ -1,0 +1,10 @@
+{
+  "name": "MSTY Project",
+  "short_name": "MSTY",
+  "start_url": "./index.html#home",
+  "display": "standalone",
+  "background_color": "#080a0f",
+  "theme_color": "#090b10",
+  "description": "MSTY 1,000주 로드맵과 세후 배당 현금흐름 관리",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
