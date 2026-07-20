@@ -1,10 +1,25 @@
 {
-  "name": "MSTY Project",
-  "short_name": "MSTY",
-  "start_url": "./index.html#home",
+  "name": "MSTY PROJECT 1000",
+  "short_name": "MSTY 1000",
+  "description": "MSTY 1000주 달성, 배당 재투자와 원금회수를 기록하는 개인용 앱",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#080a0f",
-  "theme_color": "#090b10",
-  "description": "MSTY 1,000주 로드맵과 세후 배당 현금흐름 관리",
-  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+  "background_color": "#f4f5f9",
+  "theme_color": "#645bff",
+  "lang": "ko-KR",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
