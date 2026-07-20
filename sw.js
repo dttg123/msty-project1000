@@ -1,7 +1,7 @@
-const CACHE = 'msty-project1000-v3.0.0';
+const CACHE = 'msty-project1000-v3.0.1';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
-  './js/app.js', './js/firebase.js', './js/auth.js', './js/storage.js', './js/cloud.js'
+  './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js'
 ];
 
 self.addEventListener('install', event => {

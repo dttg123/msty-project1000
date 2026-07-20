@@ -189,7 +189,7 @@ function setCloudStatus(status, text) {
       setCloudStatus('saving','클라우드 저장 중');
       try {
         const payload=deepClone(state);
-        await saveCloudDocument(currentUser.uid,{state:payload,clientUpdatedAt:payload.meta.updatedAt,appVersion:'3.0.0'});
+        await saveCloudDocument(currentUser.uid,{state:payload,clientUpdatedAt:payload.meta.updatedAt,appVersion:'3.0.1'});
         lastCloudSyncAt=new Date().toISOString();
         setCloudStatus('ok','클라우드 저장됨');
       } catch(err){ console.error('Cloud save failed',err); setCloudStatus('error','클라우드 오류'); toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.'); }
