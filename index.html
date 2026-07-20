@@ -847,7 +847,7 @@
 
   <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
-  import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+  import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
   import { getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
   (() => {
@@ -952,7 +952,9 @@
       });
     }
 
-    const DB_NAME = 'MSTYProject1000DB';
+    const DB_NAME = 'MSTYProject1000DB_V2';
+    const LEGACY_DB_NAME = 'MSTYProject1000DB';
+    const LEGACY_SEED_FLAG = 'mstyPersonalSeedAppliedV112';
     const DB_VERSION = 1;
     const STORE = 'kv';
     const STATE_KEY = 'state';
@@ -1025,6 +1027,16 @@
       milestoneOpen: null
     };
 
+    function removeLegacyStorage() {
+      try { localStorage.removeItem(LEGACY_SEED_FLAG); } catch (_) {}
+      return new Promise(resolve => {
+        try {
+          const req = indexedDB.deleteDatabase(LEGACY_DB_NAME);
+          req.onsuccess = req.onerror = req.onblocked = () => resolve();
+        } catch (_) { resolve(); }
+      });
+    }
+
     function openDB() {
       return new Promise((resolve,reject) => {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -1085,7 +1097,7 @@
       setCloudStatus('saving','클라우드 저장 중');
       try {
         const payload=deepClone(state);
-        await setDoc(cloudDocRef(),{state:payload,updatedAt:serverTimestamp(),clientUpdatedAt:payload.meta.updatedAt,appVersion:'2.0'},{merge:true});
+        await setDoc(cloudDocRef(),{state:payload,updatedAt:serverTimestamp(),clientUpdatedAt:payload.meta.updatedAt,appVersion:'2.0.3'},{merge:true});
         lastCloudSyncAt=new Date().toISOString();
         setCloudStatus('ok','클라우드 저장됨');
       } catch(err){ console.error('Cloud save failed',err); setCloudStatus('error','클라우드 오류'); toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.'); }
@@ -2078,15 +2090,26 @@
     function hideAuthGate() { const gate=document.getElementById('authGate'); if(gate) gate.classList.add('hidden'); }
     async function loginWithGoogle() {
       const btn=document.getElementById('googleLoginBtn'); if(btn) btn.disabled=true;
-      const status=document.getElementById('authGateStatus'); if(status) status.textContent='Google 로그인 창을 여는 중…';
+      const status=document.getElementById('authGateStatus');
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.matchMedia?.('(hover: none)').matches;
       try {
+        await setPersistence(auth,browserLocalPersistence);
+        if (isMobile) {
+          if(status) status.textContent='Google 로그인 화면으로 이동합니다…';
+          await signInWithRedirect(auth,googleProvider);
+          return;
+        }
+        if(status) status.textContent='Google 로그인 창을 여는 중…';
         await signInWithPopup(auth,googleProvider);
       } catch(err) {
-        console.warn('Popup login fallback',err);
-        if(['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request','auth/operation-not-supported-in-this-environment'].includes(err.code)){
-          if(status) status.textContent='페이지 이동 방식으로 로그인합니다…';
-          await signInWithRedirect(auth,googleProvider);
-        } else { if(status) status.textContent='로그인에 실패했습니다. 다시 눌러 주세요.'; toast('Google 로그인에 실패했습니다.'); }
+        console.error('Google login error',err);
+        const msg = err?.code === 'auth/unauthorized-domain'
+          ? '승인된 도메인 설정을 확인해 주세요.'
+          : err?.code === 'auth/network-request-failed'
+            ? '인터넷 연결을 확인한 뒤 다시 눌러 주세요.'
+            : '로그인에 실패했습니다. 다시 눌러 주세요.';
+        if(status) status.textContent=msg;
+        toast(msg);
       } finally { if(btn) btn.disabled=false; }
     }
     async function chooseInitialSync(cloudState) {
@@ -2128,9 +2151,16 @@
       },err=>{console.error(err);setCloudStatus('error','동기화 오류');});
       lastCloudSyncAt=new Date().toISOString(); setCloudStatus('ok','클라우드 연결됨');
     }
-    function initAuth() {
+    async function initAuth() {
       document.getElementById('googleLoginBtn')?.addEventListener('click',loginWithGoogle);
-      getRedirectResult(auth).catch(err=>console.warn('Redirect result',err));
+      try {
+        await setPersistence(auth,browserLocalPersistence);
+        await getRedirectResult(auth);
+      } catch(err) {
+        console.error('Redirect result',err);
+        const status=document.getElementById('authGateStatus');
+        if(status) status.textContent='로그인 처리 중 오류가 발생했습니다. 다시 눌러 주세요.';
+      }
       onAuthStateChanged(auth,async user=>{
         if(user) await connectCloudForUser(user);
         else { currentUser=null; cloudUnsubscribe?.(); cloudUnsubscribe=null; setSaveStatus('로그인 필요'); showAuthGate('Google로 로그인하면 자동 동기화됩니다.'); }
@@ -2151,6 +2181,7 @@
 
     async function init() {
       try {
+        await removeLegacyStorage();
         await openDB();
         state=migrate(await dbGet(STATE_KEY));
         applyTheme(state.settings.appearance||'system');
