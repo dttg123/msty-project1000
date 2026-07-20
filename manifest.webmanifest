@@ -1,7 +1,7 @@
 {
-  "name": "MSTY PROJECT 1000",
+  "name": "MSTY PROJECT 1000 V2.0",
   "short_name": "MSTY 1000",
-  "description": "MSTY 1000주 달성, 배당 재투자와 원금회수를 기록하는 개인용 앱",
+  "description": "Google 로그인과 클라우드 동기화를 지원하는 MSTY 1000주 프로젝트 앱",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

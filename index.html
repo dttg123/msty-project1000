@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <title>MSTY PROJECT 1000 · V1.2</title>
+  <title>MSTY PROJECT 1000 · V2.0</title>
   <meta name="color-scheme" content="light dark" />
   <script>
     (() => {
@@ -749,6 +749,32 @@
       .interactive-card:hover { transform: translateY(-1px); }
       .nav-btn:hover { color: var(--accent); }
     }
+
+    .auth-gate { position:fixed; inset:0; z-index:120; display:grid; place-items:center; padding:24px; background:radial-gradient(circle at 85% 0%,rgba(100,91,255,.20),transparent 38%),var(--bg); transition:opacity .25s ease,visibility .25s ease; }
+    .auth-gate.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+    .auth-card { width:min(100%,420px); padding:30px 24px; border-radius:28px; background:var(--surface-strong); border:1px solid var(--line); box-shadow:var(--shadow); text-align:center; }
+    .auth-logo { width:62px; height:62px; margin:0 auto 18px; border-radius:20px; display:grid; place-items:center; background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:white; font-size:28px; font-weight:900; box-shadow:0 12px 28px rgba(100,91,255,.26); }
+    .auth-card h2 { margin:0 0 10px; font-size:24px; letter-spacing:-.04em; }
+    .auth-card p { margin:0 0 22px; color:var(--muted); font-size:14px; line-height:1.65; }
+    .auth-login-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:10px; }
+    .google-g { width:24px; height:24px; border-radius:50%; display:grid; place-items:center; background:white; color:#4285f4; font-weight:900; }
+    #authGateStatus { margin-top:14px; min-height:18px; }
+    .cloud-card { overflow:hidden; }
+    .account-row { display:flex; align-items:center; gap:12px; min-width:0; }
+    .account-avatar { width:44px; height:44px; border-radius:50%; object-fit:cover; background:var(--accent-soft); border:1px solid var(--line); }
+    .account-avatar-fallback { display:grid; place-items:center; color:var(--accent); font-weight:900; }
+    .account-copy { min-width:0; flex:1; }
+    .account-name { font-weight:850; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .account-email { margin-top:3px; font-size:12px; color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    .sync-line { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; padding:12px 14px; border-radius:15px; background:var(--accent-soft); }
+    .sync-dot { width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 0 5px rgba(25,169,116,.12); flex:0 0 auto; }
+    .sync-dot.busy { background:var(--yellow); animation:syncPulse 1s ease-in-out infinite; }
+    .sync-dot.offline,.sync-dot.error { background:var(--red); box-shadow:0 0 0 5px rgba(230,83,83,.12); }
+    @keyframes syncPulse { 50% { transform:scale(.75); opacity:.6; } }
+    .save-pill.cloud-ok { color:var(--green); }
+    .save-pill.cloud-busy { color:var(--yellow); }
+    .save-pill.cloud-error { color:var(--red); }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
       .splash-screen { display: none; }
@@ -766,6 +792,19 @@
       <div class="splash-line"></div>
     </div>
   </div>
+  <div class="auth-gate" id="authGate" aria-live="polite">
+    <div class="auth-card">
+      <div class="auth-logo">M</div>
+      <div class="eyebrow">MSTY PROJECT 1000</div>
+      <h2>클라우드로 안전하게 이어서 사용</h2>
+      <p>한 번 로그인하면 자동 로그인되고, 크롬 데이터를 지워도 같은 Google 계정으로 복원됩니다.</p>
+      <button class="btn primary auth-login-btn" id="googleLoginBtn">
+        <span class="google-g">G</span> Google로 로그인
+      </button>
+      <div class="tiny muted" id="authGateStatus">로그인 상태 확인 중…</div>
+    </div>
+  </div>
+
   <main class="app">
     <header class="topbar">
       <div class="brand-wrap">
@@ -806,11 +845,27 @@
   <div class="toast" id="toast"></div>
   <input type="file" id="restoreInput" accept="application/json,.json" class="hidden" />
 
-  <script src="./personal-seed.js"></script>
-  <script>
+  <script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
+  import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+
   (() => {
     'use strict';
 
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyAWYLc5shkFX3L8RCb0br3e1XXXsmZLcNk",
+      authDomain: "msty-project1000.firebaseapp.com",
+      projectId: "msty-project1000",
+      storageBucket: "msty-project1000.firebasestorage.app",
+      messagingSenderId: "836173148792",
+      appId: "1:836173148792:web:73dd7aa8573aa68361738d"
+    };
+    const firebaseApp = initializeApp(FIREBASE_CONFIG);
+    const auth = getAuth(firebaseApp);
+    const firestore = getFirestore(firebaseApp);
+    const googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
 
     const APP_BOOT_AT = performance.now();
     const PAGE_ORDER = ['home','trade','dividend','goal','settings'];
@@ -914,9 +969,6 @@
     const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
     const round = (v,d=4) => Number(Number(v).toFixed(d));
 
-    const PERSONAL_SEED = window.MSTY_PERSONAL_SEED || null;
-    const PERSONAL_SEED_FLAG = 'mstyPersonalSeedAppliedV112';
-
     const blankState = () => ({
       version: 2,
       settings: {
@@ -950,21 +1002,20 @@
       }
     });
 
-    const defaultState = () => {
-      const base = blankState();
-      if (!PERSONAL_SEED) return base;
-      base.settings = Object.assign(base.settings, deepClone(PERSONAL_SEED.settings || {}));
-      base.trades = deepClone(PERSONAL_SEED.trades || []);
-      base.dividends = deepClone(PERSONAL_SEED.dividends || []);
-      base.meta.seedVersion = 1;
-      return base;
-    };
+    const defaultState = () => blankState();
 
     let db;
     let state;
     let currentPage = 'home';
     let saveTimer;
     let toastTimer;
+    let currentUser = null;
+    let cloudUnsubscribe = null;
+    let cloudSaveTimer = null;
+    let applyingCloudState = false;
+    let lastCloudSyncAt = '';
+    let cloudStatus = 'checking';
+    const CLOUD_DOC_ID = 'msty-project1000';
     const ui = {
       recent: { trade: 1, dividend: 1, log: 1, split: 1 },
       dividendYear: 'all',
@@ -1013,33 +1064,46 @@
       s.splits = Array.isArray(s.splits) ? s.splits : [];
       s.recovery = Object.assign(base.recovery, s.recovery || {});
       s.meta = Object.assign(base.meta, s.meta || {});
-      const isCompletelyEmpty = s.trades.length === 0 && s.dividends.length === 0 && s.splits.length === 0;
-      const seedAlreadyApplied = localStorage.getItem(PERSONAL_SEED_FLAG) === '1';
-      if (PERSONAL_SEED && isCompletelyEmpty && !seedAlreadyApplied) {
-        s.settings = Object.assign(s.settings, deepClone(PERSONAL_SEED.settings || {}));
-        s.trades = deepClone(PERSONAL_SEED.trades || []);
-        s.dividends = deepClone(PERSONAL_SEED.dividends || []);
-        s.meta.seedVersion = 111;
-        localStorage.setItem(PERSONAL_SEED_FLAG, '1');
-      }
       return s;
     }
 
+    function hasMeaningfulData(value=state) {
+      return !!(value && (value.trades?.length || value.dividends?.length || value.splits?.length || n(value.settings?.currentPrice) || n(value.settings?.monthlyPlanShares)));
+    }
+    function cloudDocRef(user=currentUser) { return user ? doc(firestore,'users',user.uid,'apps',CLOUD_DOC_ID) : null; }
+    function setCloudStatus(status, text) {
+      cloudStatus=status;
+      const el=document.getElementById('saveStatus');
+      if(el){ el.textContent=text; el.className='save-pill '+(status==='ok'?'cloud-ok':status==='saving'?'cloud-busy':status==='error'||status==='offline'?'cloud-error':''); }
+      const dot=document.getElementById('syncDot'); if(dot) dot.className='sync-dot '+(status==='saving'?'busy':status==='offline'?'offline':status==='error'?'error':'');
+      const label=document.getElementById('syncStatusText'); if(label) label.textContent=text;
+      const time=document.getElementById('lastSyncText'); if(time) time.textContent=lastCloudSyncAt?new Date(lastCloudSyncAt).toLocaleString('ko-KR'):'아직 없음';
+    }
+    async function pushCloudState() {
+      if(!currentUser || applyingCloudState) return;
+      if(!navigator.onLine){ setCloudStatus('offline','오프라인 · 기기 저장'); return; }
+      setCloudStatus('saving','클라우드 저장 중');
+      try {
+        const payload=deepClone(state);
+        await setDoc(cloudDocRef(),{state:payload,updatedAt:serverTimestamp(),clientUpdatedAt:payload.meta.updatedAt,appVersion:'2.0'},{merge:true});
+        lastCloudSyncAt=new Date().toISOString();
+        setCloudStatus('ok','클라우드 저장됨');
+      } catch(err){ console.error('Cloud save failed',err); setCloudStatus('error','클라우드 오류'); toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.'); }
+    }
     async function saveState(immediate=false) {
       state.meta.updatedAt = new Date().toISOString();
-      setSaveStatus('저장 중');
-      clearTimeout(saveTimer);
+      setSaveStatus(currentUser?'저장 중':'기기 저장 중');
+      clearTimeout(saveTimer); clearTimeout(cloudSaveTimer);
       const run = async () => {
         try {
           await dbSet(STATE_KEY, state);
-          setSaveStatus('저장됨');
+          setSaveStatus(currentUser?'동기화 대기':'기기 저장됨');
+          if(currentUser){ if(immediate) await pushCloudState(); else cloudSaveTimer=setTimeout(pushCloudState,450); }
         } catch (err) {
-          console.error(err);
-          setSaveStatus('저장 오류');
-          toast('저장 중 오류가 발생했습니다.');
+          console.error(err); setSaveStatus('저장 오류'); toast('저장 중 오류가 발생했습니다.');
         }
       };
-      if (immediate) await run(); else saveTimer = setTimeout(run, 180);
+      if (immediate) await run(); else saveTimer = setTimeout(run, 120);
     }
 
     function setSaveStatus(text) {
@@ -1545,6 +1609,17 @@
       document.getElementById('page-settings').innerHTML = `
         ${pageHeader('설정','저장 버튼으로 적용')}
         <div class="stack">
+          <div class="card cloud-card">
+            <div class="card-head"><div class="card-title">Google 계정 · 클라우드</div><span class="status-pill">V2.0</span></div>
+            <div class="account-row">
+              ${currentUser?.photoURL?`<img class="account-avatar" src="${esc(currentUser.photoURL)}" alt="">`:`<div class="account-avatar account-avatar-fallback">G</div>`}
+              <div class="account-copy"><div class="account-name">${esc(currentUser?.displayName||'Google 사용자')}</div><div class="account-email">${esc(currentUser?.email||'로그인 확인 중')}</div></div>
+            </div>
+            <div class="sync-line"><div style="display:flex;align-items:center;gap:10px"><span class="sync-dot ${cloudStatus==='saving'?'busy':cloudStatus==='offline'?'offline':cloudStatus==='error'?'error':''}" id="syncDot"></span><div><div class="setting-title" id="syncStatusText">${cloudStatus==='ok'?'클라우드 저장됨':cloudStatus==='saving'?'클라우드 저장 중':cloudStatus==='offline'?'오프라인 · 기기 저장':cloudStatus==='error'?'클라우드 오류':'동기화 확인 중'}</div><div class="setting-desc">마지막 동기화: <span id="lastSyncText">${lastCloudSyncAt?new Date(lastCloudSyncAt).toLocaleString('ko-KR'):'아직 없음'}</span></div></div></div></div>
+            <div class="action-row" style="margin-top:14px"><button class="btn secondary" data-sync-now>지금 동기화</button><button class="btn soft" data-logout>로그아웃</button></div>
+            <div class="tiny muted" style="margin-top:11px">입력 내용은 먼저 기기에 저장되고, 인터넷 연결 시 Google 계정으로 자동 동기화됩니다.</div>
+          </div>
+
           <div class="card">
             <div class="card-head"><div class="card-title">화면 및 사용감</div></div>
             <div class="setting-title">화면 모드</div>
@@ -1610,7 +1685,7 @@
               </div>
             </details>
           </div>
-          <div class="tiny muted center" style="padding:2px 0 8px">MSTY PROJECT 1000 · V1.2</div>
+          <div class="tiny muted center" style="padding:2px 0 8px">MSTY PROJECT 1000 · V2.0</div>
         </div>`;
     }
 
@@ -1914,6 +1989,8 @@
       });
 
       bindSettingInputs();
+      document.querySelectorAll('[data-sync-now]').forEach(x=>x.onclick=async()=>{await pushCloudState();renderSettings();bindDynamicEvents();toast(cloudStatus==='ok'?'동기화를 완료했습니다.':'동기화 상태를 확인해 주세요.');});
+      document.querySelectorAll('[data-logout]').forEach(x=>x.onclick=()=>confirmAction('로그아웃','이 기기에서 Google 계정 연결을 해제할까요? 클라우드 데이터는 삭제되지 않습니다.','로그아웃',async()=>{await signOut(auth);toast('로그아웃했습니다.');}));
       document.querySelectorAll('[data-backup]').forEach(x=>x.onclick=downloadBackup);
       document.querySelectorAll('[data-restore]').forEach(x=>x.onclick=()=>document.getElementById('restoreInput').click());
       document.querySelectorAll('[data-csv]').forEach(x=>x.onclick=exportCSV);
@@ -1994,6 +2071,74 @@
       } catch(err) {console.error(err);toast('올바른 백업 파일이 아닙니다.');}
     }
 
+    function showAuthGate(message='Google로 로그인해 주세요.') {
+      const gate=document.getElementById('authGate'); if(gate) gate.classList.remove('hidden');
+      const status=document.getElementById('authGateStatus'); if(status) status.textContent=message;
+    }
+    function hideAuthGate() { const gate=document.getElementById('authGate'); if(gate) gate.classList.add('hidden'); }
+    async function loginWithGoogle() {
+      const btn=document.getElementById('googleLoginBtn'); if(btn) btn.disabled=true;
+      const status=document.getElementById('authGateStatus'); if(status) status.textContent='Google 로그인 창을 여는 중…';
+      try {
+        await signInWithPopup(auth,googleProvider);
+      } catch(err) {
+        console.warn('Popup login fallback',err);
+        if(['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request','auth/operation-not-supported-in-this-environment'].includes(err.code)){
+          if(status) status.textContent='페이지 이동 방식으로 로그인합니다…';
+          await signInWithRedirect(auth,googleProvider);
+        } else { if(status) status.textContent='로그인에 실패했습니다. 다시 눌러 주세요.'; toast('Google 로그인에 실패했습니다.'); }
+      } finally { if(btn) btn.disabled=false; }
+    }
+    async function chooseInitialSync(cloudState) {
+      const localHas=hasMeaningfulData(state), cloudHas=hasMeaningfulData(cloudState);
+      if(cloudState && cloudHas){
+        const localTime=new Date(state.meta?.updatedAt||0).getTime(); const cloudTime=new Date(cloudState.meta?.updatedAt||0).getTime();
+        if(localHas && localTime>cloudTime+3000){
+          return await new Promise(resolve=>{
+            openModal(`<h3 class="modal-title">동기화할 데이터 선택</h3><p class="modal-desc">이 기기의 기록이 클라우드보다 새롭습니다.</p><div class="form-grid"><button class="btn primary" id="useLocalCloud">기기 기록을 클라우드에 저장</button><button class="btn secondary" id="useCloudLocal">클라우드 기록 불러오기</button></div>`);
+            document.getElementById('useLocalCloud').onclick=()=>{closeModal();resolve('local');}; document.getElementById('useCloudLocal').onclick=()=>{closeModal();resolve('cloud');};
+          });
+        }
+        return 'cloud';
+      }
+      if(localHas){
+        return await new Promise(resolve=>{
+          openModal(`<h3 class="modal-title">첫 클라우드 연결</h3><p class="modal-desc">이 기기에 기존 기록이 있습니다. 클라우드에 올릴지, 빈 상태로 새로 시작할지 선택하세요.</p><div class="form-grid"><button class="btn primary" id="uploadLocalFirst">기기 기록을 클라우드에 저장</button><button class="btn secondary" id="startBlankFirst">빈 상태로 새로 시작</button></div>`);
+          document.getElementById('uploadLocalFirst').onclick=()=>{closeModal();resolve('local');}; document.getElementById('startBlankFirst').onclick=()=>{closeModal();resolve('blank');};
+        });
+      }
+      return 'blank';
+    }
+    async function connectCloudForUser(user) {
+      currentUser=user; setCloudStatus('saving','동기화 확인 중');
+      const ref=cloudDocRef(user);
+      let snap; try { snap=await getDoc(ref); } catch(err){ console.error(err); setCloudStatus('error','클라우드 연결 오류'); hideAuthGate(); return; }
+      const cloudState=snap.exists()?migrate(snap.data().state):null;
+      const choice=await chooseInitialSync(cloudState);
+      if(choice==='cloud' && cloudState){ applyingCloudState=true; state=cloudState; await dbSet(STATE_KEY,state); applyingCloudState=false; }
+      else if(choice==='blank'){ applyingCloudState=true; state=blankState(); await dbSet(STATE_KEY,state); applyingCloudState=false; await pushCloudState(); }
+      else await pushCloudState();
+      renderAll(); showPage(currentPage||'home',{resetScroll:false}); hideAuthGate();
+      cloudUnsubscribe?.();
+      cloudUnsubscribe=onSnapshot(ref,snapshot=>{
+        if(!snapshot.exists()||applyingCloudState) return;
+        const remote=migrate(snapshot.data().state);
+        const remoteTime=new Date(remote.meta?.updatedAt||0).getTime(), localTime=new Date(state.meta?.updatedAt||0).getTime();
+        if(remoteTime>localTime+1000){ applyingCloudState=true; state=remote; dbSet(STATE_KEY,state).then(()=>{renderAll();showPage(currentPage,{resetScroll:false});lastCloudSyncAt=new Date().toISOString();setCloudStatus('ok','클라우드 동기화됨');applyingCloudState=false;}); }
+      },err=>{console.error(err);setCloudStatus('error','동기화 오류');});
+      lastCloudSyncAt=new Date().toISOString(); setCloudStatus('ok','클라우드 연결됨');
+    }
+    function initAuth() {
+      document.getElementById('googleLoginBtn')?.addEventListener('click',loginWithGoogle);
+      getRedirectResult(auth).catch(err=>console.warn('Redirect result',err));
+      onAuthStateChanged(auth,async user=>{
+        if(user) await connectCloudForUser(user);
+        else { currentUser=null; cloudUnsubscribe?.(); cloudUnsubscribe=null; setSaveStatus('로그인 필요'); showAuthGate('Google로 로그인하면 자동 동기화됩니다.'); }
+      });
+      window.addEventListener('online',()=>{if(currentUser)pushCloudState();});
+      window.addEventListener('offline',()=>setCloudStatus('offline','오프라인 · 기기 저장'));
+    }
+
     function bindStaticEvents() {
       document.addEventListener('pointerdown',addRipple,{passive:true});
       const themeMedia=window.matchMedia?.('(prefers-color-scheme: dark)');
@@ -2009,10 +2154,11 @@
         await openDB();
         state=migrate(await dbGet(STATE_KEY));
         applyTheme(state.settings.appearance||'system');
-        await saveState(true);
+        await dbSet(STATE_KEY,state);
         renderAll();
         bindStaticEvents();
         showPage('home',{resetScroll:true});
+        initAuth();
         hideSplash();
         if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
           navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW registration failed',err));
