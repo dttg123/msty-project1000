@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <title>MSTY PROJECT 1000 · V1.0.1</title>
+  <title>MSTY PROJECT 1000 · V1.1</title>
   <meta name="color-scheme" content="light dark" />
   <script>
     (() => {
@@ -671,7 +671,7 @@
         radial-gradient(circle at 25% 75%, rgba(25,169,116,.08), transparent 30%),
         var(--bg);
       color: var(--text);
-      transition: opacity .34s ease, visibility .34s ease;
+      transition: opacity .22s ease, visibility .22s ease;
     }
     .splash-screen.hide { opacity: 0; visibility: hidden; pointer-events: none; }
     .splash-inner { display: grid; justify-items: center; gap: 13px; transform: translateY(-2vh); }
@@ -821,10 +821,10 @@
     function hideSplash() {
       const el = document.getElementById('splashScreen');
       if (!el) return;
-      const wait = motionReduced() ? 0 : Math.max(0, 620 - (performance.now() - APP_BOOT_AT));
+      const wait = motionReduced() ? 0 : Math.max(0, 360 - (performance.now() - APP_BOOT_AT));
       setTimeout(() => {
         el.classList.add('hide');
-        setTimeout(() => el.remove(), 420);
+        setTimeout(() => el.remove(), 240);
       }, wait);
     }
     function addRipple(event) {
@@ -1140,13 +1140,14 @@
       const returnPct = investedPrincipal > 0 ? unrealized / investedPrincipal * 100 : 0;
       const reinvestSharesCurrent = reinvestNormalized * factor;
       const reinvestAvgPrice = reinvestSharesCurrent > 0 ? reinvestAmount / reinvestSharesCurrent : 0;
+      const dividendAvailable = dividendsTotal - reinvestAmount;
 
       return {
         factor, actualShares, normalizedShares, costBasis, realized, directBuyCost, sellProceeds,
         marketValue, unrealized, avgCost, currentTarget, progress, currentPrice, investedPrincipal,
         dividendsTotal, yearDividends, recentDividend, totalReturn, returnPct,
         milestoneDates, targetReachedDate, targetBasisSuggestion, reinvestSharesCurrent,
-        reinvestAmount, reinvestCount, reinvestAvgPrice, oversells, factorAtDate
+        reinvestAmount, reinvestCount, reinvestAvgPrice, dividendAvailable, oversells, factorAtDate
       };
     }
 
@@ -1399,6 +1400,7 @@
     }
 
     function renderDividend() {
+      const p = computePortfolio();
       const years = [...new Set(state.dividends.map(d=>String(d.date).slice(0,4)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
       const filtered = [...state.dividends]
         .filter(d=>ui.dividendYear==='all'||String(d.date).startsWith(ui.dividendYear))
@@ -1423,7 +1425,10 @@
             <div class="summary-chip"><div class="label">누적 배당</div><div class="value">${fmtUSD(total)}</div>${krwMini(total)}</div>
             <div class="summary-chip"><div class="label">지급 횟수</div><div class="value">${filtered.length.toLocaleString()}회</div></div>
             <div class="summary-chip"><div class="label">최근 배당</div><div class="value">${filtered[0]?fmtUSD(filtered[0].amountUSD):'-'}</div>${filtered[0]?krwMini(filtered[0].amountUSD):''}</div>
+            <div class="summary-chip"><div class="label">재투자 사용액</div><div class="value">${fmtUSD(p.reinvestAmount)}</div>${krwMini(p.reinvestAmount)}</div>
+            <div class="summary-chip"><div class="label">사용 가능 배당</div><div class="value ${signClass(p.dividendAvailable)}">${fmtUSD(p.dividendAvailable)}</div>${krwMini(p.dividendAvailable,signClass(p.dividendAvailable))}</div>
           </div>
+          ${p.dividendAvailable<-.0001?`<div class="check-item" style="margin-top:12px">배당 외 현금이 ${fmtUSD(Math.abs(p.dividendAvailable))} 포함된 재투자로 계산됩니다.</div>`:`<div class="tiny muted" style="margin-top:11px">사용 가능 배당 = 누적 세후배당 − 배당재투자 매수금액</div>`}
           <button class="chart-toggle ${ui.dividendChartOpen?'open':''}" data-toggle-dividend-chart aria-expanded="${ui.dividendChartOpen?'true':'false'}">
             <span class="chart-copy"><span>배당 그래프</span><span class="chart-sub">누르면 월별·주별 흐름을 봅니다.</span></span>
             <span class="chev">⌄</span>
@@ -1528,29 +1533,37 @@
           </div>
 
           <div class="card">
-            <div class="card-head"><div class="card-title">주식 수 조정</div></div>
-            <button class="btn secondary" style="width:100%" data-open-split>＋ 분할·역분할 기록</button>
-            <div style="margin-top:12px">${recentBlock('split',splitItems,splitRow,'최근 조정','분할 기록이 없습니다.')}</div>
+            <div class="card-head"><div class="card-title">데이터 백업</div></div>
+            <div class="action-row"><button class="btn primary" data-backup>JSON 백업</button><button class="btn secondary" data-restore>JSON 복원</button></div>
+            <div class="tiny muted" style="margin-top:12px">마지막 백업: ${state.meta.lastBackupAt?new Date(state.meta.lastBackupAt).toLocaleString('ko-KR'):'아직 없음'}</div>
           </div>
-
-          ${state.recovery.locked?`<div class="card ${discrepancy>.01?'warning':''}">
-            <div class="card-head"><div class="card-title">원금회수 기준</div><span class="status-pill">잠금</span></div>
-            <div class="big-number">${fmtUSD(state.recovery.basis)}</div>
-            ${krwRef(state.recovery.basis)}
-            <div class="sub-number">${fmtDate(state.recovery.startDate)}부터 회수 집계</div>
-            ${discrepancy>.01?`<div class="check-item" style="margin-top:14px">기록 변경으로 자동 계산값과 차이가 있습니다. 고정값 ${fmtUSD(state.recovery.basis)} · 현재 제안값 ${fmtUSD(p.targetBasisSuggestion)}</div>`:''}
-            <button class="btn outline" style="margin-top:14px;width:100%" data-reset-recovery>기준 재설정</button>
-          </div>`:''}
 
           <div class="card">
-            <div class="card-head"><div class="card-title">데이터</div></div>
-            <div class="action-row"><button class="btn primary" data-backup>JSON 백업</button><button class="btn secondary" data-restore>JSON 복원</button></div>
-            <div class="action-row" style="margin-top:9px"><button class="btn soft" data-csv>CSV 내보내기</button><button class="btn soft" data-project-check>프로젝트 점검</button></div>
-            <div class="tiny muted" style="margin-top:12px">마지막 백업: ${state.meta.lastBackupAt?new Date(state.meta.lastBackupAt).toLocaleString('ko-KR'):'아직 없음'}</div>
-            ${check?renderCheckResults(check):''}
-            <div class="divider"></div>
-            <button class="btn outline" style="width:100%;color:var(--red);border-color:#ffd1d1" data-reset-all>전체 데이터 초기화</button>
+            <details class="clean" style="border-top:0;margin-top:0;padding-top:0">
+              <summary><span><strong style="color:var(--text)">고급 관리</strong><span class="tiny muted" style="display:block;margin-top:4px">분할·원금회수·점검·초기화</span></span><span class="chev">⌄</span></summary>
+              <div style="padding-top:8px">
+                <div class="card-title" style="margin-bottom:10px">주식 수 조정</div>
+                <button class="btn secondary" style="width:100%" data-open-split>＋ 분할·역분할 기록</button>
+                <div style="margin-top:12px">${recentBlock('split',splitItems,splitRow,'최근 조정','분할 기록이 없습니다.')}</div>
+
+                ${state.recovery.locked?`<div class="divider"></div><div class="${discrepancy>.01?'warning':''}" style="border-radius:16px;padding:${discrepancy>.01?'14px':'0'}">
+                  <div class="card-head"><div class="card-title">원금회수 기준</div><span class="status-pill">잠금</span></div>
+                  <div class="big-number">${fmtUSD(state.recovery.basis)}</div>
+                  ${krwRef(state.recovery.basis)}
+                  <div class="sub-number">${fmtDate(state.recovery.startDate)}부터 회수 집계</div>
+                  ${discrepancy>.01?`<div class="check-item" style="margin-top:14px">기록 변경으로 자동 계산값과 차이가 있습니다. 고정값 ${fmtUSD(state.recovery.basis)} · 현재 제안값 ${fmtUSD(p.targetBasisSuggestion)}</div>`:''}
+                  <button class="btn outline" style="margin-top:14px;width:100%" data-reset-recovery>기준 재설정</button>
+                </div>`:''}
+
+                <div class="divider"></div>
+                <div class="action-row"><button class="btn soft" data-csv>CSV 내보내기</button><button class="btn soft" data-project-check>프로젝트 점검</button></div>
+                ${check?renderCheckResults(check):''}
+                <div class="divider"></div>
+                <button class="btn outline" style="width:100%;color:var(--red);border-color:#ffd1d1" data-reset-all>전체 데이터 초기화</button>
+              </div>
+            </details>
           </div>
+          <div class="tiny muted center" style="padding:2px 0 8px">MSTY PROJECT 1000 · V1.1</div>
         </div>`;
     }
 
