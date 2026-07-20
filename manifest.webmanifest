@@ -1,25 +1,14 @@
 {
-  "name": "MSTY PROJECT 1000 V2.0",
+  "name": "MSTY PROJECT 1000",
   "short_name": "MSTY 1000",
-  "description": "Google 로그인과 클라우드 동기화를 지원하는 MSTY 1000주 프로젝트 앱",
+  "description": "MSTY 1000주 목표와 배당 원금회수를 관리하는 클라우드 PWA",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f5f9",
   "theme_color": "#645bff",
-  "lang": "ko-KR",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
