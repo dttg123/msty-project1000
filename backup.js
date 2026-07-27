@@ -1,4 +1,4 @@
-export const APP_VERSION = '3.1.1';
+export const APP_VERSION = '3.1.2';
 export const DATA_SCHEMA_VERSION = 3.1;
 
 const APP_FILES = [
@@ -96,31 +96,16 @@ export async function buildPortableBackup(state) {
     dataFile:'data/state.json',
     launchFile:'app/index.html'
   };
-  const readme=[
-    'MSTY PROJECT 1000 휴대용 백업',
-    `앱 버전: ${APP_VERSION}`,
-    `데이터 구조 버전: ${DATA_SCHEMA_VERSION}`,
-    `백업 시각: ${exportedAt}`,
-    '',
-    'data/state.json: 거래·배당·설정 데이터',
-    'app/: 백업 당시 웹앱 실행 파일',
-    'backup-info.json: 버전 및 백업 정보',
-    '',
-    '사이트가 없어져도 app 폴더를 GitHub Pages 같은 정적 호스팅에 올린 뒤',
-    '앱에서 이 ZIP 또는 data/state.json을 복원할 수 있습니다.'
-  ].join('\n');
   return createStoreZip([
     {name:'backup-info.json',data:JSON.stringify(info,null,2)},
     {name:'data/state.json',data:JSON.stringify({...state,exportedAt,appVersion:APP_VERSION},null,2)},
-    {name:'README.txt',data:readme},
     ...(await fetchAppFiles())
   ]);
 }
 
 export async function readStateFromBackupFile(file) {
   const lower=file.name.toLowerCase();
-  if(lower.endsWith('.json')) return JSON.parse(await file.text());
-  if(!lower.endsWith('.zip')) throw new Error('JSON 또는 ZIP 파일만 지원합니다.');
+  if(!lower.endsWith('.zip')) throw new Error('이 앱에서 만든 ZIP 백업만 지원합니다.');
   const bytes=new Uint8Array(await file.arrayBuffer());
   let offset=0;
   while(offset+30<=bytes.length) {

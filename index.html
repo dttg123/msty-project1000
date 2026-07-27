@@ -433,6 +433,27 @@
     .bar-fill { height: 100%; background: linear-gradient(90deg,var(--accent),var(--accent-2)); border-radius: inherit; min-width: 2px; }
     .bar-value { font-size: 12px; font-weight: 800; }
 
+
+    .mini-chart-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
+    .column-chart { height:260px; display:flex; align-items:stretch; gap:8px; margin-top:14px; overflow-x:auto; padding:8px 2px 2px; }
+    .column-chart.compact-chart { height:170px; gap:10px; overflow:hidden; }
+    .column-item { min-width:44px; flex:1; border:0; background:transparent; color:var(--text); display:grid; grid-template-rows:22px 1fr 22px; gap:5px; padding:0; }
+    .column-value { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .column-track { min-height:70px; display:flex; align-items:flex-end; justify-content:center; border-bottom:1px solid var(--line); }
+    .column-fill { display:block; width:min(28px,72%); min-height:4px; border-radius:8px 8px 3px 3px; background:linear-gradient(180deg,var(--accent-2),var(--accent)); }
+    .column-label { font-size:10px; color:var(--muted); font-weight:750; white-space:nowrap; }
+    .full-chart { margin-top:12px; }
+    .dividend-detail { border-bottom:1px solid var(--line); }
+    .dividend-detail:last-child { border-bottom:0; }
+    .dividend-detail summary { list-style:none; cursor:pointer; border-bottom:0; }
+    .dividend-detail summary::-webkit-details-marker { display:none; }
+    .dividend-detail-body { padding:0 14px 14px; }
+    .yield-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+    .yield-grid>div { background:#f7f7fa; border:1px solid #eff0f4; border-radius:13px; padding:10px; display:grid; gap:5px; }
+    .yield-grid span { color:var(--muted); font-size:10px; font-weight:750; }
+    .yield-grid strong { font-size:15px; }
+    html[data-theme="dark"] .yield-grid>div { background:#222630; border-color:#303541; }
+
     .roadmap { display: grid; gap: 10px; }
     .milestone {
       display: grid;
@@ -843,7 +864,7 @@
     <div class="modal" id="modal"></div>
   </div>
   <div class="toast" id="toast"></div>
-  <input type="file" id="restoreInput" accept="application/json,application/zip,.json,.zip" class="hidden" />
+  <input type="file" id="restoreInput" accept="application/zip,.zip" class="hidden" />
 
   <script type="module" src="./app.js"></script>
 </body>

@@ -1,5 +1,5 @@
-const DRIVE_JSON_NAME = 'MSTY_v3.1.1_latest.json';
-const DRIVE_ZIP_NAME = 'MSTY_v3.1.1_latest.zip';
+const DRIVE_JSON_NAME = 'MSTY_v3.1.2_latest.json';
+const DRIVE_ZIP_NAME = 'MSTY_v3.1.2_latest.zip';
 const LEGACY_JSON_NAME = 'MSTY_PROJECT1000_latest.json';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';

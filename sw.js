@@ -1,4 +1,4 @@
-const CACHE = 'msty-project1000-v3.1.1';
+const CACHE = 'msty-project1000-v3.1.2';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './drive.js', './backup.js'
