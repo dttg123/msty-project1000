@@ -1,7 +1,9 @@
 import { auth, firestore } from './firebase.js';
-import { initGoogleAuth, logoutGoogle } from './auth.js';
+import { initGoogleAuth, logoutGoogle, requestDriveAccessToken } from './auth.js';
 import { openStorage, storageGet, storageSet } from './storage.js';
 import { getCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
+import { saveDriveBackup, loadDriveBackup } from './drive.js';
+import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 
 (() => {
     'use strict';
@@ -105,7 +107,7 @@ const APP_BOOT_AT = performance.now();
     const round = (v,d=4) => Number(Number(v).toFixed(d));
 
     const blankState = () => ({
-      version: 3,
+      version: 3.1,
       settings: {
         currentPrice: 0,
         targetUnits: 1000,
@@ -132,6 +134,9 @@ const APP_BOOT_AT = performance.now();
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastBackupAt: '',
+        lastLocalSaveAt: '',
+        lastCloudSaveAt: '',
+        lastDriveBackupAt: '',
         celebratedMilestones: []
       }
     });
@@ -162,7 +167,7 @@ const APP_BOOT_AT = performance.now();
       if (!raw || typeof raw !== 'object') return defaultState();
       const base = blankState();
       const s = raw;
-      s.version = 3;
+      s.version = 3.1;
       s.settings = Object.assign(base.settings, s.settings || {});
       s.trades = Array.isArray(s.trades) ? s.trades : [];
       s.dividends = Array.isArray(s.dividends) ? s.dividends : [];
@@ -188,9 +193,12 @@ function setCloudStatus(status, text) {
       if(!navigator.onLine){ setCloudStatus('offline','오프라인 · 기기 저장'); return; }
       setCloudStatus('saving','클라우드 저장 중');
       try {
+        const syncedAt=new Date().toISOString();
+        state.meta.lastCloudSaveAt=syncedAt;
         const payload=deepClone(state);
-        await saveCloudDocument(currentUser.uid,{state:payload,clientUpdatedAt:payload.meta.updatedAt,appVersion:'3.0.1'});
-        lastCloudSyncAt=new Date().toISOString();
+        await saveCloudDocument(currentUser.uid,{state:payload,clientUpdatedAt:payload.meta.updatedAt,appVersion:APP_VERSION});
+        lastCloudSyncAt=syncedAt;
+        await storageSet(STATE_KEY,state);
         setCloudStatus('ok','클라우드 저장됨');
       } catch(err){ console.error('Cloud save failed',err); setCloudStatus('error','클라우드 오류'); toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.'); }
     }
@@ -200,6 +208,7 @@ function setCloudStatus(status, text) {
       clearTimeout(saveTimer); clearTimeout(cloudSaveTimer);
       const run = async () => {
         try {
+          state.meta.lastLocalSaveAt = new Date().toISOString();
           await storageSet(STATE_KEY, state);
           setSaveStatus(currentUser?'동기화 대기':'기기 저장됨');
           if(currentUser){ if(immediate) await pushCloudState(); else cloudSaveTimer=setTimeout(pushCloudState,450); }
@@ -295,11 +304,20 @@ function setCloudStatus(status, text) {
           actualShares += q;
           normalizedShares += q / factor;
           costBasis += q * price;
-          if (e.buyType === 'direct' || e.buyType === 'opening') directBuyCost += q * price;
+          const totalBuyAmount = q * price;
+          if (e.buyType === 'direct' || e.buyType === 'opening') directBuyCost += totalBuyAmount;
           if (e.buyType === 'reinvest') {
             reinvestNormalized += q / factor;
-            reinvestAmount += q * price;
+            reinvestAmount += totalBuyAmount;
             reinvestCount += 1;
+          }
+          if (e.buyType === 'mixed') {
+            const dividendPart = clamp(n(e.reinvestAmountUSD), 0, totalBuyAmount);
+            const cashPart = Math.max(0, totalBuyAmount - dividendPart);
+            reinvestNormalized += totalBuyAmount > 0 ? (q * dividendPart / totalBuyAmount) / factor : 0;
+            reinvestAmount += dividendPart;
+            directBuyCost += cashPart;
+            reinvestCount += dividendPart > 0 ? 1 : 0;
           }
         } else if (e.type === 'sell') {
           const q = Math.max(0,n(e.shares));
@@ -344,13 +362,14 @@ function setCloudStatus(status, text) {
       const reinvestSharesCurrent = reinvestNormalized * factor;
       const reinvestAvgPrice = reinvestSharesCurrent > 0 ? reinvestAmount / reinvestSharesCurrent : 0;
       const dividendAvailable = dividendsTotal - reinvestAmount;
+      const mixedCashUsed = state.trades.filter(t=>t.type==='buy'&&t.buyType==='mixed').reduce((s,t)=>s+Math.max(0,n(t.shares)*n(t.price)-n(t.reinvestAmountUSD)),0);
 
       return {
         factor, actualShares, normalizedShares, costBasis, realized, directBuyCost, sellProceeds,
         marketValue, unrealized, avgCost, currentTarget, progress, currentPrice, investedPrincipal,
         dividendsTotal, yearDividends, recentDividend, totalReturn, returnPct,
         milestoneDates, targetReachedDate, targetBasisSuggestion, reinvestSharesCurrent,
-        reinvestAmount, reinvestCount, reinvestAvgPrice, dividendAvailable, oversells, factorAtDate
+        reinvestAmount, reinvestCount, reinvestAvgPrice, dividendAvailable, mixedCashUsed, oversells, factorAtDate
       };
     }
 
@@ -519,6 +538,7 @@ function setCloudStatus(status, text) {
     function tradeLabel(t) {
       if (t.type === 'sell') return '매도';
       if (t.buyType === 'opening') return '초기보유';
+      if (t.buyType === 'mixed') return '혼합매수';
       return t.buyType === 'reinvest' ? '배당재투자' : '직접매수';
     }
     function tradeRow(t, editable=true) {
@@ -527,13 +547,22 @@ function setCloudStatus(status, text) {
       const valueClass = t.type === 'sell' ? 'positive' : '';
       const amountText = isOpening ? `기준 ${fmtUSD(amount)}` : `${t.type==='sell'?'+':'-'}${fmtUSD(amount)}`;
       return `<div class="list-row">
-        <div><div class="row-title">${tradeLabel(t)} · ${fmtShares(t.shares)}주</div><div class="row-sub">${fmtDate(t.date)} · 단가 ${fmtUSD(t.price)}${t.note?` · ${esc(t.note)}`:''}</div></div>
+        <div><div class="row-title">${tradeLabel(t)} · ${fmtShares(t.shares)}주</div><div class="row-sub">${fmtDate(t.date)} · 단가 ${fmtUSD(t.price)}${t.buyType==='mixed'?` · 배당 ${fmtUSD(t.reinvestAmountUSD)} + 현금 ${fmtUSD(Math.max(0,amount-n(t.reinvestAmountUSD)))}`:''}${t.note?` · ${esc(t.note)}`:''}</div></div>
         <div><div class="row-value ${valueClass}">${amountText}</div>${krwMini(amount,valueClass).replace('krw-ref','row-krw')}${editable?`<div class="row-actions"><button class="mini-icon" data-edit-trade="${t.id}">수정</button><button class="mini-icon delete" data-delete-trade="${t.id}">삭제</button></div>`:''}</div>
       </div>`;
     }
+    function dividendYieldStats(d) {
+      const shares = Math.max(0,n(d.sharesAtPayment));
+      const referencePrice = Math.max(0,n(d.referencePrice));
+      const perShare = shares>0 ? n(d.amountUSD)/shares : 0;
+      const weeklyPct = referencePrice>0 ? perShare/referencePrice*100 : 0;
+      return {shares,referencePrice,perShare,weeklyPct,monthlyPct:weeklyPct*52/12,annualPct:weeklyPct*52};
+    }
     function dividendRow(d, editable=true) {
+      const y=dividendYieldStats(d);
+      const yieldText=y.shares>0&&y.referencePrice>0?` · 주당 ${fmtUSD(y.perShare)} · 주 ${fmtPct(y.weeklyPct)} / 월 ${fmtPct(y.monthlyPct)} / 연 ${fmtPct(y.annualPct)}`:'';
       return `<div class="list-row">
-        <div><div class="row-title">세후배당</div><div class="row-sub">${fmtDate(d.date)}${d.note?` · ${esc(d.note)}`:''}</div></div>
+        <div><div class="row-title">세후배당</div><div class="row-sub">${fmtDate(d.date)}${yieldText}${d.note?` · ${esc(d.note)}`:''}</div></div>
         <div><div class="row-value positive">+${fmtUSD(d.amountUSD)}</div>${krwMini(d.amountUSD,'positive').replace('krw-ref','row-krw')}${editable?`<div class="row-actions"><button class="mini-icon" data-edit-dividend="${d.id}">수정</button><button class="mini-icon delete" data-delete-dividend="${d.id}">삭제</button></div>`:''}</div>
       </div>`;
     }
@@ -632,8 +661,9 @@ function setCloudStatus(status, text) {
             <div class="summary-chip"><div class="label">최근 배당</div><div class="value">${filtered[0]?fmtUSD(filtered[0].amountUSD):'-'}</div>${filtered[0]?krwMini(filtered[0].amountUSD):''}</div>
             <div class="summary-chip"><div class="label">재투자 사용액</div><div class="value">${fmtUSD(p.reinvestAmount)}</div>${krwMini(p.reinvestAmount)}</div>
             <div class="summary-chip"><div class="label">사용 가능 배당</div><div class="value ${signClass(p.dividendAvailable)}">${fmtUSD(p.dividendAvailable)}</div>${krwMini(p.dividendAvailable,signClass(p.dividendAvailable))}</div>
+            <div class="summary-chip"><div class="label">혼합매수 현금</div><div class="value">${fmtUSD(p.mixedCashUsed)}</div>${krwMini(p.mixedCashUsed)}</div>
           </div>
-          ${p.dividendAvailable<-.0001?`<div class="check-item" style="margin-top:12px">배당 외 현금이 ${fmtUSD(Math.abs(p.dividendAvailable))} 포함된 재투자로 계산됩니다.</div>`:`<div class="tiny muted" style="margin-top:11px">사용 가능 배당 = 누적 세후배당 − 배당재투자 매수금액</div>`}
+          ${p.dividendAvailable<-.0001?`<div class="check-item" style="margin-top:12px">배당 사용액이 누적 배당보다 ${fmtUSD(Math.abs(p.dividendAvailable))} 많습니다. 기존 재투자 기록을 혼합매수로 수정해 현금 사용액을 분리하세요.</div>`:`<div class="tiny muted" style="margin-top:11px">사용 가능 배당 = 누적 세후배당 − 배당재투자·혼합매수의 배당 사용액</div>`}
           <button class="chart-toggle ${ui.dividendChartOpen?'open':''}" data-toggle-dividend-chart aria-expanded="${ui.dividendChartOpen?'true':'false'}">
             <span class="chart-copy"><span>배당 그래프</span><span class="chart-sub">누르면 월별·주별 흐름을 봅니다.</span></span>
             <span class="chev">⌄</span>
@@ -759,9 +789,15 @@ function setCloudStatus(status, text) {
           <div class="settings-save"><button class="btn primary" style="width:100%" data-save-settings>설정 저장</button></div>
 
           <div class="card">
-            <div class="card-head"><div class="card-title">데이터 백업</div></div>
-            <div class="action-row"><button class="btn primary" data-backup>JSON 백업</button><button class="btn secondary" data-restore>JSON 복원</button></div>
-            <div class="tiny muted" style="margin-top:12px">마지막 백업: ${state.meta.lastBackupAt?new Date(state.meta.lastBackupAt).toLocaleString('ko-KR'):'아직 없음'}</div>
+            <div class="card-head"><div class="card-title">3중 저장 상태</div></div>
+            <div class="settings-group">
+              <div class="setting-row"><div><div class="setting-title">폰 저장</div><div class="setting-desc">이 브라우저의 고정 IndexedDB 저장소</div></div><strong>${state.meta.lastLocalSaveAt?new Date(state.meta.lastLocalSaveAt).toLocaleString('ko-KR'):'준비됨'}</strong></div>
+              <div class="setting-row"><div><div class="setting-title">클라우드</div><div class="setting-desc">Google 계정 UID의 고정 Firestore 문서</div></div><strong>${state.meta.lastCloudSaveAt?new Date(state.meta.lastCloudSaveAt).toLocaleString('ko-KR'):(currentUser?'연결됨':'로그인 필요')}</strong></div>
+              <div class="setting-row"><div><div class="setting-title">Google Drive</div><div class="setting-desc">앱 전용공간에 데이터 JSON + 휴대용 ZIP 저장</div></div><strong>${state.meta.lastDriveBackupAt?new Date(state.meta.lastDriveBackupAt).toLocaleString('ko-KR'):'아직 없음'}</strong></div>
+            </div>
+            <div class="action-row" style="margin-top:14px"><button class="btn primary" data-drive-backup>Drive 백업</button><button class="btn secondary" data-drive-restore>Drive 복원</button></div>
+            <div class="action-row" style="margin-top:10px"><button class="btn soft" data-backup>파일 백업</button><button class="btn soft" data-restore>파일 복원</button></div>
+            <div class="tiny muted" style="margin-top:12px">저장 위치는 사용자가 초기화하거나 Google 계정을 바꾸지 않는 한 고정됩니다.</div>
           </div>
 
           <div class="card">
@@ -789,7 +825,7 @@ function setCloudStatus(status, text) {
               </div>
             </details>
           </div>
-          <div class="tiny muted center" style="padding:2px 0 8px">MSTY PROJECT 1000 · V2.0</div>
+          <div class="tiny muted center" style="padding:2px 0 8px">MSTY PROJECT 1000 · V${APP_VERSION}</div>
         </div>`;
     }
 
@@ -868,24 +904,28 @@ function setCloudStatus(status, text) {
         <form id="tradeForm" class="form-grid">
           <input type="hidden" name="id" value="${record?.id||''}">
           <input type="hidden" name="type" value="${type}">
-          ${type==='buy'?`<div><label class="input-label">매수 유형</label><div class="segmented"><button type="button" data-buytype="direct" class="${buyType==='direct'?'active':''}">직접매수</button><button type="button" data-buytype="reinvest" class="${buyType==='reinvest'?'active':''}">배당재투자</button>${buyType==='opening'?`<button type="button" data-buytype="opening" class="active">초기보유</button>`:''}</div><input type="hidden" name="buyType" value="${buyType}"></div>`:''}
+          ${type==='buy'?`<div><label class="input-label">매수 유형</label><div class="segmented"><button type="button" data-buytype="direct" class="${buyType==='direct'?'active':''}">직접매수</button><button type="button" data-buytype="reinvest" class="${buyType==='reinvest'?'active':''}">배당재투자</button><button type="button" data-buytype="mixed" class="${buyType==='mixed'?'active':''}">혼합매수</button>${buyType==='opening'?`<button type="button" data-buytype="opening" class="active">초기보유</button>`:''}</div><input type="hidden" name="buyType" value="${buyType}"></div>`:''}
           <div><label class="input-label">날짜</label><input class="input" type="date" name="date" required value="${record?.date||todayISO()}"></div>
           <div class="form-grid two">
             <div><label class="input-label">주수</label><input class="input" type="number" name="shares" min="0.00000001" step="0.00000001" required value="${record?.shares??''}" placeholder="0"></div>
             <div><label class="input-label">단가 USD</label><input class="input" type="number" name="price" min="0" step="0.0001" required value="${record?.price??''}" placeholder="0.00"></div>
           </div>
           <div class="inline-total"><span class="tiny muted">예상 거래금액</span><strong id="tradeTotalPreview">${record?fmtUSD(n(record.shares)*n(record.price)):fmtUSD(0)}</strong></div>
+          <div id="mixedFields" style="display:${buyType==='mixed'?'block':'none'}"><label class="input-label">배당 사용액 USD</label><input class="input" type="number" name="reinvestAmountUSD" min="0" step="0.0001" value="${record?.reinvestAmountUSD??''}" placeholder="배당으로 사용한 금액"><div class="tiny muted" id="mixedCashPreview" style="margin-top:8px">현금 사용액은 총액에서 자동 계산됩니다.</div></div>
           <div><label class="input-label">메모 <span class="muted">선택</span></label><input class="input" name="note" maxlength="80" value="${esc(record?.note||'')}" placeholder="짧은 메모"></div>
           <div class="modal-actions"><button type="button" class="btn soft" data-close-modal>취소</button><button class="btn primary" type="submit">${isEdit?'수정 저장':'기록 저장'}</button></div>
         </form>`);
       document.querySelectorAll('[data-buytype]').forEach(btn => btn.addEventListener('click',()=>{
         document.querySelectorAll('[data-buytype]').forEach(x=>x.classList.toggle('active',x===btn));
         document.querySelector('#tradeForm [name="buyType"]').value = btn.dataset.buytype;
+        const mixed=document.getElementById('mixedFields'); if(mixed)mixed.style.display=btn.dataset.buytype==='mixed'?'block':'none';
+        updateTradePreview();
       }));
       const tradeForm=document.getElementById('tradeForm');
-      const updateTradePreview=()=>{const shares=n(tradeForm.elements.shares.value),price=n(tradeForm.elements.price.value);const el=document.getElementById('tradeTotalPreview');if(el)el.textContent=fmtUSD(shares*price);};
+      const updateTradePreview=()=>{const shares=n(tradeForm.elements.shares.value),price=n(tradeForm.elements.price.value),total=shares*price;const el=document.getElementById('tradeTotalPreview');if(el)el.textContent=fmtUSD(total);const cash=document.getElementById('mixedCashPreview');if(cash){const div=Math.max(0,n(tradeForm.elements.reinvestAmountUSD?.value));cash.textContent=`현금 사용 ${fmtUSD(Math.max(0,total-div))} · 배당 사용 ${fmtUSD(Math.min(total,div))}`;}};
       tradeForm.elements.shares.addEventListener('input',updateTradePreview);
       tradeForm.elements.price.addEventListener('input',updateTradePreview);
+      tradeForm.elements.reinvestAmountUSD?.addEventListener('input',updateTradePreview);
       tradeForm.addEventListener('submit',saveTradeForm);
       bindModalClose();
     }
@@ -900,10 +940,25 @@ function setCloudStatus(status, text) {
         date: fd.get('date'),
         shares: n(fd.get('shares')),
         price: n(fd.get('price')),
+        reinvestAmountUSD: fd.get('type')==='buy' && (fd.get('buyType')||'direct')==='mixed' ? n(fd.get('reinvestAmountUSD')) : 0,
         note: String(fd.get('note')||'').trim(),
         createdAt: new Date().toISOString()
       };
+      const existing=state.trades.find(x=>x.id===item.id);
+      if(existing?.createdAt)item.createdAt=existing.createdAt;
       if (!item.date || item.shares<=0 || item.price<0) return toast('입력값을 확인해 주세요.');
+      const totalAmount=item.shares*item.price;
+      if(item.buyType==='mixed' && (item.reinvestAmountUSD<0 || item.reinvestAmountUSD>totalAmount+.0001)) return toast('배당 사용액은 총 매수금액 이하여야 합니다.');
+      if(item.buyType==='mixed'){
+        const usedByOthers=state.trades.filter(t=>t.id!==item.id&&t.type==='buy').reduce((sum,t)=>{
+          const amount=Math.max(0,n(t.shares)*n(t.price));
+          if(t.buyType==='reinvest')return sum+amount;
+          if(t.buyType==='mixed')return sum+clamp(n(t.reinvestAmountUSD),0,amount);
+          return sum;
+        },0);
+        const available=Math.max(0,state.dividends.reduce((sum,d)=>sum+Math.max(0,n(d.amountUSD)),0)-usedByOthers);
+        if(item.reinvestAmountUSD>available+.0001)return toast(`사용 가능한 배당은 ${fmtUSD(available)}입니다.`);
+      }
       const dup = state.trades.some(x=>x.id!==item.id && x.date===item.date && x.type===item.type && Math.abs(n(x.shares)-item.shares)<1e-8 && Math.abs(n(x.price)-item.price)<1e-8);
       if (dup && !confirm('같은 날짜·주수·단가의 거래가 있습니다. 그래도 저장할까요?')) return;
       const idx = state.trades.findIndex(x=>x.id===item.id);
@@ -937,11 +992,14 @@ function setCloudStatus(status, text) {
           <div><label class="input-label">지급일</label><input class="input" type="date" name="date" required value="${record?.date||todayISO()}"></div>
           <div><label class="input-label">세후 배당금 USD</label><input class="input" type="number" name="amountUSD" min="0" step="0.0001" required value="${record?.amountUSD??''}" placeholder="0.00"></div>
           <div class="inline-total"><span class="tiny muted">저장할 세후 배당</span><strong id="dividendPreview">${record?fmtUSD(record.amountUSD):fmtUSD(0)}</strong></div>
+          <div class="form-grid two"><div><label class="input-label">기준 보유주수</label><input class="input" type="number" name="sharesAtPayment" min="0" step="0.00000001" value="${record?.sharesAtPayment??computePortfolio().actualShares}" placeholder="배당 기준 주수"></div><div><label class="input-label">기준 주가 USD</label><input class="input" type="number" name="referencePrice" min="0" step="0.0001" value="${record?.referencePrice??state.settings.currentPrice}" placeholder="수익률 기준 주가"></div></div>
+          <div class="inline-total" style="display:block"><span class="tiny muted">배당률 환산</span><strong id="dividendYieldPreview" style="display:block;margin-top:6px">주 - · 월 - · 연 -</strong><span class="tiny muted" style="display:block;margin-top:6px">해당 주 배당을 52주 기준으로 단순 환산한 참고값입니다.</span></div>
           <div><label class="input-label">메모 <span class="muted">선택</span></label><input class="input" name="note" maxlength="80" value="${esc(record?.note||'')}" placeholder="짧은 메모"></div>
           <div class="modal-actions"><button type="button" class="btn soft" data-close-modal>취소</button><button class="btn primary" type="submit">${record?'수정 저장':'기록 저장'}</button></div>
         </form>`);
       const dividendForm=document.getElementById('dividendForm');
-      dividendForm.elements.amountUSD.addEventListener('input',()=>{const el=document.getElementById('dividendPreview');if(el)el.textContent=fmtUSD(n(dividendForm.elements.amountUSD.value));});
+      const updateDividendPreview=()=>{const amount=n(dividendForm.elements.amountUSD.value),shares=n(dividendForm.elements.sharesAtPayment.value),price=n(dividendForm.elements.referencePrice.value);const el=document.getElementById('dividendPreview');if(el)el.textContent=fmtUSD(amount);const y=document.getElementById('dividendYieldPreview');if(y){const per=shares>0?amount/shares:0,w=price>0?per/price*100:0;y.textContent=shares>0&&price>0?`주당 ${fmtUSD(per)} · 주 ${fmtPct(w)} · 월 ${fmtPct(w*52/12)} · 연 ${fmtPct(w*52)}`:'주수와 기준 주가를 입력하세요.';}};
+      ['amountUSD','sharesAtPayment','referencePrice'].forEach(k=>dividendForm.elements[k].addEventListener('input',updateDividendPreview)); updateDividendPreview();
       dividendForm.addEventListener('submit',saveDividendForm);
       bindModalClose();
     }
@@ -949,7 +1007,8 @@ function setCloudStatus(status, text) {
     async function saveDividendForm(ev) {
       ev.preventDefault();
       const fd = new FormData(ev.currentTarget);
-      const item = {id:fd.get('id')||uid(),date:fd.get('date'),amountUSD:n(fd.get('amountUSD')),note:String(fd.get('note')||'').trim(),createdAt:new Date().toISOString()};
+      const item = {id:fd.get('id')||uid(),date:fd.get('date'),amountUSD:n(fd.get('amountUSD')),sharesAtPayment:n(fd.get('sharesAtPayment')),referencePrice:n(fd.get('referencePrice')),note:String(fd.get('note')||'').trim(),createdAt:new Date().toISOString()};
+      const existing=state.dividends.find(x=>x.id===item.id); if(existing?.createdAt)item.createdAt=existing.createdAt;
       if (!item.date || item.amountUSD<=0) return toast('지급일과 배당금액을 확인해 주세요.');
       const dup = state.dividends.some(x=>x.id!==item.id && x.date===item.date && Math.abs(n(x.amountUSD)-item.amountUSD)<1e-8);
       if (dup && !confirm('같은 날짜·금액의 배당이 있습니다. 그래도 저장할까요?')) return;
@@ -1098,6 +1157,8 @@ function setCloudStatus(status, text) {
       document.querySelectorAll('[data-backup]').forEach(x=>x.onclick=downloadBackup);
       document.querySelectorAll('[data-restore]').forEach(x=>x.onclick=()=>document.getElementById('restoreInput').click());
       document.querySelectorAll('[data-csv]').forEach(x=>x.onclick=exportCSV);
+      document.querySelectorAll('[data-drive-backup]').forEach(x=>x.onclick=driveBackup);
+      document.querySelectorAll('[data-drive-restore]').forEach(x=>x.onclick=driveRestore);
       document.querySelectorAll('[data-project-check]').forEach(x=>x.onclick=()=>preserveScroll(()=>{ui.checkResults=projectCheck();renderSettings();bindDynamicEvents();toast(ui.checkResults.length?`${ui.checkResults.length}개 항목을 확인해 주세요.`:'오류가 발견되지 않았습니다.');}));
       document.querySelectorAll('[data-reset-all]').forEach(x=>x.onclick=()=>confirmDelete('모든 거래·배당·설정·회수 기록을 초기화합니다. 되돌릴 수 없습니다.',async()=>{await storageSet(SAFETY_KEY,deepClone(state));state=blankState();ui.checkResults=null;await saveState(true);renderAll();showPage('home',{resetScroll:true});toast('전체 데이터를 초기화했습니다.');}));
     }
@@ -1132,6 +1193,8 @@ function setCloudStatus(status, text) {
       const p=computePortfolio();
       if (p.actualShares < -1e-8) issues.push('보유주수가 음수입니다. 거래 기록을 확인하세요.');
       if (p.oversells.length) issues.push(`보유량을 초과한 매도 기록이 ${p.oversells.length}건 있습니다.`);
+      const badMixed=state.trades.filter(t=>t.buyType==='mixed'&&(n(t.reinvestAmountUSD)<0||n(t.reinvestAmountUSD)>n(t.shares)*n(t.price)+.0001)); if(badMixed.length)issues.push(`혼합매수의 배당 사용액이 잘못된 거래가 ${badMixed.length}건 있습니다.`);
+      if(p.dividendAvailable<-.0001)issues.push(`배당 사용액이 누적 배당보다 ${fmtUSD(Math.abs(p.dividendAvailable))} 많습니다. 기존 재투자 기록을 확인하세요.`);
       const badTrade=state.trades.filter(t=>!/^\d{4}-\d{2}-\d{2}$/.test(t.date)||n(t.shares)<=0||n(t.price)<0); if(badTrade.length)issues.push(`날짜·주수·단가가 잘못된 거래가 ${badTrade.length}건 있습니다.`);
       const badDiv=state.dividends.filter(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||n(d.amountUSD)<=0); if(badDiv.length)issues.push(`날짜·금액이 잘못된 배당이 ${badDiv.length}건 있습니다.`);
       const badSplit=state.splits.filter(s=>!/^\d{4}-\d{2}-\d{2}$/.test(s.date)||n(s.from)<=0||n(s.to)<=0); if(badSplit.length)issues.push(`분할 비율이 잘못된 기록이 ${badSplit.length}건 있습니다.`);
@@ -1143,7 +1206,7 @@ function setCloudStatus(status, text) {
       if (Math.abs(p.reinvestSharesCurrent)<1e-8 && p.reinvestAmount>0) issues.push('재투자 금액은 있으나 재투자 주수 계산이 0입니다.');
       if (state.meta.lastBackupAt) {
         const days=(Date.now()-new Date(state.meta.lastBackupAt).getTime())/86400000; if(days>60)issues.push(`마지막 백업 후 ${Math.floor(days)}일이 지났습니다.`);
-      } else if (state.trades.length+state.dividends.length>0) issues.push('아직 JSON 백업을 만든 적이 없습니다.');
+      } else if (state.trades.length+state.dividends.length>0) issues.push('아직 ZIP 백업을 만든 적이 없습니다.');
       return issues;
     }
 
@@ -1151,28 +1214,58 @@ function setCloudStatus(status, text) {
       const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
     }
     async function downloadBackup() {
-      state.meta.lastBackupAt=new Date().toISOString(); await saveState(true);
-      const date=todayISO().replaceAll('-','');
-      downloadFile(`MSTY_PROJECT1000_backup_${date}.json`,JSON.stringify(state,null,2),'application/json;charset=utf-8');
-      refreshPage('settings');toast('JSON 백업을 저장했습니다.');
+      try {
+        state.meta.lastBackupAt=new Date().toISOString(); await saveState(true);
+        setSaveStatus('ZIP 백업 만드는 중');
+        const zip=await buildPortableBackup(deepClone(state));
+        const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z').replace('T','_');
+        downloadFile(`MSTY_v${APP_VERSION}_${stamp}.zip`,zip,'application/zip');
+        refreshPage('settings');toast('데이터와 앱 버전이 포함된 ZIP 백업을 저장했습니다.');
+      } catch(err){console.error(err);setSaveStatus('백업 오류');toast('ZIP 백업 생성에 실패했습니다.');}
     }
+
+    async function driveBackup() {
+      if(!currentUser) return toast('먼저 Google로 로그인해 주세요.');
+      try {
+        setSaveStatus('Drive 권한 확인 중');
+        const token=await requestDriveAccessToken();
+        const exportedAt=new Date().toISOString();
+        const portableZip=await buildPortableBackup(deepClone(state));
+        await saveDriveBackup(token,{...deepClone(state),exportedAt,appVersion:APP_VERSION},portableZip);
+        state.meta.lastDriveBackupAt=exportedAt;
+        await saveState(true); refreshPage('settings'); toast('Drive에 데이터 JSON과 휴대용 ZIP을 저장했습니다.');
+      } catch(err){console.error(err);toast('Drive 백업에 실패했습니다. Google 권한을 확인해 주세요.');}
+    }
+    async function driveRestore() {
+      if(!currentUser) return toast('먼저 Google로 로그인해 주세요.');
+      try {
+        const token=await requestDriveAccessToken();
+        const result=await loadDriveBackup(token);
+        if(!result?.payload) return toast('Drive 백업 파일이 없습니다.');
+        const parsed=result.payload;
+        if(!Array.isArray(parsed.trades)||!Array.isArray(parsed.dividends)) throw new Error('형식 오류');
+        if(!confirm('Google Drive 백업으로 현재 데이터를 교체할까요?')) return;
+        await storageSet(SAFETY_KEY,deepClone(state)); state=migrate(parsed); await saveState(true); renderAll(); showPage('home',{resetScroll:true}); toast('Drive 백업을 복원했습니다.');
+      } catch(err){console.error(err);toast('Drive 복원에 실패했습니다.');}
+    }
+
     function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s;}
     function exportCSV() {
-      const rows=[['구분','ID','날짜','유형','세부유형','주수','단가USD','금액USD','메모','기존주수','변경주수']];
-      state.trades.forEach(t=>rows.push(['거래',t.id,t.date,t.type,t.buyType,t.shares,t.price,n(t.shares)*n(t.price),t.note,'','']));
-      state.dividends.forEach(d=>rows.push(['배당',d.id,d.date,'dividend','','','',d.amountUSD,d.note,'','']));
-      state.splits.forEach(s=>rows.push(['분할',s.id,s.date,s.kind,'','','','','','',s.from,s.to]));
+      const rows=[['구분','ID','날짜','유형','세부유형','주수','단가USD','금액USD','배당사용USD','기준보유주수','기준주가USD','메모','기존주수','변경주수']];
+      state.trades.forEach(t=>rows.push(['거래',t.id,t.date,t.type,t.buyType,t.shares,t.price,n(t.shares)*n(t.price),n(t.reinvestAmountUSD),'','',t.note,'','']));
+      state.dividends.forEach(d=>rows.push(['배당',d.id,d.date,'dividend','','','',d.amountUSD,'',d.sharesAtPayment,d.referencePrice,d.note,'','']));
+      state.splits.forEach(s=>rows.push(['분할',s.id,s.date,s.kind,'','','','','','','','','',s.from,s.to]));
       const csv='\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\n');
       downloadFile(`MSTY_PROJECT1000_${todayISO().replaceAll('-','')}.csv`,csv,'text/csv;charset=utf-8');toast('CSV를 저장했습니다.');
     }
 
     async function restoreFromFile(file) {
       try {
-        const text=await file.text(); const parsed=JSON.parse(text);
+        const parsed=await readStateFromBackupFile(file);
         if (!parsed || !Array.isArray(parsed.trades) || !Array.isArray(parsed.dividends)) throw new Error('형식 오류');
         await storageSet(SAFETY_KEY,deepClone(state));
         state=migrate(parsed); await saveState(true); ui.checkResults=null; renderAll();showPage('home',{resetScroll:true});toast('백업을 복원했습니다.');
-      } catch(err) {console.error(err);toast('올바른 백업 파일이 아닙니다.');}
+      } catch(err) {console.error(err);toast('올바른 JSON 또는 이 앱에서 만든 ZIP 백업이 아닙니다.');}
     }
 
     function showAuthGate(message='Google로 로그인해 주세요.') {
