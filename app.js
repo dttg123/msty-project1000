@@ -155,9 +155,11 @@ const APP_BOOT_AT = performance.now();
     let cloudStatus = 'checking';
     const CLOUD_DOC_ID = 'msty-project1000';
     const ui = {
-      recent: { trade: 1, dividend: 1, log: 1, split: 1 },
+      recent: { trade: 1, dividend: 5, log: 1, split: 1 },
       dividendYear: 'all',
-      dividendGroup: 'month',
+      dividendGroup: 'week',
+      dividendMonth: todayISO().slice(0,7),
+      dividendFabHidden: false,
       dividendChartOpen: false,
       checkResults: null,
       milestoneOpen: null
@@ -623,67 +625,101 @@ function setCloudStatus(status, text) {
       `;
     }
 
-    function dividendGroups(dividends, mode) {
+    function periodDividendYield(dividends) {
+      let yieldPct=0, valid=0;
+      for (const d of dividends) {
+        const basis=Math.max(0,n(d.sharesAtPayment))*Math.max(0,n(d.referencePrice));
+        if (basis>0) { yieldPct += n(d.amountUSD)/basis*100; valid++; }
+      }
+      return {yieldPct,valid};
+    }
+    function dividendGroups(dividends, mode, context={}) {
       const map = new Map();
       for (const d of dividends) {
         let key;
-        if (mode === 'year') key = d.date.slice(0,4);
-        else if (mode === 'month') key = d.date.slice(0,7);
+        if (mode === 'year') key = String(d.date).slice(0,4);
+        else if (mode === 'month') key = String(d.date).slice(0,7);
         else {
-          const date = new Date(`${d.date}T12:00:00`);
-          const day = (date.getDay()+6)%7;
-          date.setDate(date.getDate()-day);
-          key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+          const day=Number(String(d.date).slice(8,10));
+          key=String(Math.min(5,Math.floor((day-1)/7)+1));
         }
-        map.set(key,(map.get(key)||0)+n(d.amountUSD));
+        const current=map.get(key)||{amount:0,records:[]};
+        current.amount+=n(d.amountUSD); current.records.push(d); map.set(key,current);
+      }
+      if(mode==='week') {
+        const maxWeeks=new Date(Number(context.year),Number(context.month),0).getDate()>28?5:4;
+        for(let i=1;i<=maxWeeks;i++) if(!map.has(String(i))) map.set(String(i),{amount:0,records:[]});
+        return [...map.entries()].sort((a,b)=>Number(a[0])-Number(b[0]));
       }
       return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
     }
-    function dividendColumnChart(groups, mode, compact=false) {
-      const visible=groups.slice(compact?-6:-12);
-      const max=Math.max(1,...visible.map(x=>x[1]));
+    function dividendColumnChart(groups, mode) {
+      const visible=groups.slice(-12);
+      const max=Math.max(1,...visible.map(x=>x[1].amount));
       if(!visible.length) return `<div class="empty">선택한 기간의 배당 기록이 없습니다.</div>`;
-      return `<div class="column-chart ${compact?'compact-chart':''}">${visible.map(([k,v])=>{
-        const label=mode==='year'?k:mode==='month'?k.slice(5).replace(/^0/,'')+'월':`${Number(k.slice(5,7))}/${Number(k.slice(8,10))}`;
-        return `<button class="column-item" type="button" title="${esc(k)} ${fmtUSD(v)}"><span class="column-value">${fmtUSD(v)}</span><span class="column-track"><span class="column-fill" style="height:${Math.max(4,v/max*100)}%"></span></span><span class="column-label">${label}</span></button>`;
+      return `<div class="column-chart">${visible.map(([k,obj])=>{
+        const v=obj.amount;
+        const label=mode==='year'?k:mode==='month'?k.slice(5).replace(/^0/,'')+'월':`${k}주차`;
+        const range=mode==='week'?`<small>${k==='5'?'29일~말일':`${(Number(k)-1)*7+1}~${Number(k)*7}일`}</small>`:'';
+        return `<button class="column-item" type="button" title="${esc(label)} ${fmtUSD(v)}"><span class="column-value">${fmtUSD(v)}</span><span class="column-track"><span class="column-fill" style="height:${v?Math.max(4,v/max*100):0}%"></span></span><span class="column-label">${label}${range}</span></button>`;
       }).join('')}</div>`;
     }
     function openDividendChartModal() {
       const years=[...new Set(state.dividends.map(d=>String(d.date).slice(0,4)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
-      if(ui.dividendYear!=='all'&&!years.includes(ui.dividendYear)) ui.dividendYear=years[0]||'all';
-      const filtered=state.dividends.filter(d=>ui.dividendYear==='all'||String(d.date).startsWith(ui.dividendYear));
-      const groups=dividendGroups(filtered,ui.dividendGroup);
-      openModal(`<h3 class="modal-title">배당 그래프 전체보기</h3><p class="modal-desc">기록이 있는 연도와 월은 배당 입력·수정·삭제에 맞춰 자동으로 바뀝니다.</p>
-        <div class="form-grid two"><select class="select" id="chartYearSelect"><option value="all" ${ui.dividendYear==='all'?'selected':''}>전체 연도</option>${years.map(y=>`<option value="${y}" ${ui.dividendYear===y?'selected':''}>${y}년</option>`).join('')}</select><div class="segmented"><button type="button" data-modal-div-group="month" class="${ui.dividendGroup==='month'?'active':''}">월별</button><button type="button" data-modal-div-group="week" class="${ui.dividendGroup==='week'?'active':''}">주별</button><button type="button" data-modal-div-group="year" class="${ui.dividendGroup==='year'?'active':''}">연별</button></div></div>
-        <div class="full-chart">${dividendColumnChart(groups,ui.dividendGroup,false)}</div>
-        <div class="modal-actions"><button type="button" class="btn primary" data-close-modal>닫기</button></div>`);
+      const fallbackYear=years[0]||todayISO().slice(0,4);
+      if(!years.includes(ui.dividendYear)||ui.dividendYear==='all') ui.dividendYear=fallbackYear;
+      if(!/^\d{4}-\d{2}$/.test(ui.dividendMonth)||!ui.dividendMonth.startsWith(ui.dividendYear)) ui.dividendMonth=`${ui.dividendYear}-${todayISO().slice(0,4)===ui.dividendYear?todayISO().slice(5,7):'01'}`;
+      let filtered=[], groups=[];
+      if(ui.dividendGroup==='week') {
+        filtered=state.dividends.filter(d=>String(d.date).startsWith(ui.dividendMonth));
+        groups=dividendGroups(filtered,'week',{year:Number(ui.dividendMonth.slice(0,4)),month:Number(ui.dividendMonth.slice(5,7))});
+      } else if(ui.dividendGroup==='month') {
+        filtered=state.dividends.filter(d=>String(d.date).startsWith(ui.dividendYear));
+        groups=dividendGroups(filtered,'month');
+        for(let m=1;m<=12;m++){const k=`${ui.dividendYear}-${String(m).padStart(2,'0')}`;if(!groups.some(x=>x[0]===k))groups.push([k,{amount:0,records:[]}]);}
+        groups.sort((a,b)=>a[0].localeCompare(b[0]));
+      } else {
+        filtered=state.dividends;
+        groups=dividendGroups(filtered,'year');
+      }
+      const total=filtered.reduce((sum,d)=>sum+n(d.amountUSD),0);
+      const y=periodDividendYield(filtered);
+      const avg=filtered.length?total/filtered.length:0;
+      const monthOptions=Array.from({length:12},(_,i)=>`${ui.dividendYear}-${String(i+1).padStart(2,'0')}`);
+      openModal(`<div class="flow-modal-head"><h3 class="modal-title">배당 흐름</h3><button class="flow-close" type="button" data-close-modal aria-label="닫기">×</button></div>
+        <div class="segmented flow-tabs"><button type="button" data-modal-div-group="week" class="${ui.dividendGroup==='week'?'active':''}">주별</button><button type="button" data-modal-div-group="month" class="${ui.dividendGroup==='month'?'active':''}">월별</button><button type="button" data-modal-div-group="year" class="${ui.dividendGroup==='year'?'active':''}">연도별</button></div>
+        ${ui.dividendGroup==='year'?'':`<div class="flow-filter"><select class="select" id="chartYearSelect">${years.length?years.map(y=>`<option value="${y}" ${ui.dividendYear===y?'selected':''}>${y}년</option>`).join(''):`<option>${fallbackYear}년</option>`}</select>${ui.dividendGroup==='week'?`<select class="select" id="chartMonthSelect">${monthOptions.map(m=>`<option value="${m}" ${ui.dividendMonth===m?'selected':''}>${Number(m.slice(5))}월</option>`).join('')}</select>`:''}</div>`}
+        <div class="full-chart">${dividendColumnChart(groups,ui.dividendGroup)}</div>
+        <div class="flow-summary"><div><span>총 배당금</span><strong>${fmtUSD(total)}</strong></div><div><span>배당률</span><strong>${y.valid?fmtPct(y.yieldPct):'-'}</strong></div><div><span>지급 횟수</span><strong>${filtered.length}회</strong></div><div><span>평균 배당금</span><strong>${filtered.length?fmtUSD(avg):'-'}</strong></div></div>`);
       bindModalClose();
-      const select=document.getElementById('chartYearSelect'); if(select) select.onchange=()=>{ui.dividendYear=select.value;openDividendChartModal();};
+      document.getElementById('chartYearSelect')?.addEventListener('change',e=>{ui.dividendYear=e.target.value;openDividendChartModal();});
+      document.getElementById('chartMonthSelect')?.addEventListener('change',e=>{ui.dividendMonth=e.target.value;openDividendChartModal();});
       document.querySelectorAll('[data-modal-div-group]').forEach(b=>b.onclick=()=>{ui.dividendGroup=b.dataset.modalDivGroup;openDividendChartModal();});
     }
 
     function renderDividend() {
       const p = computePortfolio();
-      const years = [...new Set(state.dividends.map(d=>String(d.date).slice(0,4)).filter(Boolean))].sort((a,b)=>b.localeCompare(a));
-      if(ui.dividendYear!=='all'&&!years.includes(ui.dividendYear)) ui.dividendYear=years[0]||'all';
-      const filtered = [...state.dividends].filter(d=>ui.dividendYear==='all'||String(d.date).startsWith(ui.dividendYear)).sort((a,b)=>String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt)));
-      const selectedTotal = filtered.reduce((s,d)=>s+n(d.amountUSD),0);
-      const total = state.dividends.reduce((s,d)=>s+n(d.amountUSD),0);
-      const miniGroups=dividendGroups(filtered,'month');
+      const now=todayISO(), currentMonth=now.slice(0,7), currentYear=now.slice(0,4);
+      const sorted=[...state.dividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt)));
+      const monthRecords=sorted.filter(d=>String(d.date).startsWith(currentMonth));
+      const yearRecords=sorted.filter(d=>String(d.date).startsWith(currentYear));
+      const monthTotal=monthRecords.reduce((s,d)=>s+n(d.amountUSD),0);
+      const yearTotal=yearRecords.reduce((s,d)=>s+n(d.amountUSD),0);
+      const monthYield=periodDividendYield(monthRecords);
+      const yearYield=periodDividendYield(yearRecords);
       document.getElementById('page-dividend').innerHTML = `
-        ${pageHeader('배당','세후 금액 입력')}
-        <button class="btn primary" style="width:100%" data-open-dividend>＋ 배당 기록</button>
-        <div class="card compact" style="margin-top:14px">
-          <div class="filter-row" style="grid-template-columns:1fr"><select class="select" id="dividendYearSelect"><option value="all" ${ui.dividendYear==='all'?'selected':''}>전체 연도</option>${years.map(y=>`<option value="${y}" ${ui.dividendYear===y?'selected':''}>${y}년</option>`).join('')}</select></div>
-          <div class="summary-grid" style="margin-top:14px">
-            <div class="summary-chip"><div class="label">선택 기간</div><div class="value">${fmtUSD(selectedTotal)}</div>${krwMini(selectedTotal)}</div><div class="summary-chip"><div class="label">누적 배당</div><div class="value">${fmtUSD(total)}</div>${krwMini(total)}</div><div class="summary-chip"><div class="label">지급 횟수</div><div class="value">${filtered.length.toLocaleString()}회</div></div><div class="summary-chip"><div class="label">최근 배당</div><div class="value">${filtered[0]?fmtUSD(filtered[0].amountUSD):'-'}</div>${filtered[0]?krwMini(filtered[0].amountUSD):''}</div><div class="summary-chip"><div class="label">재투자 사용액</div><div class="value">${fmtUSD(p.reinvestAmount)}</div>${krwMini(p.reinvestAmount)}</div><div class="summary-chip"><div class="label">사용 가능 배당</div><div class="value ${signClass(p.dividendAvailable)}">${fmtUSD(p.dividendAvailable)}</div>${krwMini(p.dividendAvailable,signClass(p.dividendAvailable))}</div><div class="summary-chip"><div class="label">혼합매수 현금</div><div class="value">${fmtUSD(p.mixedCashUsed)}</div>${krwMini(p.mixedCashUsed)}</div>
-          </div>
-          ${p.dividendAvailable<-.0001?`<div class="check-item" style="margin-top:12px">배당 사용액이 누적 배당보다 ${fmtUSD(Math.abs(p.dividendAvailable))} 많습니다.</div>`:`<div class="tiny muted" style="margin-top:11px">사용 가능 배당 = 누적 세후배당 − 배당재투자·혼합매수의 배당 사용액</div>`}
-          <div class="mini-chart-head"><div><strong>월별 배당 흐름</strong><div class="tiny muted">최근 6개 기록 월</div></div><button class="mini-icon" data-open-dividend-chart>전체보기</button></div>
-          ${dividendColumnChart(miniGroups,'month',true)}
+        ${pageHeader('배당','세후 기준')}
+        <div class="dividend-dashboard">
+          <div class="dividend-stat"><span>이번 달 배당률</span><strong>${monthYield.valid?fmtPct(monthYield.yieldPct):'-'}</strong><small>세후 기준</small></div>
+          <div class="dividend-stat"><span>올해 배당률</span><strong>${yearYield.valid?fmtPct(yearYield.yieldPct):'-'}</strong><small>세후 기준</small></div>
+          <div class="dividend-stat"><span>이번 달 배당금</span><strong>${fmtUSD(monthTotal)}</strong><small>${monthRecords.length}회 지급</small></div>
+          <div class="dividend-stat"><span>올해 누적 배당금</span><strong>${fmtUSD(yearTotal)}</strong><small>${yearRecords.length}회 지급</small></div>
         </div>
-        ${pageHeader('최근 배당','누르면 최대 10개')}
-        ${recentBlock('dividend',filtered,d=>dividendRow(d,true),'최근 배당','아직 배당 기록이 없습니다.')}`;
+        <button class="dividend-flow-card" type="button" data-open-dividend-chart><span class="flow-icon">▥</span><span><strong>배당 흐름 보기</strong><small>주별 · 월별 · 연도별 분석</small></span><b>›</b></button>
+        <div class="card compact dividend-balance-card"><div class="summary-grid"><div class="summary-chip"><div class="label">누적 배당</div><div class="value">${fmtUSD(p.dividendsTotal||state.dividends.reduce((s,d)=>s+n(d.amountUSD),0))}</div></div><div class="summary-chip"><div class="label">사용 가능 배당</div><div class="value ${signClass(p.dividendAvailable)}">${fmtUSD(p.dividendAvailable)}</div></div></div></div>
+        ${pageHeader('배당 내역','최근 10개')}
+        ${recentBlock('dividend',sorted,d=>dividendRow(d,true),'배당 내역','아직 배당 기록이 없습니다.')}
+        <button class="dividend-fab ${ui.dividendFabHidden?'is-hidden':''}" type="button" data-open-dividend aria-label="배당 기록 추가" title="길게 누르면 잠시 숨김">＋</button>`;
     }
 
     function renderGoal() {
@@ -854,6 +890,7 @@ function setCloudStatus(status, text) {
 
     function showPage(page, options={}) {
       const previous = currentPage;
+      if(page==='dividend' && previous!=='dividend') { ui.dividendFabHidden=false; document.querySelector('.dividend-fab')?.classList.remove('is-hidden'); }
       const shouldResetScroll = options.resetScroll ?? (page !== previous);
       const oldIndex = PAGE_ORDER.indexOf(previous);
       const newIndex = PAGE_ORDER.indexOf(page);
@@ -1121,7 +1158,15 @@ function setCloudStatus(status, text) {
         d.ontoggle=()=>{const y=d.dataset.scrollY===''?window.scrollY:n(d.dataset.scrollY);restoreScrollPosition(y);};
       });
       document.querySelectorAll('[data-open-trade]').forEach(x=>x.onclick=()=>openTradeModal(x.dataset.openTrade));
-      document.querySelectorAll('[data-open-dividend]').forEach(x=>x.onclick=()=>openDividendModal());
+      document.querySelectorAll('[data-open-dividend]').forEach(x=>{
+        if(!x.classList.contains('dividend-fab')) { x.onclick=()=>openDividendModal(); return; }
+        let timer=null, longPressed=false;
+        const clear=()=>{if(timer){clearTimeout(timer);timer=null;}};
+        x.onpointerdown=()=>{longPressed=false;timer=setTimeout(()=>{longPressed=true;ui.dividendFabHidden=true;x.classList.add('is-hidden');haptic(18);toast('추가 버튼을 숨겼습니다. 배당 탭을 다시 열면 나타납니다.');},650);};
+        x.onpointerup=()=>{clear();if(!longPressed)openDividendModal();};
+        x.onpointercancel=clear; x.onpointerleave=clear;
+        x.onclick=e=>e.preventDefault();
+      });
       document.querySelectorAll('[data-open-split]').forEach(x=>x.onclick=openSplitModal);
       document.querySelectorAll('[data-confirm-recovery]').forEach(x=>x.onclick=()=>confirmRecoveryModal(false));
       document.querySelectorAll('[data-reset-recovery]').forEach(x=>x.onclick=()=>confirmRecoveryModal(true));
