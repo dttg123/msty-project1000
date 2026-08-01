@@ -3,8 +3,7 @@ import {
   onAuthStateChanged,
   setPersistence,
   signInWithPopup,
-  signOut,
-  GoogleAuthProvider
+  signOut
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { auth, googleProvider } from './firebase.js';
 
@@ -67,12 +66,4 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
 
 export function logoutGoogle() {
   return signOut(auth);
-}
-
-
-export async function requestDriveAccessToken() {
-  const result = await signInWithPopup(auth, googleProvider);
-  const credential = GoogleAuthProvider.credentialFromResult(result);
-  if (!credential?.accessToken) throw new Error('Google Drive access token unavailable');
-  return credential.accessToken;
 }

@@ -1,9 +1,9 @@
-export const APP_VERSION = '3.1.3';
+export const APP_VERSION = '3.1.5';
 export const DATA_SCHEMA_VERSION = 3.1;
 
 const APP_FILES = [
   'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
-  'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'drive.js',
+  'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js',
   'backup.js', 'sw.js'
 ];
 

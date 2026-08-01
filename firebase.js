@@ -16,6 +16,5 @@ const auth = getAuth(firebaseApp);
 const firestore = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
-googleProvider.addScope('https://www.googleapis.com/auth/drive.appdata');
 
 export { auth, firestore, googleProvider };

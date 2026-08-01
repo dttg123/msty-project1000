@@ -1,8 +1,7 @@
 import { auth, firestore } from './firebase.js';
-import { initGoogleAuth, logoutGoogle, requestDriveAccessToken } from './auth.js';
+import { initGoogleAuth, logoutGoogle } from './auth.js';
 import { openStorage, storageGet, storageSet } from './storage.js';
 import { getCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
-import { saveDriveBackup, loadDriveBackup } from './drive.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 
 (() => {
@@ -136,7 +135,6 @@ const APP_BOOT_AT = performance.now();
         lastBackupAt: '',
         lastLocalSaveAt: '',
         lastCloudSaveAt: '',
-        lastDriveBackupAt: '',
         celebratedMilestones: []
       }
     });
@@ -837,11 +835,10 @@ function setCloudStatus(status, text) {
             <div class="settings-group">
               <div class="setting-row"><div><div class="setting-title">폰 저장</div><div class="setting-desc">이 브라우저의 고정 IndexedDB 저장소</div></div><strong>${state.meta.lastLocalSaveAt?new Date(state.meta.lastLocalSaveAt).toLocaleString('ko-KR'):'준비됨'}</strong></div>
               <div class="setting-row"><div><div class="setting-title">클라우드</div><div class="setting-desc">Google 계정 UID의 고정 Firestore 문서</div></div><strong>${state.meta.lastCloudSaveAt?new Date(state.meta.lastCloudSaveAt).toLocaleString('ko-KR'):(currentUser?'연결됨':'로그인 필요')}</strong></div>
-              <div class="setting-row"><div><div class="setting-title">Google Drive</div><div class="setting-desc">앱 전용공간에 데이터 JSON + 휴대용 ZIP 저장</div></div><strong>${state.meta.lastDriveBackupAt?new Date(state.meta.lastDriveBackupAt).toLocaleString('ko-KR'):'아직 없음'}</strong></div>
+              <div class="setting-row"><div><div class="setting-title">ZIP 백업</div><div class="setting-desc">데이터와 현재 앱 버전을 한 파일로 저장</div></div><strong>${state.meta.lastBackupAt?new Date(state.meta.lastBackupAt).toLocaleString('ko-KR'):'아직 없음'}</strong></div>
             </div>
-            <div class="action-row" style="margin-top:14px"><button class="btn primary" data-drive-backup>Drive 백업</button><button class="btn secondary" data-drive-restore>Drive 복원</button></div>
-            <div class="action-row" style="margin-top:10px"><button class="btn soft" data-backup>파일 백업</button><button class="btn soft" data-restore>파일 복원</button></div>
-            <div class="tiny muted" style="margin-top:12px">저장 위치는 사용자가 초기화하거나 Google 계정을 바꾸지 않는 한 고정됩니다.</div>
+            <div class="action-row" style="margin-top:14px"><button class="btn primary" data-backup>ZIP 백업</button><button class="btn secondary" data-restore>ZIP 복원</button></div>
+            <div class="tiny muted" style="margin-top:12px">폰 저장은 자동이며, ZIP은 한 달에 한 번 보관하면 안전합니다.</div>
           </div>
 
           <div class="card">
@@ -1209,8 +1206,6 @@ function setCloudStatus(status, text) {
       document.querySelectorAll('[data-backup]').forEach(x=>x.onclick=downloadBackup);
       document.querySelectorAll('[data-restore]').forEach(x=>x.onclick=()=>document.getElementById('restoreInput').click());
       document.querySelectorAll('[data-csv]').forEach(x=>x.onclick=exportCSV);
-      document.querySelectorAll('[data-drive-backup]').forEach(x=>x.onclick=driveBackup);
-      document.querySelectorAll('[data-drive-restore]').forEach(x=>x.onclick=driveRestore);
       document.querySelectorAll('[data-project-check]').forEach(x=>x.onclick=()=>preserveScroll(()=>{ui.checkResults=projectCheck();renderSettings();bindDynamicEvents();toast(ui.checkResults.length?`${ui.checkResults.length}개 항목을 확인해 주세요.`:'오류가 발견되지 않았습니다.');}));
       document.querySelectorAll('[data-reset-all]').forEach(x=>x.onclick=()=>confirmDelete('모든 거래·배당·설정·회수 기록을 초기화합니다. 되돌릴 수 없습니다.',async()=>{await storageSet(SAFETY_KEY,deepClone(state));state=blankState();ui.checkResults=null;await saveState(true);renderAll();showPage('home',{resetScroll:true});toast('전체 데이터를 초기화했습니다.');}));
     }
@@ -1274,42 +1269,6 @@ function setCloudStatus(status, text) {
         downloadFile(`MSTY_v${APP_VERSION}_${stamp}.zip`,zip,'application/zip');
         refreshPage('settings');toast('데이터와 앱 버전이 포함된 ZIP 백업을 저장했습니다.');
       } catch(err){console.error(err);setSaveStatus('백업 오류');toast('ZIP 백업 생성에 실패했습니다.');}
-    }
-
-    function driveErrorMessage(err) {
-      const text=String(err?.message||err||'');
-      if(/403/.test(text)&&/accessNotConfigured|SERVICE_DISABLED|has not been used/i.test(text)) return 'Google Cloud에서 Drive API를 사용 설정해 주세요.';
-      if(/403/.test(text)&&/insufficientPermissions|PERMISSION_DENIED/i.test(text)) return 'Drive 앱 데이터 권한이 승인되지 않았습니다. 다시 로그인해 권한을 허용해 주세요.';
-      if(/401|invalid.?credential|token/i.test(text)) return 'Google 로그인 권한이 만료되었습니다. 다시 로그인해 주세요.';
-      if(/popup-blocked/i.test(text)) return '팝업이 차단되었습니다. Chrome에서 팝업을 허용해 주세요.';
-      if(/popup-closed|access_denied|cancel/i.test(text)) return 'Drive 권한 승인이 취소되었습니다.';
-      if(/network|fetch/i.test(text)) return '네트워크 연결을 확인해 주세요.';
-      return `Drive 오류: ${text.slice(0,120)}`;
-    }
-
-    async function driveBackup() {
-      if(!currentUser) return toast('먼저 Google로 로그인해 주세요.');
-      try {
-        setSaveStatus('Drive 권한 확인 중');
-        const token=await requestDriveAccessToken();
-        const exportedAt=new Date().toISOString();
-        const portableZip=await buildPortableBackup(deepClone(state));
-        await saveDriveBackup(token,{...deepClone(state),exportedAt,appVersion:APP_VERSION},portableZip);
-        state.meta.lastDriveBackupAt=exportedAt;
-        await saveState(true); refreshPage('settings'); toast('Drive에 데이터 JSON과 휴대용 ZIP을 저장했습니다.');
-      } catch(err){console.error(err);setSaveStatus('Drive 오류');toast(driveErrorMessage(err));}
-    }
-    async function driveRestore() {
-      if(!currentUser) return toast('먼저 Google로 로그인해 주세요.');
-      try {
-        const token=await requestDriveAccessToken();
-        const result=await loadDriveBackup(token);
-        if(!result?.payload) return toast('Drive 백업 파일이 없습니다.');
-        const parsed=result.payload;
-        if(!Array.isArray(parsed.trades)||!Array.isArray(parsed.dividends)) throw new Error('형식 오류');
-        if(!confirm('Google Drive 백업으로 현재 데이터를 교체할까요?')) return;
-        await storageSet(SAFETY_KEY,deepClone(state)); state=migrate(parsed); await saveState(true); renderAll(); showPage('home',{resetScroll:true}); toast('Drive 백업을 복원했습니다.');
-      } catch(err){console.error(err);toast(driveErrorMessage(err));}
     }
 
     function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?`"${s.replaceAll('"','""')}"`:s;}
