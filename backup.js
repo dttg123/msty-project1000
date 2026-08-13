@@ -1,4 +1,4 @@
-export const APP_VERSION = '3.1.5';
+export const APP_VERSION = '3.1.7';
 export const DATA_SCHEMA_VERSION = 3.1;
 
 const APP_FILES = [

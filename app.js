@@ -558,6 +558,68 @@ function setCloudStatus(status, text) {
       const weeklyPct = referencePrice>0 ? perShare/referencePrice*100 : 0;
       return {shares,referencePrice,perShare,weeklyPct,monthlyPct:weeklyPct*52/12,annualPct:weeklyPct*52};
     }
+    function dividendBalanceHistory() {
+      const events = [];
+      state.dividends.forEach(d => events.push({
+        id:`dividend-${d.id}`,
+        date:d.date,
+        createdAt:d.createdAt || '',
+        kind:'dividend',
+        title:'배당 입금',
+        amount:Math.max(0,n(d.amountUSD))
+      }));
+      state.trades.forEach(t => {
+        if (t.type !== 'buy') return;
+        const total = Math.max(0,n(t.shares)*n(t.price));
+        if (t.buyType === 'reinvest') events.push({
+          id:`trade-${t.id}`,
+          date:t.date,
+          createdAt:t.createdAt || '',
+          kind:'reinvest',
+          title:'배당 재투자',
+          amount:-total
+        });
+        if (t.buyType === 'mixed') {
+          const used = clamp(n(t.reinvestAmountUSD),0,total);
+          if (used > 0) events.push({
+            id:`trade-${t.id}`,
+            date:t.date,
+            createdAt:t.createdAt || '',
+            kind:'mixed',
+            title:'혼합매수 · 배당 사용',
+            amount:-used
+          });
+        }
+      });
+      events.sort((a,b)=>{
+        const byDate=String(a.date).localeCompare(String(b.date));
+        if(byDate) return byDate;
+        const aCreated=String(a.createdAt||'').trim();
+        const bCreated=String(b.createdAt||'').trim();
+        if(aCreated && bCreated){
+          const byCreated=aCreated.localeCompare(bCreated);
+          if(byCreated) return byCreated;
+        } else {
+          const priority={dividend:0,reinvest:1,mixed:1};
+          const byPriority=(priority[a.kind]??9)-(priority[b.kind]??9);
+          if(byPriority) return byPriority;
+        }
+        return String(a.id).localeCompare(String(b.id));
+      });
+      let balance = 0;
+      return events.map(e => {
+        balance = round(balance + e.amount, 8);
+        return {...e,balanceAfter:balance};
+      }).reverse();
+    }
+    function dividendBalanceRow(e) {
+      const positive = e.amount >= 0;
+      return `<div class="list-row">
+        <div><div class="row-title">${esc(e.title)}</div><div class="row-sub">${fmtDate(e.date)} · 사용 가능 배당 ${fmtUSD(e.balanceAfter)}</div></div>
+        <div class="row-value ${positive?'positive':'negative'}">${positive?'+':'-'}${fmtUSD(Math.abs(e.amount))}</div>
+      </div>`;
+    }
+
     function dividendRow(d, editable=true) {
       const y=dividendYieldStats(d);
       const hasYield=y.shares>0&&y.referencePrice>0;
@@ -715,6 +777,8 @@ function setCloudStatus(status, text) {
         </div>
         <button class="dividend-flow-card" type="button" data-open-dividend-chart><span class="flow-icon">▥</span><span><strong>배당 흐름 보기</strong><small>주별 · 월별 · 연도별 분석</small></span><b>›</b></button>
         <div class="card compact dividend-balance-card"><div class="summary-grid"><div class="summary-chip"><div class="label">누적 배당</div><div class="value">${fmtUSD(p.dividendsTotal||state.dividends.reduce((s,d)=>s+n(d.amountUSD),0))}</div></div><div class="summary-chip"><div class="label">사용 가능 배당</div><div class="value ${signClass(p.dividendAvailable)}">${fmtUSD(p.dividendAvailable)}</div></div></div></div>
+        ${pageHeader('배당 잔액 히스토리','최근 10개')}
+        <div class="card compact"><div class="list">${dividendBalanceHistory().slice(0,10).map(dividendBalanceRow).join('') || '<div class="empty">아직 배당 잔액 변동 기록이 없습니다.</div>'}</div></div>
         ${pageHeader('배당 내역','최근 10개')}
         ${recentBlock('dividend',sorted,d=>dividendRow(d,true),'배당 내역','아직 배당 기록이 없습니다.')}
         <button class="dividend-fab ${ui.dividendFabHidden?'is-hidden':''}" type="button" data-open-dividend aria-label="배당 기록 추가" title="길게 누르면 잠시 숨김">＋</button>`;
@@ -991,7 +1055,7 @@ function setCloudStatus(status, text) {
       if (!item.date || item.shares<=0 || item.price<0) return toast('입력값을 확인해 주세요.');
       const totalAmount=item.shares*item.price;
       if(item.buyType==='mixed' && (item.reinvestAmountUSD<0 || item.reinvestAmountUSD>totalAmount+.0001)) return toast('배당 사용액은 총 매수금액 이하여야 합니다.');
-      if(item.buyType==='mixed'){
+      if(item.buyType==='mixed' || item.buyType==='reinvest'){
         const usedByOthers=state.trades.filter(t=>t.id!==item.id&&t.type==='buy').reduce((sum,t)=>{
           const amount=Math.max(0,n(t.shares)*n(t.price));
           if(t.buyType==='reinvest')return sum+amount;
@@ -999,7 +1063,8 @@ function setCloudStatus(status, text) {
           return sum;
         },0);
         const available=Math.max(0,state.dividends.reduce((sum,d)=>sum+Math.max(0,n(d.amountUSD)),0)-usedByOthers);
-        if(item.reinvestAmountUSD>available+.0001)return toast(`사용 가능한 배당은 ${fmtUSD(available)}입니다.`);
+        const requestedDividend=item.buyType==='reinvest'?totalAmount:item.reinvestAmountUSD;
+        if(requestedDividend>available+.0001)return toast(`사용 가능한 배당은 ${fmtUSD(available)}입니다.`);
       }
       const dup = state.trades.some(x=>x.id!==item.id && x.date===item.date && x.type===item.type && Math.abs(n(x.shares)-item.shares)<1e-8 && Math.abs(n(x.price)-item.price)<1e-8);
       if (dup && !confirm('같은 날짜·주수·단가의 거래가 있습니다. 그래도 저장할까요?')) return;
