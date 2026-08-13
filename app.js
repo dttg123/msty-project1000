@@ -116,7 +116,9 @@ const APP_BOOT_AT = performance.now();
         showKRW: true,
         warningKRW: 18000000,
         thresholdKRW: 20000000,
-        appearance: 'system'
+        appearance: 'system',
+        initialDividendBalance: 10.78,
+        initialDividendBalanceDate: '2026-07-23'
       },
       trades: [],
       dividends: [],
@@ -178,7 +180,7 @@ const APP_BOOT_AT = performance.now();
     }
 
     function hasMeaningfulData(value=state) {
-      return !!(value && (value.trades?.length || value.dividends?.length || value.splits?.length || n(value.settings?.currentPrice) || n(value.settings?.monthlyPlanShares)));
+      return !!(value && (value.trades?.length || value.dividends?.length || value.splits?.length || n(value.settings?.currentPrice) || n(value.settings?.monthlyPlanShares) || n(value.settings?.initialDividendBalance)));
     }
 function setCloudStatus(status, text) {
       cloudStatus=status;
@@ -361,7 +363,8 @@ function setCloudStatus(status, text) {
       const returnPct = investedPrincipal > 0 ? unrealized / investedPrincipal * 100 : 0;
       const reinvestSharesCurrent = reinvestNormalized * factor;
       const reinvestAvgPrice = reinvestSharesCurrent > 0 ? reinvestAmount / reinvestSharesCurrent : 0;
-      const dividendAvailable = dividendsTotal - reinvestAmount;
+      const initialDividendBalance = Math.max(0,n(state.settings.initialDividendBalance));
+      const dividendAvailable = initialDividendBalance + dividendsTotal - reinvestAmount;
       const mixedCashUsed = state.trades.filter(t=>t.type==='buy'&&t.buyType==='mixed').reduce((s,t)=>s+Math.max(0,n(t.shares)*n(t.price)-n(t.reinvestAmountUSD)),0);
 
       return {
@@ -560,6 +563,18 @@ function setCloudStatus(status, text) {
     }
     function dividendBalanceHistory() {
       const events = [];
+      const initialBalance = Math.max(0,n(state.settings.initialDividendBalance));
+      if (initialBalance > 0) {
+        const initialDate = state.settings.initialDividendBalanceDate || state.settings.projectStart || todayISO();
+        events.push({
+          id:'initial-dividend-balance',
+          date:initialDate,
+          createdAt:'0000-00-00T00:00:00.000Z',
+          kind:'initial',
+          title:'이전 배당 잔액',
+          amount:initialBalance
+        });
+      }
       state.dividends.forEach(d => events.push({
         id:`dividend-${d.id}`,
         date:d.date,
@@ -600,7 +615,7 @@ function setCloudStatus(status, text) {
           const byCreated=aCreated.localeCompare(bCreated);
           if(byCreated) return byCreated;
         } else {
-          const priority={dividend:0,reinvest:1,mixed:1};
+          const priority={initial:0,dividend:1,reinvest:2,mixed:2};
           const byPriority=(priority[a.kind]??9)-(priority[b.kind]??9);
           if(byPriority) return byPriority;
         }
@@ -876,6 +891,8 @@ function setCloudStatus(status, text) {
             <div class="card-head"><div class="card-title">투자 기준</div></div>
             <div class="settings-group">
               <div class="setting-row"><div><div class="setting-title">현재가</div><div class="setting-desc">평가금액과 필요금액 계산에 사용합니다.</div></div><input class="input" id="setCurrentPrice" type="number" min="0" step="0.0001" value="${n(state.settings.currentPrice)}" /></div>
+              <div class="setting-row"><div><div class="setting-title">이전 배당 잔액</div><div class="setting-desc">기존 계좌에 이미 있던 배당 사용 가능 잔액입니다. 배당금·배당률에는 포함되지 않습니다.</div></div><input class="input" id="setInitialDividendBalance" type="number" min="0" step="0.01" value="${n(state.settings.initialDividendBalance)}" /></div>
+              <div class="setting-row"><div><div class="setting-title">이전 배당 잔액 기준일</div><div class="setting-desc">이전 잔액이 존재했던 날짜를 입력합니다.</div></div><input class="input" id="setInitialDividendBalanceDate" type="date" value="${esc(state.settings.initialDividendBalanceDate||'')}" /></div>
               <div class="setting-row"><div><div class="setting-title">목표주수</div><div class="setting-desc">분할이 있으면 현재 기준 목표로 표시됩니다.</div></div><input class="input" id="setTargetShares" type="number" min="0.0001" step="0.0001" value="${actualTargetInputValue()}" /></div>
               <div class="setting-row"><div><div class="setting-title">월 계획 매수주수</div><div class="setting-desc">로드맵 예상기간 계산용 참고값입니다.</div></div><input class="input" id="setMonthlyPlan" type="number" min="0" step="0.0001" value="${n(state.settings.monthlyPlanShares)}" /></div>
               <div class="setting-row"><div><div class="setting-title">프로젝트 시작일</div></div><input class="input" id="setProjectStart" type="date" value="${esc(state.settings.projectStart)}" /></div>
@@ -1062,7 +1079,7 @@ function setCloudStatus(status, text) {
           if(t.buyType==='mixed')return sum+clamp(n(t.reinvestAmountUSD),0,amount);
           return sum;
         },0);
-        const available=Math.max(0,state.dividends.reduce((sum,d)=>sum+Math.max(0,n(d.amountUSD)),0)-usedByOthers);
+        const available=Math.max(0,n(state.settings.initialDividendBalance)+state.dividends.reduce((sum,d)=>sum+Math.max(0,n(d.amountUSD)),0)-usedByOthers);
         const requestedDividend=item.buyType==='reinvest'?totalAmount:item.reinvestAmountUSD;
         if(requestedDividend>available+.0001)return toast(`사용 가능한 배당은 ${fmtUSD(available)}입니다.`);
       }
@@ -1280,6 +1297,8 @@ function setCloudStatus(status, text) {
       if(!saveBtn) return;
       saveBtn.onclick=async()=>{
         const currentPrice=Math.max(0,n(document.getElementById('setCurrentPrice')?.value));
+        const initialDividendBalance=Math.max(0,n(document.getElementById('setInitialDividendBalance')?.value));
+        const initialDividendBalanceDate=document.getElementById('setInitialDividendBalanceDate')?.value||'';
         const targetValue=Math.max(.0001,n(document.getElementById('setTargetShares')?.value));
         const monthlyPlanShares=Math.max(0,n(document.getElementById('setMonthlyPlan')?.value));
         const projectStart=document.getElementById('setProjectStart')?.value||todayISO();
@@ -1288,7 +1307,7 @@ function setCloudStatus(status, text) {
         const thresholdKRW=Math.max(1,n(document.getElementById('setThresholdKRW')?.value));
         const showKRW=!!document.getElementById('setShowKRW')?.checked;
         const factor=currentFactor();
-        state.settings=Object.assign(state.settings,{currentPrice,targetUnits:targetValue/factor,monthlyPlanShares,projectStart,exchangeRate,warningKRW,thresholdKRW,showKRW});
+        state.settings=Object.assign(state.settings,{currentPrice,targetUnits:targetValue/factor,monthlyPlanShares,projectStart,exchangeRate,warningKRW,thresholdKRW,showKRW,initialDividendBalance,initialDividendBalanceDate});
         await saveState(true);
         renderAll();showPage('settings',{resetScroll:false});toast('설정이 저장되었습니다.');
       };
@@ -1308,7 +1327,7 @@ function setCloudStatus(status, text) {
       const badMixed=state.trades.filter(t=>t.buyType==='mixed'&&(n(t.reinvestAmountUSD)<0||n(t.reinvestAmountUSD)>n(t.shares)*n(t.price)+.0001)); if(badMixed.length)issues.push(`혼합매수의 배당 사용액이 잘못된 거래가 ${badMixed.length}건 있습니다.`);
       if(p.dividendAvailable<-.0001)issues.push(`배당 사용액이 누적 배당보다 ${fmtUSD(Math.abs(p.dividendAvailable))} 많습니다. 기존 재투자 기록을 확인하세요.`);
       const badTrade=state.trades.filter(t=>!/^\d{4}-\d{2}-\d{2}$/.test(t.date)||n(t.shares)<=0||n(t.price)<0); if(badTrade.length)issues.push(`날짜·주수·단가가 잘못된 거래가 ${badTrade.length}건 있습니다.`);
-      const badDiv=state.dividends.filter(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||n(d.amountUSD)<=0); if(badDiv.length)issues.push(`날짜·금액이 잘못된 배당이 ${badDiv.length}건 있습니다.`);
+      const badDiv=state.dividends.filter(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||n(d.amountUSD)<=0); const badInitialDate=state.settings.initialDividendBalanceDate && !/^\d{4}-\d{2}-\d{2}$/.test(state.settings.initialDividendBalanceDate); if(badInitialDate)issues.push('이전 배당 잔액 기준일이 잘못되었습니다.'); if(badDiv.length)issues.push(`날짜·금액이 잘못된 배당이 ${badDiv.length}건 있습니다.`);
       const badSplit=state.splits.filter(s=>!/^\d{4}-\d{2}-\d{2}$/.test(s.date)||n(s.from)<=0||n(s.to)<=0); if(badSplit.length)issues.push(`분할 비율이 잘못된 기록이 ${badSplit.length}건 있습니다.`);
       const tradeKeys=new Set(),tradeDup=[]; state.trades.forEach(t=>{const k=[t.date,t.type,t.buyType,n(t.shares).toFixed(8),n(t.price).toFixed(8)].join('|');if(tradeKeys.has(k))tradeDup.push(t);else tradeKeys.add(k);}); if(tradeDup.length)issues.push(`중복 가능성이 있는 거래가 ${tradeDup.length}건 있습니다.`);
       const divKeys=new Set(),divDup=[]; state.dividends.forEach(d=>{const k=[d.date,n(d.amountUSD).toFixed(8)].join('|');if(divKeys.has(k))divDup.push(d);else divKeys.add(k);}); if(divDup.length)issues.push(`중복 가능성이 있는 배당이 ${divDup.length}건 있습니다.`);
