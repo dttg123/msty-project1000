@@ -117,8 +117,8 @@ const APP_BOOT_AT = performance.now();
         warningKRW: 18000000,
         thresholdKRW: 20000000,
         appearance: 'system',
-        initialDividendBalance: 10.78,
-        initialDividendBalanceDate: '2026-07-23'
+        initialDividendBalance: 0,
+        initialDividendBalanceDate: ''
       },
       trades: [],
       dividends: [],
@@ -1325,7 +1325,7 @@ function setCloudStatus(status, text) {
       if (p.actualShares < -1e-8) issues.push('보유주수가 음수입니다. 거래 기록을 확인하세요.');
       if (p.oversells.length) issues.push(`보유량을 초과한 매도 기록이 ${p.oversells.length}건 있습니다.`);
       const badMixed=state.trades.filter(t=>t.buyType==='mixed'&&(n(t.reinvestAmountUSD)<0||n(t.reinvestAmountUSD)>n(t.shares)*n(t.price)+.0001)); if(badMixed.length)issues.push(`혼합매수의 배당 사용액이 잘못된 거래가 ${badMixed.length}건 있습니다.`);
-      if(p.dividendAvailable<-.0001)issues.push(`배당 사용액이 누적 배당보다 ${fmtUSD(Math.abs(p.dividendAvailable))} 많습니다. 기존 재투자 기록을 확인하세요.`);
+      if(p.dividendAvailable<-.0001)issues.push(`배당 사용액이 누적 배당과 이전 잔액 합계보다 ${fmtUSD(Math.abs(p.dividendAvailable))} 많습니다. 기존 재투자 기록을 확인하세요.`);
       const badTrade=state.trades.filter(t=>!/^\d{4}-\d{2}-\d{2}$/.test(t.date)||n(t.shares)<=0||n(t.price)<0); if(badTrade.length)issues.push(`날짜·주수·단가가 잘못된 거래가 ${badTrade.length}건 있습니다.`);
       const badDiv=state.dividends.filter(d=>!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||n(d.amountUSD)<=0); const badInitialDate=state.settings.initialDividendBalanceDate && !/^\d{4}-\d{2}-\d{2}$/.test(state.settings.initialDividendBalanceDate); if(badInitialDate)issues.push('이전 배당 잔액 기준일이 잘못되었습니다.'); if(badDiv.length)issues.push(`날짜·금액이 잘못된 배당이 ${badDiv.length}건 있습니다.`);
       const badSplit=state.splits.filter(s=>!/^\d{4}-\d{2}-\d{2}$/.test(s.date)||n(s.from)<=0||n(s.to)<=0); if(badSplit.length)issues.push(`분할 비율이 잘못된 기록이 ${badSplit.length}건 있습니다.`);
