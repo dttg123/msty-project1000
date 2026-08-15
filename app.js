@@ -165,18 +165,47 @@ const APP_BOOT_AT = performance.now();
       milestoneOpen: null
     };
 
+    function nearly(a,b,tol=.011) { return Math.abs(n(a)-n(b)) <= tol; }
+
+    // One-time repair for the user's already-saved 2026 dividend ledger.
+    // This is deliberately strict: it runs only when all three known stale trades
+    // and the three matching dividend deposits are present. It never creates trades.
+    function repairKnownDividendLedger(s) {
+      if (!s || s.meta?.ledgerRepairV321) return s;
+      const dividends = Array.isArray(s.dividends) ? s.dividends : [];
+      const trades = Array.isArray(s.trades) ? s.trades : [];
+      const hasDividend = (date, amount) => dividends.some(d => d.date===date && nearly(d.amountUSD,amount));
+      const t1 = trades.find(t => t.type==='buy' && t.date==='2026-07-25' && t.buyType==='mixed' && nearly(t.reinvestAmountUSD,40.77) && nearly(n(t.shares)*n(t.price),49.32));
+      const t2 = trades.find(t => t.type==='buy' && t.date==='2026-08-05' && t.buyType==='reinvest' && nearly(n(t.shares)*n(t.price),38.49));
+      const t3 = trades.find(t => t.type==='buy' && t.date==='2026-08-13' && t.buyType==='reinvest' && nearly(n(t.shares)*n(t.price),36.51));
+      const exactLedger = hasDividend('2026-07-24',40.77) && hasDividend('2026-07-31',41.36) && hasDividend('2026-08-07',39.30) && t1 && t2 && t3;
+      if (!exactLedger) return s;
+
+      s.settings.initialDividendBalance = 10.78;
+      s.settings.initialDividendBalanceDate = '2026-07-23';
+
+      // Brokerage ledger truth: 4 shares/$49.39, 3 shares/$38.52, 3 shares/$36.57.
+      // Preserve IDs/createdAt/notes; only repair the ledger-driving fields.
+      Object.assign(t1,{date:'2026-07-28',buyType:'reinvest',shares:4,price:12.3475,reinvestAmountUSD:0});
+      Object.assign(t2,{date:'2026-08-07',buyType:'reinvest',shares:3,price:12.84,reinvestAmountUSD:0});
+      Object.assign(t3,{date:'2026-08-17',buyType:'reinvest',shares:3,price:12.19,reinvestAmountUSD:0});
+
+      s.meta.ledgerRepairV321 = new Date().toISOString();
+      return s;
+    }
+
     function migrate(raw) {
       if (!raw || typeof raw !== 'object') return defaultState();
       const base = blankState();
       const s = raw;
-      s.version = 3.1;
+      s.version = 3.2;
       s.settings = Object.assign(base.settings, s.settings || {});
       s.trades = Array.isArray(s.trades) ? s.trades : [];
       s.dividends = Array.isArray(s.dividends) ? s.dividends : [];
       s.splits = Array.isArray(s.splits) ? s.splits : [];
       s.recovery = Object.assign(base.recovery, s.recovery || {});
       s.meta = Object.assign(base.meta, s.meta || {});
-      return s;
+      return repairKnownDividendLedger(s);
     }
 
     function hasMeaningfulData(value=state) {
@@ -1402,9 +1431,13 @@ function setCloudStatus(status, text) {
     async function connectCloudForUser(user) {
       currentUser=user; setCloudStatus('saving','동기화 확인 중');
       let cloudData; try { cloudData=await getCloudDocument(user.uid); } catch(err){ console.error(err); setCloudStatus('error','클라우드 연결 오류'); hideAuthGate(); return; }
+      const cloudNeededLedgerRepair=!!(cloudData?.state && !cloudData.state.meta?.ledgerRepairV321);
       const cloudState=cloudData?.state?migrate(cloudData.state):null;
       const choice=await chooseInitialSync(cloudState);
-      if(choice==='cloud' && cloudState){ applyingCloudState=true; state=cloudState; await storageSet(STATE_KEY,state); applyingCloudState=false; }
+      if(choice==='cloud' && cloudState){
+        applyingCloudState=true; state=cloudState; await storageSet(STATE_KEY,state); applyingCloudState=false;
+        if(cloudNeededLedgerRepair && state.meta?.ledgerRepairV321) await pushCloudState();
+      }
       else if(choice==='blank'){ applyingCloudState=true; state=blankState(); await storageSet(STATE_KEY,state); applyingCloudState=false; await pushCloudState(); }
       else await pushCloudState();
       renderAll(); showPage(currentPage||'home',{resetScroll:false}); hideAuthGate();
