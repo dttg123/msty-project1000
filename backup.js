@@ -1,5 +1,5 @@
-export const APP_VERSION = '3.2.1';
-export const DATA_SCHEMA_VERSION = 3.1;
+export const APP_VERSION = '4.0.0-beta.1';
+export const DATA_SCHEMA_VERSION = 4;
 
 const APP_FILES = [
   'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
@@ -88,7 +88,7 @@ async function fetchAppFiles() {
 export async function buildPortableBackup(state) {
   const exportedAt=new Date().toISOString();
   const info={
-    product:'MSTY PROJECT 1000',
+    product:'DividendOS',
     appVersion:APP_VERSION,
     dataSchemaVersion:DATA_SCHEMA_VERSION,
     exportedAt,

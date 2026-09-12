@@ -6,16 +6,16 @@
   <meta name="theme-color" content="#f6f7fb" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="MSTY 1000" />
+  <meta name="apple-mobile-web-app-title" content="DividendOS" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <title>MSTY PROJECT 1000 · V3.0</title>
+  <title>DividendOS · V4</title>
   <meta name="color-scheme" content="light dark" />
   <script>
     (() => {
       try {
-        const pref = localStorage.getItem('msty-theme-pref') || 'system';
+        const pref = localStorage.getItem('dividend-os-theme') || 'system';
         const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       } catch (_) {
@@ -522,7 +522,7 @@
       backdrop-filter: blur(22px) saturate(1.25);
       border-top: 1px solid rgba(224,225,232,.85);
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 2px;
       box-shadow: 0 -12px 35px rgba(24,26,39,.07);
     }
@@ -830,22 +830,60 @@
     .flow-summary strong { margin-top:7px; font-size:19px; }
     .column-label small { display:block; margin-top:2px; font-size:8px; font-weight:650; color:var(--muted); }
     html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,rgba(100,91,255,.2),rgba(30,33,42,.96)); border-color:#373348; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; }
+    .currency-picker { display:flex; gap:3px; padding:3px; background:var(--line); border-radius:13px; }
+    .currency-picker button { border:0; border-radius:10px; padding:7px 10px; background:transparent; color:var(--muted); font-size:12px; font-weight:850; }
+    .currency-picker button.active { color:var(--text); background:var(--surface-strong); box-shadow:0 2px 9px rgba(20,22,34,.08); }
+    .project-tabs { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; margin:0 -2px 13px; padding:2px; }
+    .project-tabs::-webkit-scrollbar { display:none; }
+    .project-tab { flex:0 0 auto; border:1px solid var(--line); color:var(--muted); background:var(--surface); border-radius:14px; padding:10px 15px; font-size:13px; font-weight:850; }
+    .project-tab.active { color:#fff; border-color:transparent; background:linear-gradient(135deg,var(--accent),var(--accent-2)); box-shadow:0 8px 17px rgba(100,91,255,.22); }
+    .project-hero { color:#fff; background:radial-gradient(circle at 90% 0%,rgba(255,255,255,.2),transparent 35%),linear-gradient(145deg,var(--project-a,#5e55f4),var(--project-b,#8d7fff)); border-color:rgba(255,255,255,.16); }
+    .project-hero .card-title,.project-hero .sub-number,.project-hero .metric-label { color:rgba(255,255,255,.76); }
+    .project-hero .metric { background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.1); }
+    .project-hero .krw-ref { color:rgba(255,255,255,.76); }
+    .project-symbol { font-size:28px; font-weight:900; letter-spacing:-.05em; }
+    .project-name { margin-top:3px; color:rgba(255,255,255,.75); font-size:12px; }
+    .tag-pill { display:inline-flex; align-items:center; padding:6px 9px; border-radius:999px; background:rgba(255,255,255,.14); color:#fff; font-size:10px; font-weight:850; }
+    .metric-grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .metric-grid.three .metric { padding:12px 9px; }
+    .metric-grid.three .metric-value { font-size:14px; }
+    .quick-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:13px; }
+    .quick-grid .btn { padding:11px 7px; }
+    .chart-period { display:flex; gap:4px; padding:3px; border-radius:12px; background:var(--line); }
+    .chart-period button { border:0; border-radius:9px; padding:6px 9px; background:transparent; color:var(--muted); font-size:11px; font-weight:850; }
+    .chart-period button.active { background:var(--surface-strong); color:var(--accent); }
+    .goal-choice { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .goal-choice button { border:1px solid var(--line); background:var(--surface-strong); color:var(--muted); border-radius:14px; padding:12px 8px; font-size:12px; font-weight:800; }
+    .goal-choice button.active { color:var(--accent); border-color:rgba(100,91,255,.38); background:var(--accent-soft); }
+    .project-list-card { cursor:pointer; }
+    .project-list-card + .project-list-card { margin-top:11px; }
+    .empty-project { padding:34px 16px; text-align:center; }
+    .inline-actions { display:flex; gap:7px; flex-wrap:wrap; justify-content:flex-end; }
+    .inline-actions .mini-icon { min-width:42px; }
+    .management-bar { display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px; }
+    .app-version { text-align:center; padding:17px 0 0; color:var(--muted); font-size:11px; }
+    @media (max-width:380px) {
+      .save-pill { display:none; }
+      .topbar { align-items:flex-start; }
+      .metric-grid.three { grid-template-columns:1fr 1fr; }
+    }
   </style>
 </head>
 <body>
 
   <div class="splash-screen" id="splashScreen" aria-hidden="true">
     <div class="splash-inner">
-      <div class="splash-mark">M</div>
-      <div class="splash-title">MSTY <span>PROJECT 1000</span></div>
-      <div class="splash-sub">Dividend · Reinvest · Recover</div>
+      <div class="splash-mark">D</div>
+      <div class="splash-title">Dividend <span>OS</span></div>
+      <div class="splash-sub">Projects · Income · Recovery</div>
       <div class="splash-line"></div>
     </div>
   </div>
   <div class="auth-gate" id="authGate" aria-live="polite">
     <div class="auth-card">
-      <div class="auth-logo">M</div>
-      <div class="eyebrow">MSTY PROJECT 1000</div>
+      <div class="auth-logo">D</div>
+      <div class="eyebrow">DIVIDEND OS</div>
       <h2>클라우드로 안전하게 이어서 사용</h2>
       <p>한 번 로그인하면 자동 로그인되고, 크롬 데이터를 지워도 같은 Google 계정으로 복원됩니다.</p>
       <button class="btn primary auth-login-btn" id="googleLoginBtn">
@@ -858,15 +896,20 @@
   <main class="app">
     <header class="topbar">
       <div class="brand-wrap">
-        <div class="eyebrow">Dividend Recovery Tracker</div>
-        <h1 class="brand">MSTY <span>PROJECT 1000</span></h1>
+        <div class="eyebrow">Dividend Recovery &amp; Income</div>
+        <h1 class="brand">Dividend <span>OS</span></h1>
       </div>
-      <div class="save-pill" id="saveStatus">준비 중</div>
+      <div class="topbar-actions">
+        <div class="currency-picker" aria-label="통화 표시">
+          <button id="usdBtn" type="button" data-currency="USD">$</button>
+          <button id="krwBtn" type="button" data-currency="KRW">원</button>
+        </div>
+        <div class="save-pill" id="saveStatus">준비 중</div>
+      </div>
     </header>
 
     <section class="page active" id="page-home"></section>
-    <section class="page" id="page-trade"></section>
-    <section class="page" id="page-dividend"></section>
+    <section class="page" id="page-projects"></section>
     <section class="page" id="page-goal"></section>
     <section class="page" id="page-settings"></section>
   </main>
@@ -875,11 +918,8 @@
     <button class="nav-btn active" data-page="home" aria-label="홈">
       <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></svg><span>홈</span>
     </button>
-    <button class="nav-btn" data-page="trade" aria-label="거래">
-      <svg viewBox="0 0 24 24"><path d="M7 7h11"/><path d="m15 4 3 3-3 3"/><path d="M17 17H6"/><path d="m9 14-3 3 3 3"/></svg><span>거래</span>
-    </button>
-    <button class="nav-btn" data-page="dividend" aria-label="배당">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M14.5 9.5c-.6-.7-1.4-1-2.5-1-1.4 0-2.5.7-2.5 1.8 0 2.8 5.2 1.3 5.2 4 0 1.1-1.1 2-2.7 2-1.2 0-2.2-.4-2.9-1.2"/><path d="M12 6.8v10.4"/></svg><span>배당</span>
+    <button class="nav-btn" data-page="projects" aria-label="프로젝트">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="4" width="7" height="7" rx="2"/><rect x="3" y="15" width="7" height="5" rx="2"/><rect x="14" y="15" width="7" height="5" rx="2"/></svg><span>프로젝트</span>
     </button>
     <button class="nav-btn" data-page="goal" aria-label="목표">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3"/><path d="M22 12h-3"/></svg><span>목표</span>
