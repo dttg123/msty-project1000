@@ -2,122 +2,17 @@ import { initGoogleAuth, logoutGoogle } from './auth.js';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
+import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
+import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
+import { createPortfolioEngine } from './modules/portfolio.js';
+import { createFormatters } from './modules/format.js';
+import { createViews } from './modules/views.js';
+import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
   'use strict';
 
-  const STATE_KEY = 'state';
-  const SAFETY_KEY = 'safetyBackup';
-  const PAGES = ['home','projects','goal','settings'];
-  const PROJECT_COLORS = [
-    ['#6858f5','#9a84ff'], ['#f06d38','#ff9b68'], ['#2f7cf4','#65a8ff'],
-    ['#159a6c','#43c394'], ['#db5570','#f58aa0'], ['#b17816','#e6ac47']
-  ];
   const bootAt = performance.now();
-  const n = value => Number(value) || 0;
-  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-  const round = (value, digits = 8) => Number(n(value).toFixed(digits));
-  const clone = value => JSON.parse(JSON.stringify(value));
-  const uid = prefix => `${prefix}-${crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
-  const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-  const todayISO = () => {
-    const date = new Date();
-    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  };
-  const isDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
-
-  function blankRecovery() {
-    return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'' };
-  }
-
-  function blankProject(symbol = 'MSTY', name = 'YieldMax MSTR Option Income') {
-    return {
-      id: `p-${symbol.toLowerCase()}-${Date.now()}`,
-      symbol: symbol.toUpperCase(), name, tag: symbol === 'MSTY' ? 'PROJECT1000' : '배당 프로젝트',
-      targetUnits: symbol === 'MSTY' ? 1000 : 500, monthlyPlanShares:0, projectStart:todayISO(),
-      currentPrice:0, distributionFrequency:symbol === 'MSTY' ? 'weekly' : 'monthly',
-      initialDividendBalance:0, initialDividendBalanceDate:'', afterGoalMode:'cashflow',
-      recovery:blankRecovery(), colorIndex:0, archived:false
-    };
-  }
-
-  function blankState() {
-    const project = blankProject();
-    return {
-      version:4,
-      settings:{ exchangeRate:1370, displayCurrency:'USD', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
-      projects:[project], trades:[], dividends:[], splits:[], cashAdjustments:[],
-      integrations:{ toss:{ status:'not_connected', lastSyncAt:'', candidates:[] } },
-      meta:{ createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), lastBackupAt:'', lastLocalSaveAt:'', lastCloudSaveAt:'', migratedFrom:'', migrationCheckedAt:'', celebratedMilestones:[] }
-    };
-  }
-
-  function repairLegacy(raw) {
-    if (!raw || raw.meta?.ledgerRepairV321) return raw;
-    const dividends = Array.isArray(raw.dividends) ? raw.dividends : [];
-    const trades = Array.isArray(raw.trades) ? raw.trades : [];
-    const near = (a,b) => Math.abs(n(a)-n(b)) <= .011;
-    const hasDividend = (date, amount) => dividends.some(d => d.date===date && near(d.amountUSD,amount));
-    const t1 = trades.find(t => t.type==='buy' && t.date==='2026-07-25' && t.buyType==='mixed' && near(t.reinvestAmountUSD,40.77) && near(n(t.shares)*n(t.price),49.32));
-    const t2 = trades.find(t => t.type==='buy' && t.date==='2026-08-05' && t.buyType==='reinvest' && near(n(t.shares)*n(t.price),38.49));
-    const t3 = trades.find(t => t.type==='buy' && t.date==='2026-08-13' && t.buyType==='reinvest' && near(n(t.shares)*n(t.price),36.51));
-    if (!(hasDividend('2026-07-24',40.77) && hasDividend('2026-07-31',41.36) && hasDividend('2026-08-07',39.30) && t1 && t2 && t3)) return raw;
-    raw.settings = raw.settings || {};
-    raw.settings.initialDividendBalance = 10.78;
-    raw.settings.initialDividendBalanceDate = '2026-07-23';
-    Object.assign(t1,{date:'2026-07-28',buyType:'reinvest',shares:4,price:12.3475,reinvestAmountUSD:0});
-    Object.assign(t2,{date:'2026-08-07',buyType:'reinvest',shares:3,price:12.84,reinvestAmountUSD:0});
-    Object.assign(t3,{date:'2026-08-17',buyType:'reinvest',shares:3,price:12.19,reinvestAmountUSD:0});
-    raw.meta = {...(raw.meta || {}), ledgerRepairV321:new Date().toISOString()};
-    return raw;
-  }
-
-  function migrateLegacy(input) {
-    const raw = repairLegacy(clone(input));
-    const state = blankState();
-    const project = state.projects[0];
-    project.id = 'p-msty';
-    project.targetUnits = Math.max(.000001,n(raw.settings?.targetUnits) || 1000);
-    project.monthlyPlanShares = Math.max(0,n(raw.settings?.monthlyPlanShares));
-    project.projectStart = raw.settings?.projectStart || todayISO();
-    project.currentPrice = Math.max(0,n(raw.settings?.currentPrice));
-    project.initialDividendBalance = Math.max(0,n(raw.settings?.initialDividendBalance));
-    project.initialDividendBalanceDate = raw.settings?.initialDividendBalanceDate || '';
-    project.recovery = {...blankRecovery(), ...(raw.recovery || {})};
-    state.settings.exchangeRate = Math.max(0,n(raw.settings?.exchangeRate) || 1370);
-    state.settings.warningKRW = Math.max(0,n(raw.settings?.warningKRW) || 18000000);
-    state.settings.thresholdKRW = Math.max(1,n(raw.settings?.thresholdKRW) || 20000000);
-    state.settings.appearance = raw.settings?.appearance || 'system';
-    state.trades = (raw.trades || []).map(x => ({...x, projectId:project.id, symbol:'MSTY'}));
-    state.dividends = (raw.dividends || []).map(x => ({...x, projectId:project.id, symbol:'MSTY'}));
-    state.splits = (raw.splits || []).map(x => ({...x, projectId:project.id, symbol:'MSTY'}));
-    state.meta = {...state.meta, ...(raw.meta || {}), migratedFrom:'MSTY PROJECT1000 V3.2.1', migrationCheckedAt:new Date().toISOString()};
-    state.version = 4;
-    return state;
-  }
-
-  function normalizeV4(raw) {
-    const base = blankState();
-    const result = {...base, ...raw};
-    result.version = 4;
-    result.settings = {...base.settings, ...(raw.settings || {})};
-    result.projects = Array.isArray(raw.projects) ? raw.projects.map((p,index) => ({
-      ...blankProject(p.symbol || `ASSET${index+1}`,p.name || p.symbol || '배당 종목'), ...p,
-      id:p.id || uid('p'), symbol:String(p.symbol || `ASSET${index+1}`).toUpperCase(),
-      recovery:{...blankRecovery(), ...(p.recovery || {})}, colorIndex:Number.isInteger(p.colorIndex) ? p.colorIndex : index % PROJECT_COLORS.length
-    })) : base.projects;
-    for (const key of ['trades','dividends','splits','cashAdjustments']) result[key] = Array.isArray(raw[key]) ? raw[key] : [];
-    result.integrations = {toss:{...base.integrations.toss, ...(raw.integrations?.toss || {})}};
-    result.meta = {...base.meta, ...(raw.meta || {})};
-    return result;
-  }
-
-  function migrate(raw) {
-    if (!raw || typeof raw !== 'object') return blankState();
-    if (Array.isArray(raw.projects) || n(raw.version) >= 4) return normalizeV4(raw);
-    if (Array.isArray(raw.trades) && Array.isArray(raw.dividends)) return migrateLegacy(raw);
-    return blankState();
-  }
 
   let state;
   let currentPage = 'home';
@@ -131,110 +26,10 @@ import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './bac
   let cloudTimer = null;
   let toastTimer = null;
 
-  function activeProjects() { return state.projects.filter(p => !p.archived); }
-  function projectById(id = selectedProjectId) { return state.projects.find(p => p.id === id) || activeProjects()[0] || state.projects[0]; }
-  function projectRows(key, projectId) { return state[key].filter(row => row.projectId === projectId || (!row.projectId && projectById(projectId)?.symbol === 'MSTY')); }
-
-  function sortedEvents(projectId) {
-    const trades = projectRows('trades',projectId).map(x => ({...x,eventType:'trade'}));
-    const splits = projectRows('splits',projectId).map(x => ({...x,eventType:'split'}));
-    return [...trades,...splits].sort((a,b) => {
-      const byDate=String(a.date).localeCompare(String(b.date));
-      if(byDate)return byDate;
-      const byType=(a.eventType==='split'?0:1)-(b.eventType==='split'?0:1);
-      if(byType)return byType;
-      return String(a.createdAt||a.id).localeCompare(String(b.createdAt||b.id));
-    });
-  }
-
-  function computeProject(projectOrId) {
-    const project = typeof projectOrId === 'string' ? projectById(projectOrId) : projectOrId;
-    if (!project) return null;
-    const trades = projectRows('trades',project.id);
-    const dividends = projectRows('dividends',project.id);
-    const adjustments = projectRows('cashAdjustments',project.id);
-    const targetUnits = Math.max(.000001,n(project.targetUnits));
-    let factor=1, shares=0, normalizedShares=0, costBasis=0, realized=0, directBuyCost=0, sellProceeds=0;
-    let reinvestNormalized=0, reinvestAmount=0, reinvestCount=0, targetReachedDate='', targetBasisSuggestion=0;
-    const milestoneDates={25:'',50:'',75:'',100:''}, oversells=[];
-    for (const event of sortedEvents(project.id)) {
-      if (event.eventType === 'split') {
-        const ratio=n(event.to)/n(event.from);
-        if (ratio>0 && Number.isFinite(ratio)) { shares*=ratio; factor*=ratio; }
-      } else if (event.type === 'buy') {
-        const quantity=Math.max(0,n(event.shares)), price=Math.max(0,n(event.price)), amount=quantity*price;
-        shares+=quantity; normalizedShares+=quantity/factor; costBasis+=amount;
-        if (event.buyType==='direct' || event.buyType==='opening') directBuyCost+=amount;
-        if (event.buyType==='reinvest') { reinvestNormalized+=quantity/factor; reinvestAmount+=amount; reinvestCount++; }
-        if (event.buyType==='mixed') {
-          const dividendPart=clamp(n(event.reinvestAmountUSD),0,amount);
-          reinvestNormalized+=amount>0?(quantity*dividendPart/amount)/factor:0;
-          reinvestAmount+=dividendPart; directBuyCost+=Math.max(0,amount-dividendPart);
-          if (dividendPart>0) reinvestCount++;
-        }
-      } else if (event.type === 'sell') {
-        const quantity=Math.max(0,n(event.shares)), price=Math.max(0,n(event.price));
-        if (quantity>shares+1e-8) oversells.push(event);
-        const safeQuantity=Math.min(quantity,Math.max(0,shares));
-        const avg=shares>0?costBasis/shares:0;
-        realized+=safeQuantity*(price-avg); costBasis-=safeQuantity*avg; shares-=safeQuantity;
-        normalizedShares-=safeQuantity/factor; sellProceeds+=safeQuantity*price;
-      }
-      const progress=normalizedShares/targetUnits;
-      for (const pct of [25,50,75,100]) if (!milestoneDates[pct] && progress+1e-10>=pct/100) milestoneDates[pct]=event.date;
-      if (!targetReachedDate && progress+1e-10>=1) { targetReachedDate=event.date; targetBasisSuggestion=Math.max(0,directBuyCost-sellProceeds); }
-    }
-    shares=Math.abs(shares)<1e-9?0:shares; costBasis=Math.max(0,Math.abs(costBasis)<1e-7?0:costBasis);
-    const currentPrice=Math.max(0,n(project.currentPrice)), marketValue=shares*currentPrice;
-    const unrealized=marketValue-costBasis, avgCost=shares>0?costBasis/shares:0, currentTarget=targetUnits*factor;
-    const dividendsTotal=dividends.reduce((sum,row)=>sum+n(row.amountUSD),0);
-    const currentYear=String(new Date().getFullYear());
-    const yearDividends=dividends.filter(row=>String(row.date).startsWith(currentYear)).reduce((sum,row)=>sum+n(row.amountUSD),0);
-    const recentDividend=[...dividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
-    const recentCount=project.distributionFrequency==='weekly'?4:3;
-    const recent=[...dividends].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,recentCount);
-    const monthlyEstimate=recent.length ? recent.reduce((sum,row)=>sum+n(row.amountUSD),0)/recent.length*(project.distributionFrequency==='weekly'?4.33:1) : 0;
-    const adjustmentTotal=adjustments.reduce((sum,row)=>sum+n(row.amountUSD),0);
-    const dividendAvailable=Math.max(0,n(project.initialDividendBalance))+dividendsTotal+adjustmentTotal-reinvestAmount;
-    return {
-      project,trades,dividends,adjustments,factor,shares,normalizedShares,costBasis,realized,directBuyCost,sellProceeds,
-      reinvestAmount,reinvestCount,reinvestShares:reinvestNormalized*factor,currentPrice,marketValue,unrealized,avgCost,
-      currentTarget,progress:currentTarget>0?shares/currentTarget:0,dividendsTotal,yearDividends,recentDividend,monthlyEstimate,
-      dividendAvailable,totalReturn:unrealized+realized+dividendsTotal,targetReachedDate,targetBasisSuggestion,milestoneDates,oversells
-    };
-  }
-
-  function recoveryStats(calc) {
-    const recovery=calc.project.recovery || blankRecovery();
-    if (!recovery.locked) return {dividendRecovery:0,sellRecovery:0,total:0,remaining:0,pct:0};
-    const dividendRecovery=calc.dividends.filter(x=>x.date>=recovery.startDate).reduce((sum,x)=>sum+n(x.amountUSD),0);
-    const sellRecovery=calc.trades.filter(x=>x.type==='sell'&&x.date>=recovery.startDate).reduce((sum,x)=>sum+n(x.shares)*n(x.price),0);
-    const total=dividendRecovery+sellRecovery, basis=Math.max(0,n(recovery.basis));
-    return {dividendRecovery,sellRecovery,total,remaining:Math.max(0,basis-total),pct:basis>0?total/basis*100:0};
-  }
-
-  function totals() {
-    const rows=activeProjects().map(computeProject).filter(Boolean);
-    return {
-      rows, marketValue:rows.reduce((s,x)=>s+x.marketValue,0), costBasis:rows.reduce((s,x)=>s+x.costBasis,0),
-      unrealized:rows.reduce((s,x)=>s+x.unrealized,0), totalReturn:rows.reduce((s,x)=>s+x.totalReturn,0),
-      dividendsTotal:rows.reduce((s,x)=>s+x.dividendsTotal,0), yearDividends:rows.reduce((s,x)=>s+x.yearDividends,0),
-      monthlyEstimate:rows.reduce((s,x)=>s+x.monthlyEstimate,0), dividendAvailable:rows.reduce((s,x)=>s+x.dividendAvailable,0)
-    };
-  }
-
-  function displayCurrency() { return state.settings.displayCurrency==='KRW'?'KRW':'USD'; }
-  function fmtMoney(usd, digits=2) {
-    if (displayCurrency()==='KRW') return `${Math.round(n(usd)*Math.max(0,n(state.settings.exchangeRate))).toLocaleString('ko-KR')}원`;
-    return `${n(usd)<0?'-':''}$${Math.abs(n(usd)).toLocaleString('en-US',{minimumFractionDigits:digits,maximumFractionDigits:digits})}`;
-  }
-  function fmtSignedMoney(usd) { return `${n(usd)>=0?'+':'-'}${fmtMoney(Math.abs(n(usd)))}`; }
-  function fmtShares(value) { return n(value).toLocaleString('en-US',{maximumFractionDigits:4}); }
-  function fmtPct(value) { return `${n(value).toLocaleString('ko-KR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`; }
-  function fmtDate(value) { if(!value)return '-'; const [y,m,d]=String(value).slice(0,10).split('-'); return `${y}.${m}.${d}`; }
-  function signClass(value) { return n(value)>0?'positive':n(value)<0?'negative':''; }
-  function projectColors(project) { return PROJECT_COLORS[n(project?.colorIndex)%PROJECT_COLORS.length] || PROJECT_COLORS[0]; }
-
+  const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
+  const { activeProjects, projectById, projectRows, computeProject, recoveryStats, totals } = portfolio;
+  const formatters = createFormatters(() => state);
+  const { displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors } = formatters;
   function applyTheme(pref=state?.settings?.appearance || 'system') {
     const dark=pref==='dark'||(pref==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);
     document.documentElement.dataset.theme=dark?'dark':'light';
@@ -268,164 +63,13 @@ import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './bac
     if(immediate)await run();else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
 
-  function sectionTitle(title,note='') { return `<div class="section-title-row"><h2 class="section-title">${esc(title)}</h2>${note?`<span class="section-note">${esc(note)}</span>`:''}</div>`; }
-  function progress(value,color='') { return `<div class="progress-track"><div class="progress-fill" style="width:${clamp(value,0,100)}%;${color?`background:${color}`:''}"></div></div>`; }
-
-  function periodKey(dateString,mode) {
-    const date=new Date(`${dateString}T12:00:00`); if(Number.isNaN(date.getTime()))return '';
-    if(mode==='year')return String(date.getFullYear());
-    if(mode==='month')return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
-    const day=(date.getDay()+6)%7; date.setDate(date.getDate()-day);
-    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-  }
-  function chartSeries(projectId=null) {
-    const rows=projectId?projectRows('dividends',projectId):state.dividends;
-    const grouped=new Map(); rows.forEach(row=>{const key=periodKey(row.date,chartMode);if(key)grouped.set(key,(grouped.get(key)||0)+n(row.amountUSD));});
-    const count=chartMode==='year'?5:6;
-    return [...grouped.entries()].sort(([a],[b])=>a.localeCompare(b)).slice(-count).map(([key,value])=>({key,label:chartMode==='year'?key:chartMode==='month'?`${Number(key.slice(5))}월`:`${Number(key.slice(5,7))}/${Number(key.slice(8))}`,value}));
-  }
-  function chartHTML(projectId=null) {
-    const series=chartSeries(projectId), max=Math.max(1,...series.map(x=>x.value));
-    if(!series.length)return '<div class="empty">배당을 입력하면 실제 흐름이 표시됩니다.</div>';
-    return `<div class="column-chart compact-chart">${series.map(x=>`<div class="column-item"><div class="column-value">${fmtMoney(x.value,0)}</div><div class="column-track"><div class="column-fill" style="height:${Math.max(7,x.value/max*126)}px"></div></div><div class="column-label">${esc(x.label)}</div></div>`).join('')}</div>`;
-  }
-
-  function renderHome() {
-    const total=totals(), monthlyTarget=Math.max(.01,n(state.settings.targetMonthlyDividend)), monthlyPct=total.monthlyEstimate/monthlyTarget*100;
-    const annualKRW=total.yearDividends*n(state.settings.exchangeRate), threshold=Math.max(1,n(state.settings.thresholdKRW)), annualPct=annualKRW/threshold*100;
-    const overallTarget=total.rows.reduce((sum,x)=>sum+x.currentTarget,0), overallShares=total.rows.reduce((sum,x)=>sum+x.shares,0), overallPct=overallTarget?overallShares/overallTarget*100:0;
-    document.getElementById('page-home').innerHTML=`
-      <div class="stack">
-        <article class="card accent">
-          <div class="card-head"><div class="card-title">전체 이번 달 예상 세후배당</div><span class="tag-pill">${total.rows.length}개 프로젝트</span></div>
-          <div class="big-number">${fmtMoney(total.monthlyEstimate)}</div>
-          <div class="metric-grid three">
-            <div class="metric"><div class="metric-label">평가금액</div><div class="metric-value">${fmtMoney(total.marketValue,0)}</div></div>
-            <div class="metric"><div class="metric-label">누적배당</div><div class="metric-value">${fmtMoney(total.dividendsTotal,0)}</div></div>
-            <div class="metric"><div class="metric-label">목표달성</div><div class="metric-value">${fmtPct(overallPct)}</div></div>
-          </div>
-          <div class="progress-wrap"><div class="progress-meta"><span>월배당 목표 ${fmtMoney(monthlyTarget)}</span><span>${fmtPct(monthlyPct)}</span></div>${progress(monthlyPct)}</div>
-        </article>
-        ${sectionTitle('전체 배당 흐름','세후 실입금 합산')}
-        <article class="card">
-          <div class="card-head"><div><div class="card-title">배당 추세</div><div class="sub-number">더미값 없이 입력 기록만 반영</div></div>${periodButtons()}</div>
-          <div id="homeChart">${chartHTML()}</div>
-        </article>
-        ${sectionTitle('프로젝트','종목별 현황')}
-        <div>${total.rows.map(projectSummaryCard).join('')||'<article class="card empty-project">프로젝트를 추가해 주세요.</article>'}</div>
-        ${sectionTitle('전체 상태','자동 합산')}
-        <article class="card compact">
-          <div class="list-row"><div><div class="row-title">투입원금</div><div class="row-sub">현재 남은 취득원가</div></div><div class="row-value">${fmtMoney(total.costBasis)}</div></div>
-          <div class="list-row"><div><div class="row-title">사용 가능 배당</div><div class="row-sub">배당 + 보정 − 재투자</div></div><div class="row-value positive">${fmtMoney(total.dividendAvailable)}</div></div>
-          <div class="list-row"><div><div class="row-title">올해 배당 관리</div><div class="row-sub">${Math.round(annualKRW).toLocaleString('ko-KR')}원 / ${Math.round(threshold).toLocaleString('ko-KR')}원</div></div><div class="row-value ${annualPct>=100?'negative':''}">${fmtPct(annualPct)}</div></div>
-        </article>
-      </div>`;
-  }
-
-  function periodButtons() {
-    return `<div class="chart-period">${[['week','주'],['month','월'],['year','년']].map(([mode,label])=>`<button type="button" data-chart-mode="${mode}" class="${chartMode===mode?'active':''}">${label}</button>`).join('')}</div>`;
-  }
-  function projectSummaryCard(calc) {
-    const colors=projectColors(calc.project), pct=calc.progress*100;
-    return `<article class="card compact project-list-card" data-open-project="${calc.project.id}" style="border-left:4px solid ${colors[0]}">
-      <div class="card-head"><div><div class="row-title">${esc(calc.project.symbol)} · ${esc(calc.project.tag)}</div><div class="row-sub">${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</div></div><span class="status-pill">${fmtPct(pct)}</span></div>
-      ${progress(pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
-      <div class="summary-grid" style="margin-top:12px"><div class="summary-chip"><div class="label">월 예상</div><div class="value">${fmtMoney(calc.monthlyEstimate,0)}</div></div><div class="summary-chip"><div class="label">총손익</div><div class="value ${signClass(calc.totalReturn)}">${fmtMoney(calc.totalReturn,0)}</div></div></div>
-    </article>`;
-  }
-
-  function combinedRecords(calc) {
-    return [
-      ...calc.trades.map(row=>({...row,kind:'trade'})),
-      ...calc.dividends.map(row=>({...row,kind:'dividend'})),
-      ...projectRows('splits',calc.project.id).map(row=>({...row,kind:'split'})),
-      ...calc.adjustments.map(row=>({...row,kind:'cash'}))
-    ].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id)));
-  }
-  function recordRow(row) {
-    let title='',sub='',value='',cls='';
-    if(row.kind==='trade'){title=row.type==='sell'?'매도':row.buyType==='reinvest'?'배당재투자':row.buyType==='mixed'?'혼합매수':row.buyType==='opening'?'초기보유':'직접매수';sub=`${fmtDate(row.date)} · ${fmtShares(row.shares)}주 · 단가 ${fmtMoney(row.price)}`;value=`${row.type==='sell'?'+':'-'}${fmtMoney(n(row.shares)*n(row.price))}`;cls=row.type==='sell'?'positive':'';}
-    if(row.kind==='dividend'){title='세후배당';sub=`${fmtDate(row.date)}${row.note?` · ${esc(row.note)}`:''}`;value=`+${fmtMoney(row.amountUSD)}`;cls='positive';}
-    if(row.kind==='split'){title=row.type==='reverse'?'역분할':'주식분할';sub=`${fmtDate(row.date)} · ${row.from}:${row.to}`;value='비율 반영';}
-    if(row.kind==='cash'){title=row.label||'배당 잔액 보정';sub=fmtDate(row.date);value=fmtSignedMoney(row.amountUSD);cls=n(row.amountUSD)>=0?'positive':'negative';}
-    return `<div class="list-row"><div><div class="row-title">${title}</div><div class="row-sub">${sub}</div></div><div><div class="row-value ${cls}">${value}</div><div class="row-actions"><button class="mini-icon" data-edit-record="${row.kind}:${row.id}">수정</button><button class="mini-icon delete" data-delete-record="${row.kind}:${row.id}">삭제</button></div></div></div>`;
-  }
-
-  function renderProjects() {
-    const projects=activeProjects(); if(!selectedProjectId||!projectById(selectedProjectId))selectedProjectId=projects[0]?.id||'';
-    const calc=computeProject(selectedProjectId), page=document.getElementById('page-projects');
-    if(!calc){page.innerHTML=`${sectionTitle('프로젝트')}<article class="card empty-project"><p>등록된 프로젝트가 없습니다.</p><button class="btn primary" data-add-project>프로젝트 추가</button></article>`;return;}
-    const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc), shown=recordsExpanded?rows:rows.slice(0,5);
-    page.innerHTML=`
-      <div class="section-title-row"><h2 class="section-title">프로젝트</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
-      <div class="project-tabs">${projects.map(x=>`<button class="project-tab ${x.id===p.id?'active':''}" data-select-project="${x.id}">${esc(x.symbol)}</button>`).join('')}</div>
-      <div class="stack">
-        <article class="card project-hero" style="--project-a:${colors[0]};--project-b:${colors[1]}">
-          <div class="card-head"><div><div class="project-symbol">${esc(p.symbol)}</div><div class="project-name">${esc(p.name)}</div></div><span class="tag-pill">${esc(p.tag)}</span></div>
-          <div class="big-number">${fmtMoney(calc.marketValue)}</div><div class="sub-number">평가손익 ${fmtSignedMoney(calc.unrealized)}</div>
-          <div class="metric-grid"><div class="metric"><div class="metric-label">보유주수</div><div class="metric-value">${fmtShares(calc.shares)}주</div></div><div class="metric"><div class="metric-label">평균단가</div><div class="metric-value">${fmtMoney(calc.avgCost)}</div></div></div>
-        </article>
-        <article class="card">
-          <div class="card-head"><div class="card-title">배당 · 현금흐름</div><span class="status-pill">세후</span></div>
-          <div class="metric-grid three"><div class="metric"><div class="metric-label">월 예상</div><div class="metric-value">${fmtMoney(calc.monthlyEstimate)}</div></div><div class="metric"><div class="metric-label">누적배당</div><div class="metric-value">${fmtMoney(calc.dividendsTotal)}</div></div><div class="metric"><div class="metric-label">사용 가능</div><div class="metric-value positive">${fmtMoney(calc.dividendAvailable)}</div></div></div>
-          <div class="quick-grid"><button class="btn primary" data-add-trade>거래</button><button class="btn secondary" data-add-dividend>배당</button><button class="btn soft" data-add-cash>잔액</button></div>
-        </article>
-        <article class="card">
-          <div class="card-head"><div><div class="card-title">목표</div><div class="sub-number">${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</div></div><strong>${fmtPct(pct)}</strong></div>
-          ${progress(pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
-          <div class="metric-grid three"><div class="metric"><div class="metric-label">남은 주수</div><div class="metric-value">${fmtShares(Math.max(0,calc.currentTarget-calc.shares))}주</div></div><div class="metric"><div class="metric-label">재투자 주수</div><div class="metric-value">${fmtShares(calc.reinvestShares)}주</div></div><div class="metric"><div class="metric-label">원금회수</div><div class="metric-value">${fmtPct(rec.pct)}</div></div></div>
-        </article>
-        <article class="card"><div class="card-head"><div><div class="card-title">배당 흐름</div><div class="sub-number">${esc(p.symbol)} 실제 입력 기록</div></div>${periodButtons()}</div><div id="projectChart">${chartHTML(p.id)}</div></article>
-        <article class="card">
-          <div class="card-head"><div class="card-title">최근 기록</div><button class="mini-icon" data-project-settings>설정</button></div>
-          <div class="list">${shown.map(recordRow).join('')||'<div class="empty">아직 기록이 없습니다.</div>'}</div>
-          ${rows.length>5?`<button class="btn soft" style="width:100%;margin-top:10px" data-toggle-records>${recordsExpanded?'최근 5건만':'전체 기록 보기'}</button>`:''}
-          <div class="quick-grid"><button class="btn soft" data-add-split>분할·역분할</button><button class="btn soft" data-project-settings>프로젝트 설정</button><button class="btn soft" data-project-check>점검</button></div>
-        </article>
-      </div>`;
-  }
-
-  function estimatedDate(calc) {
-    const plan=Math.max(0,n(calc.project.monthlyPlanShares)), remaining=Math.max(0,calc.currentTarget-calc.shares);
-    if(remaining<=0)return '달성 완료'; if(plan<=0)return '월 매수계획 필요';
-    const date=new Date(); date.setMonth(date.getMonth()+Math.ceil(remaining/plan));
-    return `${date.getFullYear()}년 ${date.getMonth()+1}월 예상`;
-  }
-  function renderGoals() {
-    const total=totals(), monthlyTarget=Math.max(.01,n(state.settings.targetMonthlyDividend)), pct=total.monthlyEstimate/monthlyTarget*100;
-    document.getElementById('page-goal').innerHTML=`${sectionTitle('목표','전체 + 종목별')}
-      <div class="stack"><article class="card"><div class="card-head"><div><div class="card-title">전체 월배당 목표</div><div class="sub-number">세후 실입금 추정 합산</div></div><span class="status-pill">${fmtPct(pct)}</span></div><div class="big-number">${fmtMoney(total.monthlyEstimate)}</div><div class="sub-number">목표 ${fmtMoney(monthlyTarget)}</div><div class="progress-wrap">${progress(pct)}</div></article>
-      ${total.rows.map(calc=>{const p=calc.project,colors=projectColors(p),goalPct=calc.progress*100,rec=recoveryStats(calc);return `<article class="card">
-        <div class="card-head"><div><div class="row-title">${esc(p.symbol)} · ${esc(p.tag)}</div><div class="row-sub">${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</div></div><span class="status-pill">${fmtPct(goalPct)}</span></div>
-        ${progress(goalPct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
-        <div class="metric-grid"><div class="metric"><div class="metric-label">예상 달성</div><div class="metric-value small">${estimatedDate(calc)}</div></div><div class="metric"><div class="metric-label">원금 회수</div><div class="metric-value">${fmtPct(rec.pct)}</div></div></div>
-        <div class="sub-number">목표 달성 후 운용</div><div class="goal-choice"><button data-goal-mode="${p.id}:cashflow" class="${p.afterGoalMode==='cashflow'?'active':''}">현금흐름 전환</button><button data-goal-mode="${p.id}:reinvest" class="${p.afterGoalMode==='reinvest'?'active':''}">계속 재투자</button></div>
-        ${goalPct>=100&&!p.recovery.locked?`<button class="btn primary" style="width:100%;margin-top:11px" data-lock-recovery="${p.id}">원금회수 기준 확정</button>`:''}
-      </article>`}).join('')}</div>`;
-  }
-
-  function renderSettings() {
-    const toss=state.integrations.toss;
-    document.getElementById('page-settings').innerHTML=`${sectionTitle('설정','표시 · 데이터 · 연동')}
-      <div class="stack">
-        <article class="card"><div class="card-title">전체 표시 설정</div><form id="globalSettingsForm" class="form-grid" style="margin-top:14px">
-          <div><label class="input-label">참고 환율 (1달러)</label><input class="input" name="exchangeRate" type="number" min="0" step="1" value="${n(state.settings.exchangeRate)}"></div>
-          <div><label class="input-label">전체 월배당 목표 USD</label><input class="input" name="targetMonthlyDividend" type="number" min="0" step="1" value="${n(state.settings.targetMonthlyDividend)}"></div>
-          <div><label class="input-label">연 배당 경고금액 (원)</label><input class="input" name="warningKRW" type="number" min="0" step="10000" value="${n(state.settings.warningKRW)}"></div>
-          <div><label class="input-label">연 배당 관리기준 (원)</label><input class="input" name="thresholdKRW" type="number" min="1" step="10000" value="${n(state.settings.thresholdKRW)}"></div>
-          <div><label class="input-label">화면 테마</label><select class="input select" name="appearance"><option value="system" ${state.settings.appearance==='system'?'selected':''}>기기 설정</option><option value="light" ${state.settings.appearance==='light'?'selected':''}>라이트</option><option value="dark" ${state.settings.appearance==='dark'?'selected':''}>다크</option></select></div>
-          <button class="btn primary" type="submit">설정 저장</button>
-        </form></article>
-        <article class="card"><div class="card-head"><div><div class="card-title">토스 읽기 전용</div><div class="sub-number">신규 거래 발견 → 확인 → 승인 저장</div></div><span class="status-pill">${toss.status==='connected'?'연결됨':'미연결'}</span></div>
-          <p class="tiny muted">자동 덮어쓰기는 하지 않습니다. 현재는 공식 개인 투자내역 API 연결값이 없어 실제 동기화는 비활성 상태입니다.</p>
-          <button class="btn soft" style="width:100%" data-review-toss ${toss.candidates?.length?'':'disabled'}>${toss.candidates?.length?`거래 후보 ${toss.candidates.length}건 검토`:'검토할 거래 없음'}</button>
-        </article>
-        <article class="card"><div class="card-title">클라우드</div><div class="sync-line" style="margin-top:13px"><span class="sync-dot" id="syncDot"></span><div><div class="row-title" id="syncStatusText">${currentUser?'연결됨':'로그인 필요'}</div><div class="row-sub">V4 전용 저장공간 · V3 원본 보존</div></div></div>${currentUser?'<button class="btn soft" style="width:100%;margin-top:12px" data-logout>로그아웃</button>':''}</article>
-        <article class="card"><div class="card-title">백업 · 내보내기</div><div class="action-row" style="margin-top:13px"><button class="btn primary" data-backup>ZIP 백업</button><button class="btn secondary" data-restore>ZIP 복원</button></div><div class="action-row" style="margin-top:9px"><button class="btn soft" data-csv>CSV 내보내기</button><button class="btn soft" data-all-check>전체 점검</button></div></article>
-        <article class="card danger"><div class="card-title">초기화</div><p class="tiny muted">V4 데이터만 지웁니다. V3.2.1 저장소는 삭제하지 않습니다.</p><button class="btn soft" style="width:100%" data-reset>V4 전체 초기화</button></article>
-      </div><div class="app-version">DividendOS ${APP_VERSION}${state.meta.migratedFrom?` · ${esc(state.meta.migratedFrom)}에서 이전`:''}</div>`;
-  }
-
+  const views = createViews({
+    getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
+    getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getCurrentUser:() => currentUser,
+    activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
+    displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
+  });
+  const { renderHome, renderProjects, renderGoals, renderSettings } = views;
   function renderAll() {
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');

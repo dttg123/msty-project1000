@@ -1,10 +1,12 @@
-export const APP_VERSION = '4.0.0-beta.1';
+export const APP_VERSION = '0.9';
 export const DATA_SCHEMA_VERSION = 4;
 
 const APP_FILES = [
-  'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+  'index.html', 'styles.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js',
-  'backup.js', 'sw.js'
+  'backup.js', 'sw.js',
+  'modules/constants.js', 'modules/utils.js', 'modules/state.js',
+  'modules/portfolio.js', 'modules/format.js', 'modules/views.js'
 ];
 
 const encoder = new TextEncoder();
