@@ -7,6 +7,7 @@ import { blankProject, blankState, migrate, migrateLegacy } from './modules/stat
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
+import { buildMigrationAudit } from './modules/migration.js';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -25,6 +26,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let saveTimer = null;
   let cloudTimer = null;
   let toastTimer = null;
+  let legacyMigrationSource = null;
 
   const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
   const { activeProjects, projectById, projectRows, computeProject, recoveryStats, totals } = portfolio;
@@ -70,6 +72,28 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
   const { renderHome, renderProjects, renderGoals, renderSettings } = views;
+  function auditLegacyAgainstState(raw,targetState) {
+    const project=targetState.projects.find(item=>item.symbol==='MSTY')||targetState.projects[0];
+    if(!project)return null;
+    const engine=createPortfolioEngine(()=>targetState,()=>project.id),calc=engine.computeProject(project);
+    return buildMigrationAudit(raw,targetState,calc);
+  }
+  function prepareLegacyMigration(raw) {
+    const candidate=migrateLegacy(raw),audit=auditLegacyAgainstState(raw,candidate);
+    candidate.meta.migrationAudit=audit;candidate.meta.legacyMigrationAvailable=false;
+    return {candidate,audit};
+  }
+  function migrationCheckRows(audit) {
+    const labels={tradeCount:'거래 건수',dividendCount:'배당 건수',splitCount:'분할 건수',shares:'보유주수',costBasis:'남은 취득원가',marketValue:'평가금액',dividendsTotal:'누적배당',reinvestAmount:'재투자 사용액',dividendAvailable:'사용 가능 배당',currentTarget:'현재 목표주수',recoveryBasis:'원금회수 기준'};
+    return audit.checks.filter(check=>labels[check.key]).map(check=>`<div class="list-row"><div><div class="row-title">${labels[check.key]}</div><div class="row-sub">V3 ${typeof check.source==='number'?round(check.source,4):check.source} → V4 ${typeof check.target==='number'?round(check.target,4):check.target}</div></div><div class="row-value ${check.passed?'positive':'negative'}">${check.passed?'일치':'불일치'}</div></div>`).join('');
+  }
+  async function previewLegacyMigration() {
+    legacyMigrationSource=legacyMigrationSource||await readLegacyState();
+    if(!legacyMigrationSource){toast('이 기기에서 V3.2.1 데이터를 찾지 못했습니다.');return;}
+    const preview=prepareLegacyMigration(legacyMigrationSource),audit=preview.audit;
+    openModal(`<h3 class="modal-title">V3.2.1 → V4 이전 점검</h3><p class="modal-desc">V3 원본은 읽기만 합니다. 아래 값이 모두 일치할 때 V4 전용 저장소에 복사합니다.</p><div class="list">${migrationCheckRows(audit)}</div><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmLegacyMigration" ${audit.passed?'':'disabled'}>일치 확인 후 복사</button></div>`);
+    const confirm=document.getElementById('confirmLegacyMigration');if(confirm)confirm.onclick=async()=>{await storageSet(SAFETY_KEY,clone(state));state=preview.candidate;selectedProjectId=state.projects[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('settings');toast('V3.2.1 데이터를 V4에 복사했습니다.');};
+  }
   function renderAll() {
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');
@@ -191,7 +215,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     currentUser=user;setSaveStatus('동기화 확인','cloud-busy');
     try{
       let cloudData=await getCloudDocument(user.uid),cloudState=cloudData?.state?migrate(cloudData.state):null,usingLegacyCloud=false;
-      if(!cloudState){const legacy=await getLegacyCloudDocument(user.uid);if(legacy?.state){cloudState=migrateLegacy(legacy.state);usingLegacyCloud=true;}}
+      if(!cloudState){const legacy=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;cloudState=prepareLegacyMigration(legacy.state).candidate;usingLegacyCloud=true;}}
+      else if(!cloudState.meta?.migrationAudit){const legacy=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;const audit=auditLegacyAgainstState(legacy.state,cloudState);if(audit?.passed)cloudState.meta.migrationAudit=audit;else cloudState.meta.legacyMigrationAvailable=true;}}
       const choice=await chooseInitialSync(cloudState);
       if(choice==='cloud'&&cloudState){applyingCloudState=true;state=cloudState;await storageSet(STATE_KEY,state);applyingCloudState=false;if(usingLegacyCloud)await pushCloudState();}else await pushCloudState();
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
@@ -243,6 +268,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
+    if('migrateV3'in button.dataset){previewLegacyMigration();return;}
     if('logout'in button.dataset){logoutGoogle();return;}
     if('reset'in button.dataset){confirmAction('V4 전체 초기화','V4 거래·배당·프로젝트를 초기화합니다. V3.2.1 원본은 유지됩니다.',async()=>{await storageSet(SAFETY_KEY,clone(state));await storageDelete(STATE_KEY);state=blankState();selectedProjectId=state.projects[0].id;await saveState(true);renderAll();showPage('home');toast('V4 데이터를 초기화했습니다.');},'초기화');return;}
     if('closeModal'in button.dataset){closeModal();return;}
@@ -269,10 +295,13 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     try{
       await openStorage();
       const existing=await storageGet(STATE_KEY);
-      if(existing)state=migrate(existing);else{const legacy=await readLegacyState();state=legacy?migrateLegacy(legacy):blankState();}
+      legacyMigrationSource=await readLegacyState();
+      if(existing){state=migrate(existing);if(legacyMigrationSource&&!state.meta.migrationAudit){const audit=auditLegacyAgainstState(legacyMigrationSource,state);if(audit?.passed)state.meta.migrationAudit=audit;else state.meta.legacyMigrationAvailable=true;}}
+      else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
+      else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r3').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r4').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
