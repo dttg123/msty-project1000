@@ -1,5 +1,6 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
+import { renderDividendView } from './dividend-view.js';
 
 export function createViews(context) {
   const {
@@ -143,6 +144,13 @@ export function createViews(context) {
       </div>`;
   }
 
+  function renderDividends() {
+    renderDividendView({
+      state, total:totals(), projects:activeProjects(), sectionTitle, periodButtons, chartHTML, recordRow,
+      computeProject, fmtMoney, fmtDate, fmtShares, signClass
+    });
+  }
+
   function estimatedDate(calc) {
     const plan=Math.max(0,n(calc.project.monthlyPlanShares)), remaining=Math.max(0,calc.currentTarget-calc.shares);
     if(remaining<=0)return '달성 완료'; if(plan<=0)return '월 매수계획 필요';
@@ -213,5 +221,5 @@ export function createViews(context) {
       </div><div class="app-version">DividendOS ${APP_VERSION}${state.meta.migratedFrom?` · ${esc(state.meta.migratedFrom)}에서 이전`:''}</div>`;
   }
 
-  return { renderHome, renderProjects, renderGoals, renderSettings };
+  return { renderHome, renderProjects, renderDividends, renderGoals, renderSettings };
 }
