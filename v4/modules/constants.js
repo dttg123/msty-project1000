@@ -1,6 +1,6 @@
 export const STATE_KEY = 'state';
 export const SAFETY_KEY = 'safetyBackup';
-export const PAGES = ['home', 'projects', 'dividend', 'goal', 'settings'];
+export const PAGES = ['home', 'projects', 'goal', 'settings'];
 export const PROJECT_COLORS = [
   ['#6858f5', '#9a84ff'],
   ['#f06d38', '#ff9b68'],
