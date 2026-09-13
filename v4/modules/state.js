@@ -12,7 +12,7 @@ export function blankProject(symbol = 'MSTY', name = 'YieldMax MSTR Option Incom
     targetUnits: symbol === 'MSTY' ? 1000 : 500, monthlyPlanShares:0, projectStart:todayISO(),
     currentPrice:0, priceSource:'manual', priceUpdatedAt:'', distributionFrequency:symbol === 'MSTY' ? 'weekly' : 'monthly',
     initialDividendBalance:0, initialDividendBalanceDate:'', afterGoalMode:'cashflow',
-    recovery:blankRecovery(), colorIndex:0, archived:false
+    recovery:blankRecovery(), category:symbol === 'MSTY' ? 'highYield' : 'dividend', colorIndex:0, archived:false
   };
 }
 
@@ -20,7 +20,7 @@ export function blankState() {
   const project = blankProject();
   return {
     version:4,
-    settings:{ exchangeRate:1370, displayCurrency:'USD', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
+    settings:{ exchangeRate:1370, exchangeRateMode:'manual', displayCurrency:'USD', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
     projects:[project], trades:[], dividends:[], splits:[], cashAdjustments:[],
     integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastError:'', accountLabel:'', candidates:[], holdings:[], comparisons:[], ignoredCount:0, matchedExistingCount:0, unsupportedCurrencyCount:0, historyTruncated:false } },
     meta:{ createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), lastBackupAt:'', lastLocalSaveAt:'', lastCloudSaveAt:'', migratedFrom:'', migrationCheckedAt:'', celebratedMilestones:[] }
@@ -80,7 +80,7 @@ export function normalizeV4(raw) {
   result.projects = Array.isArray(raw.projects) ? raw.projects.map((project,index) => ({
     ...blankProject(project.symbol || `ASSET${index+1}`,project.name || project.symbol || '배당 종목'), ...project,
     id:project.id || uid('p'), symbol:String(project.symbol || `ASSET${index+1}`).toUpperCase(),
-    recovery:{...blankRecovery(), ...(project.recovery || {})}, colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
+    recovery:{...blankRecovery(), ...(project.recovery || {})}, category:project.category==='dividend'?'dividend':'highYield', colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
   })) : base.projects;
   for (const key of ['trades','dividends','splits','cashAdjustments']) result[key] = Array.isArray(raw[key]) ? raw[key] : [];
   result.integrations = {toss:{...base.integrations.toss, ...(raw.integrations?.toss || {})}};
