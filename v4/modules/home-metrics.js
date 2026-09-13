@@ -17,6 +17,8 @@ function projectForecast(calc, today) {
   const amount=average(rows,weekly?8:3);
   if(!amount)return [];
   const last=new Date(`${rows.at(-1).date}T12:00:00`), end=new Date(today.getFullYear(),11,31,12);
+  const ageDays=Math.floor((today-last)/86400000);
+  if(ageDays>(weekly?45:75))return [];
   let next=weekly?addDays(last,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(last,1);
   const result=[];
   while(next<=today)next=weekly?addDays(next,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(next,1);
@@ -41,8 +43,9 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
   const monthForecast=sum(forecast.filter(row=>row.date.startsWith(currentMonth)));
   const yearActual=sum(actual.filter(row=>row.date.startsWith(currentYear)));
   const yearForecast=sum(forecast.filter(row=>row.date.startsWith(currentYear)));
-  const stable=calcs.reduce((total,calc)=>total+(calc.estimateReliable?n(calc.monthlyEstimate):0),0);
-  const recent=calcs.reduce((total,calc)=>total+(calc.estimateReliable?n(calc.shortMonthlyEstimate):0),0);
+  const forecastIds=new Set(forecast.map(row=>row.projectId));
+  const stable=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.rawMonthlyEstimate):0),0);
+  const recent=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.rawShortMonthlyEstimate):0),0);
   const paceChange=stable>0?(recent/stable-1)*100:null;
   const months=[];
   for(let offset=-11;offset<=0;offset++){
