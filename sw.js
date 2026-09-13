@@ -1,4 +1,4 @@
-const CACHE = 'dividend-os-v0.9-r1';
+const CACHE = 'dividend-os-v0.9-r2';
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js',
@@ -18,8 +18,11 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  // GitHub Pages may retain an older app shell in the HTTP cache after a
+  // deploy. Revalidate online first, then retain that response for offline use.
+  const freshRequest = new Request(event.request, { cache: 'no-store' });
   event.respondWith(
-    fetch(event.request)
+    fetch(freshRequest)
       .then(response => {
         const copy = response.clone();
         caches.open(CACHE).then(cache => cache.put(event.request, copy));
