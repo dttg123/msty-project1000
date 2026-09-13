@@ -31,6 +31,12 @@ export function normalizeTossHolding(row) {
   };
 }
 
+export function normalizeTossPrice(row) {
+  const symbol=symbolOf(row?.symbol),currency=String(row?.currency||'').toUpperCase(),lastPrice=Math.max(0,n(row?.lastPrice));
+  if(!symbol||!currency||lastPrice<=0)return null;
+  return {symbol,currency,lastPrice,timestamp:String(row?.timestamp||'')};
+}
+
 export function normalizeTossOrder(order) {
   const execution=order?.execution||{};
   const externalId=orderIdOf(order),symbol=symbolOf(order?.symbol);
@@ -50,6 +56,7 @@ export function normalizeTossOrder(order) {
 export function buildTossSync(snapshot, {existingTrades=[], appPositions=[]}={}) {
   const existingIds=new Set(existingTrades.filter(row=>row?.source?.provider==='toss').map(row=>String(row.source.externalId||'')));
   const holdings=(Array.isArray(snapshot?.holdings)?snapshot.holdings:[]).map(normalizeTossHolding).filter(Boolean);
+  const prices=(Array.isArray(snapshot?.prices)?snapshot.prices:[]).map(normalizeTossPrice).filter(Boolean);
   const appMap=new Map(appPositions.map(row=>[symbolOf(row.symbol),Math.max(0,n(row.shares))]));
   const comparisons=holdings.map(row=>({
     ...row,
@@ -70,7 +77,7 @@ export function buildTossSync(snapshot, {existingTrades=[], appPositions=[]}={})
   return {
     accountLabel:String(snapshot?.accountLabel||'토스증권 계좌'),
     fetchedAt:String(snapshot?.fetchedAt||new Date().toISOString()),
-    holdings,comparisons,candidates,
+    holdings,prices,comparisons,candidates,
     ignoredCount:ignored.length,historyTruncated:!!snapshot?.historyTruncated,
     unsupportedCurrencyCount:ignored.filter(row=>row.reason==='currency').length
   };
