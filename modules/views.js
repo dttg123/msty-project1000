@@ -147,6 +147,7 @@ export function createViews(context) {
 
   function renderSettings() {
     const toss=state.integrations.toss;
+    const migration=state.meta.migrationAudit,migrationAvailable=!!state.meta.legacyMigrationAvailable;
     document.getElementById('page-settings').innerHTML=`${sectionTitle('설정','표시 · 데이터 · 연동')}
       <div class="stack">
         <article class="card"><div class="card-title">전체 표시 설정</div><form id="globalSettingsForm" class="form-grid" style="margin-top:14px">
