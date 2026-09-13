@@ -12,4 +12,7 @@ export function todayISO() {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
-export const isDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+export const isDate = value => {
+  const text=String(value||''),match=text.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!match)return false;
+  const date=new Date(`${text}T00:00:00Z`);return !Number.isNaN(date.getTime())&&date.getUTCFullYear()===Number(match[1])&&date.getUTCMonth()+1===Number(match[2])&&date.getUTCDate()===Number(match[3]);
+};
