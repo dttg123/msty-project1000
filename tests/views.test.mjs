@@ -40,6 +40,7 @@ assert.match(elements.get('page-home').innerHTML,/MSTY/);
 assert.match(elements.get('page-projects').innerHTML,/첫 배당/);
 assert.match(elements.get('page-projects').innerHTML,/성과 구성/);
 assert.match(elements.get('page-projects').innerHTML,/최근 8회 월환산/);
+assert.match(elements.get('page-projects').innerHTML,/26\.01/);
 assert.match(elements.get('page-goal').innerHTML,/현금흐름 전환/);
 assert.match(elements.get('page-goal').innerHTML,/milestone-grid/);
 assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.9\.1/);
