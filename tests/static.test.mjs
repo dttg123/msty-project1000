@@ -26,7 +26,7 @@ for (const file of ['styles.css',...modules.map(name=>`modules/${name}`)]) {
   assert.ok(sw.includes(`./${file}`),`service worker missing ${file}`);
   assert.ok(backup.includes(`'${file}'`),`portable backup missing ${file}`);
 }
-assert.ok(sw.includes("dividend-os-v0.9-r4"));
+assert.ok(sw.includes("dividend-os-v0.9-r5"));
 assert.ok(sw.includes("cache: \'no-store\'"));
 assert.ok(backup.includes("APP_VERSION = '0.9'"));
 assert.ok(app.includes('name="amountUSD" type="number" min="0.01" step="0.01" required'));
