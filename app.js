@@ -30,6 +30,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let toastTimer = null;
   let legacyMigrationSource = null;
   let tossSyncRunning = false;
+  let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
 
   const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
   const { activeProjects, projectById, projectRows, computeProject, recoveryStats, totals } = portfolio;
@@ -227,7 +228,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       setSaveStatus('클라우드 저장','cloud-ok');
     }catch(error){console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
-  async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('로그인 필요');document.getElementById('authGate')?.classList.remove('hidden');},onError:message=>toast(message)});}
+  async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus(localOnlySession?'기기 저장':'로그인 필요');document.getElementById('authGate')?.classList.toggle('hidden',localOnlySession);},onError:message=>toast(message)});}
 
   function refreshTossComparisons() {
     const toss=state.integrations.toss;
@@ -299,13 +300,15 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project=projectById(id);if(project){project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');toast('목표 달성 후 운용 방식을 저장했습니다.');});}return;}
     if(button.dataset.lockRecovery){lockRecovery(button.dataset.lockRecovery);return;}
     if(button.dataset.restoreProject){const project=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
+    if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('기기 저장');return;}
+    if('showLogin'in button.dataset){localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');document.getElementById('authGate')?.classList.remove('hidden');return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('migrateV3'in button.dataset){previewLegacyMigration();return;}
-    if('logout'in button.dataset){logoutGoogle();return;}
+    if('logout'in button.dataset){localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');logoutGoogle();return;}
     if('reset'in button.dataset){confirmAction('V4 전체 초기화','V4 거래·배당·프로젝트를 초기화합니다. V3.2.1 원본은 유지됩니다.',async()=>{await storageSet(SAFETY_KEY,clone(state));await storageDelete(STATE_KEY);state=blankState();selectedProjectId=state.projects[0].id;await saveState(true);renderAll();showPage('home');toast('V4 데이터를 초기화했습니다.');},'초기화');return;}
     if('closeModal'in button.dataset){closeModal();return;}
   }
@@ -337,7 +340,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r8').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r9').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
