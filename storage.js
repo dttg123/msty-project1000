@@ -46,7 +46,13 @@ export function storageDelete(key) {
   });
 }
 
-export function readLegacyState(key = 'state') {
+export async function readLegacyState(key = 'state') {
+  try {
+    if (typeof indexedDB.databases === 'function') {
+      const databases=await indexedDB.databases();
+      if (!databases.some(item=>item.name===LEGACY_DB_NAME)) return null;
+    }
+  } catch (_) {}
   return new Promise(resolve => {
     const request = indexedDB.open(LEGACY_DB_NAME, 1);
     request.onerror = () => resolve(null);
