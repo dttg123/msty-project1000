@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { blankProject, blankState, migrate, migrateLegacy, normalizeV4 } from '../modules/state.js';
-import { createPortfolioEngine } from '../modules/portfolio.js';\nimport { buildMigrationAudit, summarizeLegacyState } from '../modules/migration.js';
+import { createPortfolioEngine } from '../modules/portfolio.js';
+import { buildMigrationAudit, summarizeLegacyState } from '../modules/migration.js';
 
 function engineFor(state, selected = state.projects[0]?.id || '') {
   return createPortfolioEngine(() => state, () => selected);
