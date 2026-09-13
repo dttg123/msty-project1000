@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from '../modules/toss.js';
+import { buildTossSync, mergeTossCandidates, normalizeTossOrder, normalizeTossPrice, tossCandidateToTrade } from '../modules/toss.js';
 
 const snapshot={
   accountLabel:'토스증권 •1234',fetchedAt:'2026-09-13T10:00:00Z',
@@ -7,6 +7,7 @@ const snapshot={
     {symbol:'msty',name:'MSTY',currency:'USD',quantity:'12.5',averagePurchasePrice:'18',lastPrice:'14'},
     {symbol:'005930',name:'삼성전자',currency:'KRW',quantity:'3',averagePurchasePrice:'70000',lastPrice:'72000'}
   ],
+  prices:[{symbol:'msty',currency:'USD',lastPrice:'14.57',timestamp:'2026-09-13T10:00:00Z'},{symbol:'bad symbol',currency:'USD',lastPrice:'1'}],
   orders:[
     {orderId:'old',symbol:'MSTY',side:'BUY',currency:'USD',orderedAt:'2026-09-01T10:00:00+09:00',execution:{filledQuantity:'2',averageFilledPrice:'15',filledAt:'2026-09-01T10:01:00+09:00'}},
     {orderId:'new',symbol:'MSTY',side:'SELL',currency:'USD',orderedAt:'2026-09-02T10:00:00+09:00',execution:{filledQuantity:'0.5',averageFilledPrice:'16',filledAt:'2026-09-02T10:01:00+09:00'}},
@@ -18,6 +19,7 @@ const snapshot={
 const existing=[{source:{provider:'toss',externalId:'old'}}];
 const result=buildTossSync(snapshot,{existingTrades:existing,appPositions:[{symbol:'MSTY',shares:10}]});
 assert.equal(result.candidates.length,1);
+assert.deepEqual(result.prices,[{symbol:'MSTY',currency:'USD',lastPrice:14.57,timestamp:'2026-09-13T10:00:00Z'}]);
 assert.equal(result.candidates[0].externalId,'new');
 assert.equal(result.candidates[0].type,'sell');
 assert.equal(result.candidates[0].shares,.5);
@@ -28,6 +30,7 @@ assert.equal(result.unsupportedCurrencyCount,1);
 assert.equal(result.comparisons[0].difference,2.5);
 assert.equal(result.comparisons[1].supported,false);
 assert.equal(normalizeTossOrder({}),null);
+assert.equal(normalizeTossPrice({symbol:'MSTY',currency:'USD',lastPrice:'0'}),null);
 assert.deepEqual(mergeTossCandidates(result.candidates,result.candidates).map(row=>row.externalId),['new']);
 
 const longOrders=[];
