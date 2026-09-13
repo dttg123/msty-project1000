@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { renderDividendView } from './dividend-view.js?v=0.9.4-r20';
+import { renderDividendView } from './dividend-view.js?v=0.9.4-r21';
 
 export function createViews(context) {
   const {
@@ -43,32 +43,29 @@ export function createViews(context) {
   }
 
   function renderHome() {
-    const total=totals(), monthlyTarget=Math.max(.01,n(state.settings.targetMonthlyDividend)), monthlyPct=total.monthlyEstimate/monthlyTarget*100;
-    const annualKRW=total.yearDividends*n(state.settings.exchangeRate), threshold=Math.max(1,n(state.settings.thresholdKRW)), annualPct=annualKRW/threshold*100;
-    const overallPct=total.rows.length?total.rows.reduce((sum,row)=>sum+Math.min(1,Math.max(0,row.progress)),0)/total.rows.length*100:0;
+    const total=totals(),primary=total.rows[0]||null,monthlyTarget=Math.max(.01,n(state.settings.targetMonthlyDividend)),monthlyPct=total.currentMonthDividends/monthlyTarget*100;
+    const now=new Date(),previousDate=new Date(now.getFullYear(),now.getMonth()-1,1),previousKey=`${previousDate.getFullYear()}-${String(previousDate.getMonth()+1).padStart(2,'0')}`;
+    const activeIds=new Set(total.rows.map(row=>row.project.id)),asOf=new Date().toISOString().slice(0,10);
+    const previousMonth=(state.dividends||[]).filter(row=>activeIds.has(row.projectId)&&isDate(row.date)&&String(row.date)<=asOf&&String(row.date).startsWith(previousKey)).reduce((sum,row)=>sum+n(row.amountUSD),0);
+    const monthChange=previousMonth>0?(total.currentMonthDividends/previousMonth-1)*100:null;
+    const monthChangeText=monthChange===null?'지난달 비교 데이터 없음':`${monthChange>=0?'지난달보다 ':'지난달보다 '}${monthChange>=0?'+':''}${fmtPct(monthChange)}`;
+    const primaryPct=primary?primary.progress*100:0,remaining=primary?Math.max(0,primary.currentTarget-primary.shares):0;
     document.getElementById('page-home').innerHTML=`
       <div class="stack">
         <article class="card accent">
-          <div class="card-head"><div class="card-title">전체 최근 배당 월환산</div><span class="tag-pill">${total.rows.length}개 프로젝트</span></div>
-          <div class="big-number">${fmtMoney(total.monthlyEstimate)}</div>
-          <div class="metric-grid three">
-            <div class="metric"><div class="metric-label">이번 달 실입금</div><div class="metric-value">${fmtMoney(total.currentMonthDividends,0)}</div></div>
+          <div class="card-head"><div><div class="card-title">이번 달 받은 배당</div><div class="sub-number">실제 세후 입금액</div></div><span class="tag-pill">${now.getMonth()+1}월</span></div>
+          <div class="big-number home-primary-amount">${fmtMoney(total.currentMonthDividends,0)}</div>
+          <div class="home-change ${monthChange===null?'':signClass(monthChange)}">${monthChangeText}</div>
+          <div class="metric-grid">
+            <div class="metric"><div class="metric-label">올해 받은 배당</div><div class="metric-value">${fmtMoney(total.yearDividends,0)}</div></div>
             <div class="metric"><div class="metric-label">최근 12개월</div><div class="metric-value">${fmtMoney(total.trailing12Dividends,0)}</div></div>
-            <div class="metric"><div class="metric-label">목표달성</div><div class="metric-value">${fmtPct(overallPct)}</div></div>
           </div>
-          <div class="progress-wrap"><div class="progress-meta"><span>월환산 목표 ${fmtMoney(monthlyTarget)}</span><span>${fmtPct(monthlyPct)}</span></div>${progress(monthlyPct)}</div>
-          ${total.staleEstimateCount?`<div class="tiny muted" style="margin-top:9px">${total.staleEstimateCount}개 프로젝트의 최근 배당 기록이 오래되어 월환산 신뢰도가 낮습니다.</div>`:''}
+          <div class="progress-wrap"><div class="progress-meta"><span>이번 달 목표 ${fmtMoney(monthlyTarget)}</span><span>${fmtPct(monthlyPct)}</span></div>${progress(monthlyPct)}</div>
         </article>
-        <button class="dividend-flow-card" type="button" data-page="dividend"><span class="flow-icon">$</span><span><strong>전체 배당 흐름</strong><small>주·월·년 상세 그래프 보기</small></span><b>${fmtMoney(total.currentMonthDividends,0)}</b></button>
-        ${sectionTitle('포트폴리오','종목별 현황')}
-        <div>${total.rows.map(projectSummaryCard).join('')||'<article class="card empty-project">프로젝트를 추가해 주세요.</article>'}</div>
-        ${sectionTitle('전체 상태','자동 합산')}
-        <article class="card compact">
-          <div class="list-row"><div><div class="row-title">평가금액</div><div class="row-sub">${total.missingPriceCount?`현재가 미입력 ${total.missingPriceCount}개 · 알려진 종목만 합산`:'모든 종목 현재가 반영'}</div></div><div class="row-value">${fmtMoney(total.marketValue)}</div></div>
-          <div class="list-row"><div><div class="row-title">투입원금</div><div class="row-sub">현재 남은 취득원가</div></div><div class="row-value">${fmtMoney(total.costBasis)}</div></div>
-          <div class="list-row"><div><div class="row-title">사용 가능 배당</div><div class="row-sub">배당 + 보정 − 재투자</div></div><div class="row-value ${signClass(total.dividendAvailable)}">${fmtMoney(total.dividendAvailable)}</div></div>
-          <div class="list-row"><div><div class="row-title">올해 배당 관리</div><div class="row-sub">경고 ${Math.round(n(state.settings.warningKRW)).toLocaleString('ko-KR')}원 · 기준 ${Math.round(threshold).toLocaleString('ko-KR')}원</div></div><div class="row-value ${annualKRW>=threshold?'negative':annualKRW>=n(state.settings.warningKRW)?'warning':''}">${Math.round(annualKRW).toLocaleString('ko-KR')}원</div></div>
-        </article>
+        ${primary?`<article class="card home-goal-card" data-open-project="${primary.project.id}" tabindex="0" role="button"><div class="card-head"><div><div class="card-title">${esc(primary.project.symbol)} 목표</div><div class="row-title">${fmtShares(primary.shares)} / ${fmtShares(primary.currentTarget)}주</div></div><span class="status-pill">${fmtPct(primaryPct)}</span></div>${progress(primaryPct)}<div class="home-goal-meta"><span>남은 주수<strong>${fmtShares(remaining)}주</strong></span><span>예상 달성<strong>${estimatedDate(primary)}</strong></span></div></article>`:''}
+        <article class="card compact home-overview"><button type="button" data-page="projects"><span>포트폴리오</span><strong>${total.missingPriceCount?'현재가 확인 필요':fmtMoney(total.marketValue,0)}</strong></button><button type="button" data-page="projects"><span>총손익</span><strong class="${total.totalReturn===null?'':signClass(total.totalReturn)}">${total.totalReturn===null?'계산 대기':fmtSignedMoney(total.totalReturn,0)}</strong></button><button type="button" data-page="dividend"><span>쓸 수 있는 배당</span><strong class="${signClass(total.dividendAvailable)}">${fmtMoney(total.dividendAvailable,0)}</strong></button></article>
+        <button class="dividend-flow-card" type="button" data-page="dividend"><span class="flow-icon">$</span><span><strong>배당 상세 보기</strong><small>주·월·년 흐름과 종목별 배당</small></span><b>›</b></button>
+        ${total.rows.length>1?`${sectionTitle('다른 종목','포트폴리오')}<div>${total.rows.slice(1).map(projectSummaryCard).join('')}</div>`:''}
       </div>`;
   }
 
