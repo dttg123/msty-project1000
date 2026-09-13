@@ -202,10 +202,12 @@ function testFutureActualRecordsAreExcluded() {
   const state=blankState(),project=state.projects[0];project.id='p-msty';project.currentPrice=10;
   const tomorrow=new Date();tomorrow.setUTCDate(tomorrow.getUTCDate()+1);const future=tomorrow.toISOString().slice(0,10);
   state.trades=[{id:'past',projectId:project.id,date:'2026-01-01',type:'buy',buyType:'direct',shares:10,price:10},{id:'future-buy',projectId:project.id,date:future,type:'buy',buyType:'direct',shares:100,price:10}];
+  state.trades.push({id:'invalid-buy',projectId:project.id,date:'',type:'buy',buyType:'direct',shares:999,price:10});
   state.dividends=[{id:'future-dividend',projectId:project.id,date:future,amountUSD:500}];
+  state.dividends.push({id:'invalid-dividend',projectId:project.id,date:'bad-date',amountUSD:999});
   state.splits=[{id:'future-split',projectId:project.id,date:future,from:1,to:10}];
   const calc=engineFor(state).computeProject(project);
-  nearly(calc.shares,10);nearly(calc.factor,1);nearly(calc.dividendsTotal,0);assert.equal(calc.trades.length,2);assert.equal(calc.postedTrades.length,1);
+  nearly(calc.shares,10);nearly(calc.factor,1);nearly(calc.dividendsTotal,0);assert.equal(calc.trades.length,3);assert.equal(calc.postedTrades.length,1);assert.equal(calc.postedDividends.length,0);
 }
 
 function testFullSellRebuyAndCashReconciliation() {
