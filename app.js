@@ -1,6 +1,6 @@
 import { auth, firestore } from './firebase.js';
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet } from './storage.js';
+import { openStorage, storageGet, storageSet } from './storage.js?v=3.2.2';
 import { getCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 
@@ -1490,7 +1490,7 @@ function setCloudStatus(status, text) {
         await initAuth();
         hideSplash();
         if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-          navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW registration failed',err));
+          navigator.serviceWorker.register('./sw.js?v=3.2.2').catch(err=>console.warn('SW registration failed',err));
         }
       } catch(err) {
         console.error(err);

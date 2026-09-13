@@ -1,5 +1,5 @@
 const DB_NAME = 'MSTYProject1000DB_V3';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'kv';
 let database;
 
