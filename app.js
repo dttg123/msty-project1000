@@ -318,7 +318,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       const form=event.target;if(!(form instanceof HTMLFormElement))return;
       if(form.dataset.submitting==='true'){event.preventDefault();event.stopImmediatePropagation();return;}
       form.dataset.submitting='true';
-      const buttons=[...form.querySelectorAll('button[type="submit"]')];buttons.forEach(button=>button.disabled=true);
+      const buttons=[...form.querySelectorAll('button[type="submit"]')];
+      setTimeout(()=>{if(form.isConnected)buttons.forEach(button=>button.disabled=true);},0);
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;buttons.forEach(button=>button.disabled=false);},800);
     },true);
     document.addEventListener('click',handleClick);
@@ -340,7 +341,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r9').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r10').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
