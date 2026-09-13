@@ -38,8 +38,11 @@ views.renderSettings();
 assert.match(elements.get('page-home').innerHTML,/2개 프로젝트/);
 assert.match(elements.get('page-home').innerHTML,/MSTY/);
 assert.match(elements.get('page-projects').innerHTML,/첫 배당/);
+assert.match(elements.get('page-projects').innerHTML,/성과 구성/);
+assert.match(elements.get('page-projects').innerHTML,/최근 8회 월환산/);
 assert.match(elements.get('page-goal').innerHTML,/현금흐름 전환/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.9/);
+assert.match(elements.get('page-goal').innerHTML,/milestone-grid/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.9\.1/);
 assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
 assert.match(elements.get('page-settings').innerHTML,/서버 준비 중/);
 assert.match(elements.get('page-settings').innerHTML,/클라우드 연결/);
@@ -59,4 +62,4 @@ state.trades.push({id:'goal',projectId:'p-msty',date:'2026-02-01',type:'buy',buy
 views.renderGoals();
 assert.match(elements.get('page-goal').innerHTML,/원금회수 기준 확정/);
 assert.match(elements.get('page-goal').innerHTML,/data-goal-mode="p-msty:cashflow" class="active"/);
-console.log('DividendOS v0.9 view QA: PASS');
+console.log('DividendOS v0.9.1 view QA: PASS');
