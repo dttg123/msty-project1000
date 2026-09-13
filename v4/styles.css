@@ -418,12 +418,12 @@ textarea.input { min-height: 90px; resize: vertical; }
 
 .mini-chart-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
 .column-chart { height:260px; display:flex; align-items:stretch; gap:8px; margin-top:14px; overflow-x:auto; padding:8px 2px 2px; }
-.column-chart.compact-chart { height:170px; gap:10px; overflow:hidden; }
-.column-item { min-width:44px; flex:1; border:0; background:transparent; color:var(--text); display:grid; grid-template-rows:22px 1fr 22px; gap:5px; padding:0; }
-.column-value { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.column-chart.compact-chart { height:152px; gap:8px; overflow:hidden; }
+.column-item { min-width:0; flex:1; border:0; background:transparent; color:var(--text); display:grid; grid-template-rows:20px 1fr 22px; gap:4px; padding:0; }
+.column-value { font-size:9px; color:var(--muted); white-space:nowrap; overflow:visible; text-align:center; font-variant-numeric:tabular-nums; }
 .column-track { min-height:70px; display:flex; align-items:flex-end; justify-content:center; border-bottom:1px solid var(--line); }
 .column-fill { display:block; width:min(28px,72%); min-height:4px; border-radius:8px 8px 3px 3px; background:linear-gradient(180deg,var(--accent-2),var(--accent)); }
-.column-label { font-size:10px; color:var(--muted); font-weight:750; white-space:nowrap; }
+.column-label { font-size:9px; color:var(--muted); font-weight:750; white-space:nowrap; text-align:center; }
 .full-chart { margin-top:12px; }
 .dividend-detail { border-bottom:1px solid var(--line); }
 .dividend-detail:last-child { border-bottom:0; }
@@ -599,6 +599,11 @@ html[data-theme="dark"] .yield-grid>div { background:#222630; border-color:#3035
   .setting-row { grid-template-columns: 1fr; }
   .setting-row .switch { justify-content: flex-start; }
   .modal-actions { grid-template-columns: 1fr; }
+  .column-chart.compact-chart { height:142px; gap:4px; }
+  .column-fill { width:min(24px,70%); }
+  .column-value,.column-label { font-size:8px; letter-spacing:-.02em; }
+  .dividend-flow-card { grid-template-columns:42px minmax(0,1fr) auto; padding:12px 13px; }
+  .dividend-flow-card b { font-size:18px; }
 }
 
 
