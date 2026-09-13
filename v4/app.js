@@ -244,10 +244,15 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     const toss=state.integrations.toss;
     toss.status='syncing';toss.lastError='';renderSettings();showPage('settings');
     try{
-      const snapshot=await fetchTossSnapshot();
+      const snapshot=await fetchTossSnapshot({symbols:activeProjects().map(project=>project.symbol)});
       const appPositions=activeProjects().map(project=>({symbol:project.symbol,shares:computeProject(project).shares}));
       const result=buildTossSync(snapshot,{existingTrades:state.trades,appPositions});
       Object.assign(toss,{status:'connected',lastSyncAt:result.fetchedAt,lastError:'',accountLabel:result.accountLabel,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates)});
+      for(const price of result.prices||[]){
+        if(price.currency!=='USD')continue;
+        const project=state.projects.find(item=>item.symbol===price.symbol&&!item.archived);
+        if(project)project.currentPrice=price.lastPrice;
+      }
       await saveState(true);renderAll();showPage('settings');toast(result.candidates.length?`토스 신규 체결 ${result.candidates.length}건을 찾았습니다.`:'토스 계좌와 대조했습니다. 신규 체결은 없습니다.');
     }catch(error){
       console.error('Toss read-only sync error',error);toss.status='error';toss.lastError=error?.message||'토스 조회에 실패했습니다.';await saveState();renderSettings();showPage('settings');toast(toss.lastError);
@@ -293,6 +298,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('allCheck'in button.dataset){showIssues();return;}
     if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project=projectById(id);if(project){project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');toast('목표 달성 후 운용 방식을 저장했습니다.');});}return;}
     if(button.dataset.lockRecovery){lockRecovery(button.dataset.lockRecovery);return;}
+    if(button.dataset.restoreProject){const project=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
