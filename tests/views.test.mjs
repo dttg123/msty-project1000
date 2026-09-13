@@ -7,7 +7,7 @@ import { createViews } from '../modules/views.js';
 const elements = new Map(['page-home','page-projects','page-goal','page-settings'].map(id => [id,{id,innerHTML:''}]));
 globalThis.document = { getElementById:id => elements.get(id) || null };
 
-const state=blankState();
+const state=blankState();\nstate.meta.legacyMigrationAvailable=true;
 state.projects[0].id='p-msty'; state.projects[0].currentPrice=12; state.projects[0].targetUnits=1000;
 const cony=blankProject('CONY','CONY Fund'); cony.id='p-cony'; cony.currentPrice=8; cony.targetUnits=500; cony.colorIndex=1;
 state.projects.push(cony);
@@ -38,5 +38,5 @@ assert.match(elements.get('page-home').innerHTML,/MSTY/);
 assert.match(elements.get('page-projects').innerHTML,/첫 배당/);
 assert.match(elements.get('page-goal').innerHTML,/현금흐름 전환/);
 assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.9/);
-assert.match(elements.get('page-settings').innerHTML,/토스 읽기 전용/);
+assert.match(elements.get('page-settings').innerHTML,/토스 읽기 전용/);\nassert.match(elements.get('page-settings').innerHTML,/V3\\.2\\.1 데이터 이전/);\nassert.match(elements.get('page-settings').innerHTML,/V3 이전값 점검/);
 console.log('DividendOS v0.9 view QA: PASS');
