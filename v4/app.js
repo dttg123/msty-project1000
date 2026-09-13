@@ -1,5 +1,5 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.1-r13';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.1-r14';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
@@ -9,7 +9,7 @@ import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9.1-r13';
+import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9.1-r14';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -195,6 +195,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(calc.oversells.length)issues.push(`${prefix}보유량 초과 매도 ${calc.oversells.length}건`);
       if(calc.cashDeficitEvents.length)issues.push(`${prefix}날짜순 배당 원장에서 잔액 부족 ${calc.cashDeficitEvents.length}건 · 최대 ${fmtMoney(Math.abs(calc.minDividendBalance))}`);
       if(!calc.priceAvailable&&calc.shares>0)issues.push(`${prefix}현재가 미입력으로 평가금액·총손익 계산 대기`);
+      const futureCount=['trades','dividends','splits','cashAdjustments'].reduce((count,key)=>count+projectRows(key,project.id).filter(row=>String(row.date)>todayISO()).length,0);if(futureCount)issues.push(`${prefix}현재 계산에서 제외된 미래 날짜 기록 ${futureCount}건`);
       const badTrade=calc.trades.filter(x=>!isDate(x.date)||n(x.shares)<=0||n(x.price)<0);if(badTrade.length)issues.push(`${prefix}잘못된 거래 ${badTrade.length}건`);
       const badDividend=calc.dividends.filter(x=>!isDate(x.date)||n(x.amountUSD)<=0);if(badDividend.length)issues.push(`${prefix}잘못된 배당 ${badDividend.length}건`);
       const badSplit=projectRows('splits',project.id).filter(x=>!isDate(x.date)||n(x.from)<=0||n(x.to)<=0);if(badSplit.length)issues.push(`${prefix}잘못된 분할 ${badSplit.length}건`);
@@ -325,6 +326,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   function bindStaticEvents() {
     document.addEventListener('submit',event=>{
       const form=event.target;if(!(form instanceof HTMLFormElement))return;
+      const futureDate=[...form.querySelectorAll('input[type="date"]')].find(input=>input.value&&input.value>todayISO());
+      if(futureDate){event.preventDefault();event.stopImmediatePropagation();futureDate.setCustomValidity('미래 날짜는 실제 기록으로 저장할 수 없습니다.');futureDate.reportValidity();setTimeout(()=>futureDate.setCustomValidity(''),1200);return;}
       if(form.dataset.submitting==='true'){event.preventDefault();event.stopImmediatePropagation();return;}
       form.dataset.submitting='true';
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;},800);
@@ -348,7 +351,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.1-r13').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.1-r14').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
