@@ -30,6 +30,7 @@ assert.equal(result.unsupportedCurrencyCount,1);
 assert.equal(result.comparisons[0].difference,2.5);
 assert.equal(result.comparisons[1].supported,false);
 assert.equal(normalizeTossOrder({}),null);
+assert.equal(normalizeTossOrder({orderId:'invalid-date',symbol:'MSTY',side:'BUY',currency:'USD',orderedAt:'2026-99-99',filledQuantity:1,averageFilledPrice:10}),null);
 assert.equal(normalizeTossPrice({symbol:'MSTY',currency:'USD',lastPrice:'0'}),null);
 assert.deepEqual(mergeTossCandidates(result.candidates,result.candidates).map(row=>row.externalId),['new']);
 
