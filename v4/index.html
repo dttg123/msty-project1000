@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <title>DividendOS · v0.9.3</title>
+  <title>DividendOS · v0.9.4</title>
   <meta name="color-scheme" content="light dark" />
   <script>
     (() => {
@@ -23,7 +23,7 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="./styles.css?v=0.9.3-r18" />
+  <link rel="stylesheet" href="./styles.css?v=0.9.4-r19" />
 </head>
 <body>
 
@@ -61,11 +61,15 @@
           <button id="krwBtn" type="button" data-currency="KRW">원</button>
         </div>
         <div class="save-pill" id="saveStatus">준비 중</div>
+        <button class="top-icon-btn" type="button" data-page="settings" aria-label="설정 열기" title="설정">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+        </button>
       </div>
     </header>
 
     <section class="page active" id="page-home"></section>
     <section class="page" id="page-projects"></section>
+    <section class="page" id="page-dividend"></section>
     <section class="page" id="page-goal"></section>
     <section class="page" id="page-settings"></section>
   </main>
@@ -74,14 +78,14 @@
     <button class="nav-btn active" data-page="home" aria-label="홈">
       <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></svg><span>홈</span>
     </button>
-    <button class="nav-btn" data-page="projects" aria-label="프로젝트">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="4" width="7" height="7" rx="2"/><rect x="3" y="15" width="7" height="5" rx="2"/><rect x="14" y="15" width="7" height="5" rx="2"/></svg><span>프로젝트</span>
+    <button class="nav-btn" data-page="projects" aria-label="포트폴리오">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="4" width="7" height="7" rx="2"/><rect x="3" y="15" width="7" height="5" rx="2"/><rect x="14" y="15" width="7" height="5" rx="2"/></svg><span>포트폴리오</span>
+    </button>
+    <button class="nav-btn" data-page="dividend" aria-label="배당">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M14.8 8.7c-.6-.5-1.5-.8-2.5-.8-1.5 0-2.7.8-2.7 2s1 1.7 2.8 2.1 2.8.9 2.8 2.1-1.2 2-2.8 2c-1.1 0-2.2-.4-2.9-1"/><path d="M12.3 6.5v11"/></svg><span>배당</span>
     </button>
     <button class="nav-btn" data-page="goal" aria-label="목표">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3"/><path d="M22 12h-3"/></svg><span>목표</span>
-    </button>
-    <button class="nav-btn" data-page="settings" aria-label="설정">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg><span>설정</span>
     </button>
   </nav>
 
@@ -91,6 +95,6 @@
   <div class="toast" id="toast"></div>
   <input type="file" id="restoreInput" accept="application/zip,.zip" class="hidden" />
 
-  <script type="module" src="./app.js?v=0.9.3-r18"></script>
+  <script type="module" src="./app.js?v=0.9.4-r19"></script>
 </body>
 </html>
