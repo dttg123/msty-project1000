@@ -59,7 +59,7 @@ export function migrateLegacy(input) {
   project.initialDividendBalance = Math.max(0,n(raw.settings?.initialDividendBalance));
   project.initialDividendBalanceDate = raw.settings?.initialDividendBalanceDate || '';
   project.recovery = {...blankRecovery(), ...(raw.recovery || {})};
-  state.settings.exchangeRate = Math.max(0,n(raw.settings?.exchangeRate) || 1370);
+  state.settings.exchangeRate = Math.max(0,n(raw.settings?.exchangeRate) || 1370);\n  state.settings.displayCurrency = raw.settings?.showKRW === false ? 'USD' : 'KRW';
   state.settings.warningKRW = Math.max(0,n(raw.settings?.warningKRW) || 18000000);
   state.settings.thresholdKRW = Math.max(1,n(raw.settings?.thresholdKRW) || 20000000);
   state.settings.appearance = raw.settings?.appearance || 'system';
