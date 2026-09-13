@@ -46,6 +46,6 @@ export function renderDividendView(context) {
         <div class="card-head"><div><div class="card-title">최근 배당</div><div class="sub-number">최근 5건</div></div><span class="status-pill">${recent.length}건</span></div>
         <div class="list">${recent.map(recordRow).join('')||'<div class="empty">아직 배당 기록이 없습니다.</div>'}</div>
       </article>
-      ${total.staleEstimateCount?`<article class="card compact"><div class="row-title">월환산 점검 필요</div><div class="row-sub">${n(total.staleEstimateCount)}개 종목은 최근 배당이 오래되어 추정치를 숨겼습니다.</div></article>`:''}
+      ${total.staleEstimateCount?`<article class="card compact"><div class="row-title">월환산 점검 필요</div><div class="row-sub">${n(total.staleEstimateCount)}개 종목은 기록 수·최근 지급일·지급 간격 조건이 부족해 추정치를 숨겼습니다.</div></article>`:''}
     </div>`;
 }
