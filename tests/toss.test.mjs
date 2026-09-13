@@ -43,4 +43,4 @@ assert.equal(longResult.candidates.length,1200);
 assert.equal(new Set(longResult.candidates.map(row=>row.externalId)).size,1200);
 assert.ok(longResult.candidates.every(row=>Number.isFinite(row.shares)&&Number.isFinite(row.price)));
 assert.equal(buildTossSync({orders:[],historyTruncated:true}).historyTruncated,true);
-console.log('DividendOS v0.9 Toss QA: PASS');
+console.log('DividendOS v0.9.1 Toss QA: PASS');
