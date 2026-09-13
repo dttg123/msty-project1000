@@ -25,6 +25,7 @@ const views=createViews({
   getChartMode:()=> 'month',
   getRecordsExpanded:()=> false,
   getCurrentUser:()=> null,
+  isTossBridgeConfigured:()=> false,
   ...portfolio,
   ...formatters
 });
@@ -39,7 +40,13 @@ assert.match(elements.get('page-home').innerHTML,/MSTY/);
 assert.match(elements.get('page-projects').innerHTML,/첫 배당/);
 assert.match(elements.get('page-goal').innerHTML,/현금흐름 전환/);
 assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.9/);
-assert.match(elements.get('page-settings').innerHTML,/토스 읽기 전용/);
+assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
+assert.match(elements.get('page-settings').innerHTML,/서버 준비 중/);
+state.integrations.toss={...state.integrations.toss,status:'connected',accountLabel:'토스증권 •1234',lastSyncAt:'2026-09-13T10:00:00Z',comparisons:[{symbol:'MSTY',shares:22,appShares:20,difference:2,supported:true}],candidates:[{externalId:'x'}]};
+views.renderSettings();
+assert.match(elements.get('page-settings').innerHTML,/토스증권 •1234/);
+assert.match(elements.get('page-settings').innerHTML,/후보 1건 검토/);
+assert.match(elements.get('page-settings').innerHTML,/\+2주/);
 assert.match(elements.get('page-settings').innerHTML,/V3\.2\.1 데이터 이전/);
 assert.match(elements.get('page-settings').innerHTML,/V3 이전값 점검/);
 console.log('DividendOS v0.9 view QA: PASS');

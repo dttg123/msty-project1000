@@ -67,3 +67,7 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
 export function logoutGoogle() {
   return signOut(auth);
 }
+
+export function getGoogleIdToken(forceRefresh=false) {
+  return auth.currentUser ? auth.currentUser.getIdToken(forceRefresh) : null;
+}

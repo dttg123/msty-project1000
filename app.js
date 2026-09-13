@@ -8,6 +8,8 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
+import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
+import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9-r6';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -27,6 +29,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let cloudTimer = null;
   let toastTimer = null;
   let legacyMigrationSource = null;
+  let tossSyncRunning = false;
 
   const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
   const { activeProjects, projectById, projectRows, computeProject, recoveryStats, totals } = portfolio;
@@ -67,7 +70,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getCurrentUser:() => currentUser,
+    getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getCurrentUser:() => currentUser, isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -226,6 +229,31 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
   async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('로그인 필요');document.getElementById('authGate')?.classList.remove('hidden');},onError:message=>toast(message)});}
 
+  function refreshTossComparisons() {
+    const toss=state.integrations.toss;
+    toss.comparisons=(toss.comparisons||[]).map(row=>{
+      const project=state.projects.find(item=>item.symbol===row.symbol&&!item.archived);
+      const appShares=project?computeProject(project).shares:0;
+      return {...row,appShares,difference:n(row.shares)-appShares};
+    });
+  }
+
+  async function syncTossReadOnly() {
+    if(tossSyncRunning)return;
+    tossSyncRunning=true;
+    const toss=state.integrations.toss;
+    toss.status='syncing';toss.lastError='';renderSettings();showPage('settings');
+    try{
+      const snapshot=await fetchTossSnapshot();
+      const appPositions=activeProjects().map(project=>({symbol:project.symbol,shares:computeProject(project).shares}));
+      const result=buildTossSync(snapshot,{existingTrades:state.trades,appPositions});
+      Object.assign(toss,{status:'connected',lastSyncAt:result.fetchedAt,lastError:'',accountLabel:result.accountLabel,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates)});
+      await saveState(true);renderAll();showPage('settings');toast(result.candidates.length?`토스 신규 체결 ${result.candidates.length}건을 찾았습니다.`:'토스 계좌와 대조했습니다. 신규 체결은 없습니다.');
+    }catch(error){
+      console.error('Toss read-only sync error',error);toss.status='error';toss.lastError=error?.message||'토스 조회에 실패했습니다.';await saveState();renderSettings();showPage('settings');toast(toss.lastError);
+    }finally{tossSyncRunning=false;if(state.integrations.toss.status==='syncing')state.integrations.toss.status='not_connected';renderSettings();showPage('settings');}
+  }
+
   function reviewTossCandidates() {
     const candidates=state.integrations.toss.candidates||[];
     if(!candidates.length){toast('검토할 신규 거래가 없습니다.');return;}
@@ -234,13 +262,14 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       event.preventDefault();const selected=new Set(new FormData(event.currentTarget).getAll('candidate').map(Number));let imported=0;
       candidates.forEach((row,index)=>{
         if(!selected.has(index))return;
-        let project=state.projects.find(p=>p.symbol===String(row.symbol).toUpperCase());
-        if(!project){project=blankProject(String(row.symbol).toUpperCase(),row.name||row.symbol);project.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(project);}
-        const externalId=String(row.externalId||row.id||'');
+        const normalized=normalizeTossOrder(row);if(!normalized||normalized.currency!=='USD')return;
+        let project=state.projects.find(p=>p.symbol===normalized.symbol);
+        if(!project){project=blankProject(normalized.symbol,normalized.name);project.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(project);}
+        const externalId=normalized.externalId;
         if(externalId&&state.trades.some(t=>t.source?.provider==='toss'&&t.source.externalId===externalId))return;
-        state.trades.push({id:uid('t'),projectId:project.id,symbol:project.symbol,date:row.date,type:row.type==='sell'?'sell':'buy',buyType:row.type==='sell'?'':row.buyType||'direct',shares:Math.max(0,n(row.shares)),price:Math.max(0,n(row.price)),reinvestAmountUSD:Math.max(0,n(row.reinvestAmountUSD)),note:row.note||'토스 승인 가져오기',createdAt:new Date().toISOString(),source:{provider:'toss',externalId}});imported++;
+        const trade=tossCandidateToTrade(normalized,{projectId:project.id,id:uid('t')});if(trade){state.trades.push(trade);imported++;}
       });
-      state.integrations.toss.candidates=candidates.filter((_,index)=>!selected.has(index));state.integrations.toss.lastSyncAt=new Date().toISOString();await saveState(true);closeModal();renderAll();toast(`${imported}건을 승인 저장했습니다.`);
+      state.integrations.toss.candidates=candidates.filter((_,index)=>!selected.has(index));state.integrations.toss.lastSyncAt=new Date().toISOString();refreshTossComparisons();await saveState(true);closeModal();renderAll();showPage('settings');toast(`${imported}건을 승인 저장했습니다.`);
     };
   }
 
@@ -267,6 +296,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
+    if('syncToss'in button.dataset){syncTossReadOnly();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('migrateV3'in button.dataset){previewLegacyMigration();return;}
     if('logout'in button.dataset){logoutGoogle();return;}
@@ -301,7 +331,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r5').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r6').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

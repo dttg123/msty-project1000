@@ -3,7 +3,7 @@ import { clamp, esc, n } from './utils.js';
 
 export function createViews(context) {
   const {
-    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getRecordsExpanded, getCurrentUser,
+    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getRecordsExpanded, getCurrentUser, isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   } = context;
@@ -147,6 +147,10 @@ export function createViews(context) {
 
   function renderSettings() {
     const toss=state.integrations.toss;
+    const tossReady=isTossBridgeConfigured(),tossUser=!!getCurrentUser(),tossBusy=toss.status==='syncing';
+    const tossStatus=tossBusy?'조회 중':toss.status==='connected'?'연결됨':toss.status==='error'?'확인 필요':tossReady?'승인 대기':'서버 준비 중';
+    const tossComparisons=(toss.comparisons||[]).slice(0,6);
+    const tossDescription=!tossReady?'비밀키를 앱에 넣지 않도록 읽기 전용 중계 서버를 준비 중입니다.':!tossUser?'Google 로그인 후 토스 계좌 조회를 시작할 수 있습니다.':toss.status==='error'?(toss.lastError||'토스 연결 상태를 다시 확인해 주세요.'):'계좌·보유주식·체결 주문만 조회합니다. 자동 저장이나 주문 기능은 없습니다.';
     const migration=state.meta.migrationAudit,migrationAvailable=!!state.meta.legacyMigrationAvailable;
     document.getElementById('page-settings').innerHTML=`${sectionTitle('설정','표시 · 데이터 · 연동')}
       <div class="stack">
@@ -158,9 +162,13 @@ export function createViews(context) {
           <div><label class="input-label">화면 테마</label><select class="input select" name="appearance"><option value="system" ${state.settings.appearance==='system'?'selected':''}>기기 설정</option><option value="light" ${state.settings.appearance==='light'?'selected':''}>라이트</option><option value="dark" ${state.settings.appearance==='dark'?'selected':''}>다크</option></select></div>
           <button class="btn primary" type="submit">설정 저장</button>
         </form></article>
-        <article class="card"><div class="card-head"><div><div class="card-title">토스 읽기 전용</div><div class="sub-number">신규 거래 발견 → 확인 → 승인 저장</div></div><span class="status-pill">${toss.status==='connected'?'연결됨':'미연결'}</span></div>
-          <p class="tiny muted">자동 덮어쓰기는 하지 않습니다. 현재는 공식 개인 투자내역 API 연결값이 없어 실제 동기화는 비활성 상태입니다.</p>
-          <button class="btn soft" style="width:100%" data-review-toss ${toss.candidates?.length?'':'disabled'}>${toss.candidates?.length?`거래 후보 ${toss.candidates.length}건 검토`:'검토할 거래 없음'}</button>
+        <article class="card"><div class="card-head"><div><div class="card-title">토스증권 읽기 전용</div><div class="sub-number">보유주식 대조 · 체결 후보 승인</div></div><span class="status-pill ${toss.status==='connected'?'positive':''}">${tossStatus}</span></div>
+          <p class="tiny muted">${esc(tossDescription)}</p>
+          ${toss.accountLabel?`<div class="row-sub">${esc(toss.accountLabel)}${toss.lastSyncAt?` · ${fmtDate(toss.lastSyncAt.slice(0,10))} 조회`:''}</div>`:''}
+          ${tossComparisons.length?`<div class="list" style="margin-top:12px">${tossComparisons.map(row=>`<div class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${fmtShares(row.shares)}주</div><div class="row-sub">앱 ${fmtShares(row.appShares)}주${row.supported?'':' · 원화 종목은 대조만'}</div></div><div class="row-value ${Math.abs(n(row.difference))<.0001?'positive':''}">${Math.abs(n(row.difference))<.0001?'일치':`${n(row.difference)>0?'+':''}${fmtShares(row.difference)}주`}</div></div>`).join('')}</div>`:''}
+          ${toss.unsupportedCurrencyCount?`<p class="tiny muted">원화 체결 ${toss.unsupportedCurrencyCount}건은 USD 원장에 섞지 않고 제외했습니다.</p>`:''}
+          ${toss.historyTruncated?'<p class="tiny negative">체결 기록이 10,000건을 넘어 일부만 조회됐습니다. 기간을 나눠 다시 조회해야 합니다.</p>':''}
+          <div class="action-row" style="margin-top:12px"><button class="btn secondary" data-sync-toss ${tossReady&&tossUser&&!tossBusy?'':'disabled'}>${tossBusy?'조회 중…':toss.status==='connected'?'다시 조회':'토스 조회'}</button><button class="btn soft" data-review-toss ${toss.candidates?.length?'':'disabled'}>${toss.candidates?.length?`후보 ${toss.candidates.length}건 검토`:'후보 없음'}</button></div>
         </article>
         <article class="card"><div class="card-title">클라우드</div><div class="sync-line" style="margin-top:13px"><span class="sync-dot" id="syncDot"></span><div><div class="row-title" id="syncStatusText">${getCurrentUser()?'연결됨':'로그인 필요'}</div><div class="row-sub">V4 전용 저장공간 · V3 원본 보존</div></div></div>${getCurrentUser()?'<button class="btn soft" style="width:100%;margin-top:12px" data-logout>로그아웃</button>':''}</article>
         <article class="card"><div class="card-head"><div><div class="card-title">V3.2.1 데이터 이전</div><div class="sub-number">원본 읽기 전용 · V4 복사</div></div><span class="status-pill ${migration?.passed?'positive':''}">${migration?.passed?'대조 통과':migrationAvailable?'이전 가능':'대기'}</span></div>${migration?.passed?`<div class="list" style="margin-top:12px"><div class="list-row"><div><div class="row-title">이전 결과</div><div class="row-sub">거래 ${migration.source.tradeCount}건 · 배당 ${migration.source.dividendCount}건 · 분할 ${migration.source.splitCount}건</div></div><div class="row-value positive">전부 일치</div></div></div>`:`<p class="tiny muted">${migrationAvailable?'이 기기의 V3.2.1 기록을 발견했습니다. 숫자를 먼저 대조한 뒤 복사합니다.':'V3.2.1 기록 또는 로그인된 기존 클라우드를 확인하면 활성화됩니다.'}</p>${migrationAvailable?'<button class="btn primary" style="width:100%" data-migrate-v3>V3 이전값 점검</button>':''}`}</article>
