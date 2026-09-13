@@ -34,7 +34,7 @@ export function summarizeLegacyState(input) {
     if(event.type==='sell'){
       const safeQuantity=Math.min(quantity,Math.max(0,shares)),average=shares>0?costBasis/shares:0;
       realized+=safeQuantity*(price-average);costBasis-=safeQuantity*average;shares-=safeQuantity;
-      normalizedShares-=safeQuantity/factor;sellProceeds+=quantity*price;
+      normalizedShares-=safeQuantity/factor;sellProceeds+=safeQuantity*price;
     }
   }
   shares=Math.abs(shares)<1e-9?0:shares;costBasis=Math.max(0,Math.abs(costBasis)<1e-7?0:costBasis);
