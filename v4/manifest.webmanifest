@@ -1,0 +1,14 @@
+{
+  "name": "DividendOS",
+  "short_name": "DividendOS",
+  "description": "배당 프로젝트와 목표·재투자·원금회수를 통합 관리하는 PWA",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f9",
+  "theme_color": "#645bff",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

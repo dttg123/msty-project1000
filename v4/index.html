@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f6f7fb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="DividendOS" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon-192.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <title>DividendOS · v0.9</title>
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    (() => {
+      try {
+        const pref = localStorage.getItem('dividend-os-theme') || 'system';
+        const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch (_) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <div class="splash-screen" id="splashScreen" aria-hidden="true">
+    <div class="splash-inner">
+      <div class="splash-mark">D</div>
+      <div class="splash-title">Dividend <span>OS</span></div>
+      <div class="splash-sub">Projects · Income · Recovery</div>
+      <div class="splash-line"></div>
+    </div>
+  </div>
+  <div class="auth-gate" id="authGate" aria-live="polite">
+    <div class="auth-card">
+      <div class="auth-logo">D</div>
+      <div class="eyebrow">DIVIDEND OS</div>
+      <h2>클라우드로 안전하게 이어서 사용</h2>
+      <p>한 번 로그인하면 자동 로그인되고, 크롬 데이터를 지워도 같은 Google 계정으로 복원됩니다.</p>
+      <button class="btn primary auth-login-btn" id="googleLoginBtn">
+        <span class="google-g">G</span> Google로 로그인
+      </button>
+      <div class="tiny muted" id="authGateStatus">로그인 상태 확인 중…</div>
+    </div>
+  </div>
+
+  <main class="app">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="eyebrow">Dividend Recovery &amp; Income</div>
+        <h1 class="brand">Dividend <span>OS</span></h1>
+      </div>
+      <div class="topbar-actions">
+        <div class="currency-picker" aria-label="통화 표시">
+          <button id="usdBtn" type="button" data-currency="USD">$</button>
+          <button id="krwBtn" type="button" data-currency="KRW">원</button>
+        </div>
+        <div class="save-pill" id="saveStatus">준비 중</div>
+      </div>
+    </header>
+
+    <section class="page active" id="page-home"></section>
+    <section class="page" id="page-projects"></section>
+    <section class="page" id="page-goal"></section>
+    <section class="page" id="page-settings"></section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="하단 메뉴">
+    <button class="nav-btn active" data-page="home" aria-label="홈">
+      <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></svg><span>홈</span>
+    </button>
+    <button class="nav-btn" data-page="projects" aria-label="프로젝트">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="4" width="7" height="7" rx="2"/><rect x="3" y="15" width="7" height="5" rx="2"/><rect x="14" y="15" width="7" height="5" rx="2"/></svg><span>프로젝트</span>
+    </button>
+    <button class="nav-btn" data-page="goal" aria-label="목표">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3"/><path d="M22 12h-3"/></svg><span>목표</span>
+    </button>
+    <button class="nav-btn" data-page="settings" aria-label="설정">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg><span>설정</span>
+    </button>
+  </nav>
+
+  <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal" id="modal"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+  <input type="file" id="restoreInput" accept="application/zip,.zip" class="hidden" />
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
