@@ -35,7 +35,7 @@ export function createViews(context) {
   function renderHome() {
     const total=totals(), monthlyTarget=Math.max(.01,n(state.settings.targetMonthlyDividend)), monthlyPct=total.monthlyEstimate/monthlyTarget*100;
     const annualKRW=total.yearDividends*n(state.settings.exchangeRate), threshold=Math.max(1,n(state.settings.thresholdKRW)), annualPct=annualKRW/threshold*100;
-    const overallTarget=total.rows.reduce((sum,x)=>sum+x.currentTarget,0), overallShares=total.rows.reduce((sum,x)=>sum+x.shares,0), overallPct=overallTarget?overallShares/overallTarget*100:0;
+    const overallPct=total.rows.length?total.rows.reduce((sum,row)=>sum+Math.min(1,Math.max(0,row.progress)),0)/total.rows.length*100:0;
     document.getElementById('page-home').innerHTML=`
       <div class="stack">
         <article class="card accent">
@@ -74,7 +74,7 @@ export function createViews(context) {
     return `<article class="card compact project-list-card" data-open-project="${calc.project.id}" tabindex="0" role="button" aria-label="${esc(calc.project.symbol)} 프로젝트 열기" style="border-left:4px solid ${colors[0]}">
       <div class="card-head"><div><div class="row-title">${esc(calc.project.symbol)} · ${esc(calc.project.tag)}</div><div class="row-sub">${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</div></div><span class="status-pill">${fmtPct(pct)}</span></div>
       ${progress(pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
-      <div class="summary-grid" style="margin-top:12px"><div class="summary-chip"><div class="label">최근 배당 월환산</div><div class="value">${fmtMoney(calc.monthlyEstimate,0)}</div></div><div class="summary-chip"><div class="label">총손익</div><div class="value ${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtMoney(calc.totalReturn,0):'현재가 필요'}</div></div></div>
+      <div class="summary-grid" style="margin-top:12px"><div class="summary-chip"><div class="label">최근 배당 월환산</div><div class="value">${calc.estimateReliable?fmtMoney(calc.monthlyEstimate,0):'기록 부족'}</div></div><div class="summary-chip"><div class="label">총손익</div><div class="value ${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtMoney(calc.totalReturn,0):'현재가 필요'}</div></div></div>
     </article>`;
   }
 
@@ -113,10 +113,10 @@ export function createViews(context) {
         </article>
         <article class="card">
           <div class="card-head"><div class="card-title">배당 · 현금흐름</div><span class="status-pill">세후</span></div>
-          <div class="metric-grid three"><div class="metric"><div class="metric-label">${estimateLabel(calc,true)}</div><div class="metric-value">${fmtMoney(calc.shortMonthlyEstimate)}</div></div><div class="metric"><div class="metric-label">${estimateLabel(calc)}</div><div class="metric-value">${fmtMoney(calc.monthlyEstimate)}</div></div><div class="metric"><div class="metric-label">이번 달 실제</div><div class="metric-value">${fmtMoney(calc.currentMonthDividends)}</div></div></div>
-          ${calc.stablePerShare?`<div class="list" style="margin-top:10px"><div class="list-row"><div><div class="row-title">주당 분배금 흐름</div><div class="row-sub">최근 ${p.distributionFrequency==='weekly'?'4회':'1회'} ${fmtMoney(calc.shortPerShare,4)} · ${p.distributionFrequency==='weekly'?'8회':'3회'} ${fmtMoney(calc.stablePerShare,4)}</div></div><div class="row-value ${signClass(calc.perShareTrendPct)}">${calc.perShareTrendPct>=0?'+':''}${fmtPct(calc.perShareTrendPct)}</div></div>${calc.priceAvailable?`<div class="list-row"><div><div class="row-title">현재가 기준 단순 연환산 분배율</div><div class="row-sub">최근 주당 평균을 연환산한 참고값</div></div><div class="row-value">${fmtPct(calc.annualizedCurrentYield)}</div></div>`:''}</div>`:''}
+          <div class="metric-grid three"><div class="metric"><div class="metric-label">${estimateLabel(calc,true)}</div><div class="metric-value">${calc.estimateReliable?fmtMoney(calc.shortMonthlyEstimate):'—'}</div></div><div class="metric"><div class="metric-label">${estimateLabel(calc)}</div><div class="metric-value">${calc.estimateReliable?fmtMoney(calc.monthlyEstimate):'—'}</div></div><div class="metric"><div class="metric-label">이번 달 실제</div><div class="metric-value">${fmtMoney(calc.currentMonthDividends)}</div></div></div>
+          ${calc.stablePerShare?`<div class="list" style="margin-top:10px"><div class="list-row"><div><div class="row-title">주당 분배금 흐름</div><div class="row-sub">최근 ${p.distributionFrequency==='weekly'?'4회':'1회'} ${fmtMoney(calc.shortPerShare,4)} · ${p.distributionFrequency==='weekly'?'8회':'3회'} ${fmtMoney(calc.stablePerShare,4)}</div></div><div class="row-value ${signClass(calc.perShareTrendPct)}">${calc.perShareTrendPct>=0?'+':''}${fmtPct(calc.perShareTrendPct)}</div></div>${calc.priceAvailable&&calc.estimateReliable?`<div class="list-row"><div><div class="row-title">현재가 기준 단순 연환산 분배율</div><div class="row-sub">최근 주당 평균을 연환산한 참고값</div></div><div class="row-value">${fmtPct(calc.annualizedCurrentYield)}</div></div>`:''}</div>`:''}
           <div class="list" style="margin-top:10px"><div class="list-row"><div><div class="row-title">누적 세후배당</div><div class="row-sub">입력한 실입금 합계</div></div><div class="row-value positive">${fmtMoney(calc.dividendsTotal)}</div></div><div class="list-row"><div><div class="row-title">사용 가능 배당</div><div class="row-sub">날짜순 원장 기준</div></div><div class="row-value ${signClass(calc.dividendAvailable)}">${fmtMoney(calc.dividendAvailable)}</div></div></div>
-          ${calc.estimateStale&&calc.dividends.length?'<div class="tiny warning" style="margin-top:8px">최근 배당 기록이 오래되었습니다. 월환산 값을 예상 입금액으로 사용하지 마세요.</div>':''}
+          ${calc.estimateStale?'<div class="tiny warning" style="margin-top:8px">최근 지급일 또는 지급 간격이 설정한 배당 주기와 맞지 않아 월환산을 숨겼습니다.</div>':''}
           <div class="quick-grid"><button class="btn primary" data-add-trade>거래</button><button class="btn secondary" data-add-dividend>배당</button><button class="btn soft" data-add-cash>잔액</button></div>
         </article>
         <article class="card">
