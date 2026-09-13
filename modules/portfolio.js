@@ -1,5 +1,5 @@
 import { blankRecovery } from './state.js';
-import { clamp, n, todayISO } from './utils.js';
+import { clamp, isDate, n, todayISO } from './utils.js';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
@@ -32,12 +32,15 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const project = typeof projectOrId === 'string' ? projectById(projectOrId) : projectOrId;
     if (!project) return null;
     const asOf=todayISO(),trades=projectRows('trades',project.id),dividends=projectRows('dividends',project.id),adjustments=projectRows('cashAdjustments',project.id);
-    const postedTrades=trades.filter(row=>String(row.date)<=asOf),postedDividends=dividends.filter(row=>String(row.date)<=asOf),postedAdjustments=adjustments.filter(row=>String(row.date)<=asOf);
+    const postedTrades=trades.filter(row=>isDate(row.date)&&String(row.date)<=asOf&&(row.type==='buy'||row.type==='sell')&&n(row.shares)>0&&n(row.price)>=0);
+    const postedDividends=dividends.filter(row=>isDate(row.date)&&String(row.date)<=asOf&&n(row.amountUSD)>0);
+    const postedAdjustments=adjustments.filter(row=>isDate(row.date)&&String(row.date)<=asOf&&Math.abs(n(row.amountUSD))>0);
     const targetUnits = Math.max(.000001,n(project.targetUnits));
     let factor=1, shares=0, normalizedShares=0, costBasis=0, realized=0, directBuyCost=0, sellProceeds=0;
     let directShares=0, reinvestShares=0, reinvestAmount=0, reinvestCount=0, targetReachedDate='', targetBasisSuggestion=0;
     const milestoneDates={25:'',50:'',75:'',100:''}, oversells=[], effectiveSells=[];
-    for (const event of sortedEvents(project.id).filter(row=>String(row.date)<=asOf)) {
+    const postedTradeIds=new Set(postedTrades.map(row=>row.id));
+    for (const event of sortedEvents(project.id).filter(row=>row.eventType==='trade'?postedTradeIds.has(row.id):isDate(row.date)&&String(row.date)<=asOf&&n(row.from)>0&&n(row.to)>0)) {
       if (event.eventType === 'split') {
         const ratio=n(event.to)/n(event.from);
         if (ratio>0 && Number.isFinite(ratio)) { shares*=ratio; directShares*=ratio; reinvestShares*=ratio; factor*=ratio; }
