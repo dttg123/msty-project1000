@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { renderDividendView } from './dividend-view.js';
+import { renderDividendView } from './dividend-view.js?v=0.9.4-r20';
 
 export function createViews(context) {
   const {
@@ -31,7 +31,15 @@ export function createViews(context) {
   function chartHTML(projectId=null) {
     const series=chartSeries(projectId), max=Math.max(1,...series.map(x=>x.value));
     if(!series.length)return '<div class="empty">배당을 입력하면 실제 흐름이 표시됩니다.</div>';
-    return `<div class="column-chart compact-chart">${series.map(x=>`<div class="column-item"><div class="column-value">${fmtMoney(x.value,0)}</div><div class="column-track"><div class="column-fill" style="height:${Math.max(7,x.value/max*126)}px"></div></div><div class="column-label">${esc(x.label)}</div></div>`).join('')}</div>`;
+    const chartMoney=value=>{
+      if(displayCurrency()==='KRW'){
+        const krw=n(value)*n(state.settings.exchangeRate);
+        if(Math.abs(krw)>=10000)return `${(krw/10000).toFixed(Math.abs(krw)>=100000?1:1)}만`;
+        return `${Math.round(krw).toLocaleString('ko-KR')}원`;
+      }
+      return `$${Math.round(n(value)).toLocaleString('en-US')}`;
+    };
+    return `<div class="column-chart compact-chart">${series.map(x=>`<div class="column-item"><div class="column-value" title="${esc(fmtMoney(x.value,0))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${Math.max(7,x.value/max*108)}px"></div></div><div class="column-label">${esc(x.label)}</div></div>`).join('')}</div>`;
   }
 
   function renderHome() {
@@ -51,12 +59,8 @@ export function createViews(context) {
           <div class="progress-wrap"><div class="progress-meta"><span>월환산 목표 ${fmtMoney(monthlyTarget)}</span><span>${fmtPct(monthlyPct)}</span></div>${progress(monthlyPct)}</div>
           ${total.staleEstimateCount?`<div class="tiny muted" style="margin-top:9px">${total.staleEstimateCount}개 프로젝트의 최근 배당 기록이 오래되어 월환산 신뢰도가 낮습니다.</div>`:''}
         </article>
-        ${sectionTitle('전체 배당 흐름','세후 실입금 합산')}
-        <article class="card">
-          <div class="card-head"><div><div class="card-title">배당 추세</div><div class="sub-number">실제 입력 기록만 반영</div></div>${periodButtons()}</div>
-          <div id="homeChart">${chartHTML()}</div>
-        </article>
-        ${sectionTitle('프로젝트','종목별 현황')}
+        <button class="dividend-flow-card" type="button" data-page="dividend"><span class="flow-icon">$</span><span><strong>전체 배당 흐름</strong><small>주·월·년 상세 그래프 보기</small></span><b>${fmtMoney(total.currentMonthDividends,0)}</b></button>
+        ${sectionTitle('포트폴리오','종목별 현황')}
         <div>${total.rows.map(projectSummaryCard).join('')||'<article class="card empty-project">프로젝트를 추가해 주세요.</article>'}</div>
         ${sectionTitle('전체 상태','자동 합산')}
         <article class="card compact">
@@ -102,10 +106,10 @@ export function createViews(context) {
     const projects=activeProjects(); let selectedProjectId=getSelectedProjectId();
     if(!selectedProjectId||!projectById(selectedProjectId)){selectedProjectId=projects[0]?.id||'';setSelectedProjectId(selectedProjectId);}
     const calc=computeProject(selectedProjectId), page=document.getElementById('page-projects');
-    if(!calc){page.innerHTML=`${sectionTitle('프로젝트')}<article class="card empty-project"><p>등록된 프로젝트가 없습니다.</p><button class="btn primary" data-add-project>프로젝트 추가</button></article>`;return;}
+    if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<article class="card empty-project"><p>등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
     const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc), shown=getRecordsExpanded()?rows:rows.slice(0,5);
     page.innerHTML=`
-      <div class="section-title-row"><h2 class="section-title">프로젝트</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
+      <div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
       <div class="project-tabs">${projects.map(x=>`<button class="project-tab ${x.id===p.id?'active':''}" data-select-project="${x.id}">${esc(x.symbol)}</button>`).join('')}</div>
       <div class="stack">
         <article class="card project-hero" style="--project-a:${colors[0]};--project-b:${colors[1]}">
