@@ -164,10 +164,30 @@ function testMixedBuyUsesDividendOnce() {
   nearly(calc.dividendAvailable,60);
 }
 
+function testTenYearGoalAndCashflowRecovery() {
+  const state=blankState(),project=state.projects[0];
+  project.id='p-msty';project.targetUnits=1000;project.currentPrice=20;project.afterGoalMode='cashflow';
+  for(let month=0;month<120;month++){
+    const year=2017+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
+    state.trades.push({id:`goal-t-${month}`,projectId:project.id,date:`${year}-${mm}-05`,type:'buy',buyType:'direct',shares:10,price:10+month/20,createdAt:String(month)});
+    state.dividends.push({id:`goal-d-${month}`,projectId:project.id,date:`${year}-${mm}-20`,amountUSD:25,createdAt:String(month)});
+  }
+  const calc=engineFor(state).computeProject(project);
+  nearly(calc.shares,1200);nearly(calc.progress,1.2);
+  assert.equal(calc.targetReachedDate,'2025-04-05');
+  nearly(calc.targetBasisSuggestion,12475);
+  project.recovery={locked:true,basis:calc.targetBasisSuggestion,startDate:calc.targetReachedDate};
+  state.trades.push({id:'goal-sell',projectId:project.id,date:'2026-12-01',type:'sell',shares:100,price:21,createdAt:'sell'});
+  const afterSell=engineFor(state).computeProject(project),recovery=engineFor(state).recoveryStats(afterSell);
+  nearly(afterSell.shares,1100);nearly(recovery.sellRecovery,2100);nearly(recovery.dividendRecovery,525);
+  nearly(recovery.total,2625);assert.ok(recovery.remaining>0&&recovery.pct>0&&recovery.pct<100);
+}
+
 testLegacyRepairAndMigration();
 testSplitSellAndRecovery();
 testProjectIsolationAndThirtyYears();
 testOversellGuard();
 testFullSellRebuyAndCashReconciliation();
 testMixedBuyUsesDividendOnce();
+testTenYearGoalAndCashflowRecovery();
 console.log('DividendOS v0.9 domain QA: PASS');
