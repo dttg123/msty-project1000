@@ -1,4 +1,4 @@
-import { n } from './utils.js';
+import { isDate, n } from './utils.js';
 
 const SYMBOL_PATTERN = /^[A-Z0-9.-]{1,16}$/;
 
@@ -10,7 +10,7 @@ function symbolOf(value) {
 function dateOf(value) {
   const text=String(value||'');
   const match=text.match(/^\d{4}-\d{2}-\d{2}/);
-  return match?match[0]:'';
+  return match&&isDate(match[0])?match[0]:'';
 }
 
 function orderIdOf(order) {
