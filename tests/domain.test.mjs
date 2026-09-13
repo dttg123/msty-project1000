@@ -68,12 +68,20 @@ function testSplitSellAndRecovery() {
   nearly(calc.realized,248.33333333333334);
   nearly(calc.dividendAvailable,-50);
   nearly(calc.currentTarget,2000);
+  nearly(calc.progress,.115);
+  assert.equal(calc.cashDeficitEvents.length,1);
+  nearly(calc.minDividendBalance,-130);
+  nearly(calc.reinvestShares,38.333333333333336);
   assert.equal(calc.oversells.length,0);
   project.recovery={locked:true,basis:500,startDate:'2026-05-01'};
   const recovery=engineFor(state).recoveryStats(calc);
   nearly(recovery.total,380);
   nearly(recovery.remaining,120);
   nearly(recovery.pct,76);
+  assert.equal(recovery.milestoneDates[25],'2026-05-01');
+  assert.equal(recovery.milestoneDates[50],'2026-05-01');
+  assert.equal(recovery.milestoneDates[75],'2026-06-01');
+  assert.equal(recovery.milestoneDates[100],'');
 }
 
 function testProjectIsolationAndThirtyYears() {
@@ -117,6 +125,24 @@ function testProjectIsolationAndThirtyYears() {
   assert.equal(normalized.projects.length,3);
 }
 
+function testTenYearCorporateActionLedgerAgainstReference() {
+  const state=blankState(),project=state.projects[0];project.id='p-msty';project.currentPrice=17;project.targetUnits=1000;
+  let shares=0,costBasis=0,realized=0,sellProceeds=0,factor=1,normalizedShares=0,dividendsTotal=0,reinvestAmount=0;
+  for(let month=0;month<120;month++){
+    const year=2017+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
+    if(month>0&&month%36===0){const ratio=month%72===0?.5:2;state.splits.push({id:`sp-${month}`,projectId:project.id,date:`${year}-${mm}-01`,from:ratio===2?1:2,to:ratio===2?2:1});shares*=ratio;costBasis=costBasis;factor*=ratio;}
+    const quantity=1+(month%7),price=8+(month%13)*.37,buyType=month%4===0?'reinvest':'direct';
+    state.trades.push({id:`b-${month}`,projectId:project.id,date:`${year}-${mm}-05`,type:'buy',buyType,shares:quantity,price,createdAt:`a-${month}`});
+    shares+=quantity;normalizedShares+=quantity/factor;costBasis+=quantity*price;if(buyType==='reinvest')reinvestAmount+=quantity*price;
+    const dividend=12+(month%9);state.dividends.push({id:`d-${month}`,projectId:project.id,date:`${year}-${mm}-15`,amountUSD:dividend,sharesAtPayment:shares});dividendsTotal+=dividend;
+    if(month%10===9&&shares>=5){const sellPrice=price+2,average=costBasis/shares;state.trades.push({id:`s-${month}`,projectId:project.id,date:`${year}-${mm}-20`,type:'sell',shares:5,price:sellPrice,createdAt:`z-${month}`});realized+=5*(sellPrice-average);costBasis-=5*average;shares-=5;normalizedShares-=5/factor;sellProceeds+=5*sellPrice;}
+  }
+  const calc=engineFor(state).computeProject(project);
+  nearly(calc.shares,shares);nearly(calc.costBasis,costBasis);nearly(calc.realized,realized);nearly(calc.sellProceeds,sellProceeds);
+  nearly(calc.normalizedShares,normalizedShares);nearly(calc.currentTarget,1000*factor);nearly(calc.dividendsTotal,dividendsTotal);
+  nearly(calc.dividendAvailable,dividendsTotal-reinvestAmount);assert.equal(calc.oversells.length,0);
+}
+
 function testOversellGuard() {
   const state=blankState();
   const project=state.projects[0]; project.id='p-msty'; project.currentPrice=10;
@@ -128,6 +154,39 @@ function testOversellGuard() {
   assert.equal(calc.shares,0);
   assert.equal(calc.costBasis,0);
   assert.equal(calc.oversells.length,1);
+  project.recovery={locked:true,basis:100,startDate:'2026-01-01'};
+  const recovery=engineFor(state).recoveryStats(calc);
+  nearly(recovery.sellRecovery,55);
+}
+
+function testReverseSplitPreservesEconomicGoal() {
+  const state=blankState(),project=state.projects[0];
+  project.id='p-msty';project.targetUnits=1000;project.currentPrice=20;
+  state.trades=[{id:'b',projectId:project.id,date:'2025-01-01',type:'buy',buyType:'direct',shares:1000,price:10}];
+  state.splits=[{id:'rs',projectId:project.id,date:'2026-01-01',type:'reverse',from:4,to:1}];
+  const calc=engineFor(state).computeProject(project);
+  nearly(calc.shares,250);nearly(calc.currentTarget,250);nearly(calc.progress,1);
+  assert.equal(calc.targetReachedDate,'2025-01-01');
+  assert.equal(calc.milestoneDates[100],'2025-01-01');
+}
+
+function testPriceMissingDoesNotInventLoss() {
+  const state=blankState(),project=state.projects[0];
+  project.id='p-msty';project.currentPrice=0;
+  state.trades=[{id:'b',projectId:project.id,date:'2026-01-01',type:'buy',buyType:'direct',shares:10,price:20}];
+  const calc=engineFor(state).computeProject(project),total=engineFor(state).totals();
+  assert.equal(calc.priceAvailable,false);assert.equal(calc.totalReturn,null);
+  assert.equal(total.totalReturn,null);assert.equal(total.missingPriceCount,1);
+}
+
+function testPerShareFourAndEightPaymentTrend() {
+  const state=blankState(),project=state.projects[0];project.id='p-msty';project.currentPrice=20;project.distributionFrequency='weekly';
+  for(let index=1;index<=8;index++)state.dividends.push({id:`d${index}`,projectId:project.id,date:`2026-01-${String(index).padStart(2,'0')}`,amountUSD:index*10,sharesAtPayment:10});
+  const calc=engineFor(state).computeProject(project);
+  nearly(calc.stablePerShare,4.5);nearly(calc.shortPerShare,6.5);
+  nearly(calc.perShareTrendPct,44.44444444444444);
+  nearly(calc.annualizedDistributionPerShare,234);
+  nearly(calc.annualizedCurrentYield,1170);
 }
 
 function testFullSellRebuyAndCashReconciliation() {
@@ -161,6 +220,7 @@ function testMixedBuyUsesDividendOnce() {
   nearly(calc.directBuyCost,10);
   nearly(calc.reinvestAmount,40);
   nearly(calc.reinvestShares,.8);
+  nearly(calc.directShares,.2);
   nearly(calc.dividendAvailable,60);
 }
 
@@ -186,8 +246,12 @@ function testTenYearGoalAndCashflowRecovery() {
 testLegacyRepairAndMigration();
 testSplitSellAndRecovery();
 testProjectIsolationAndThirtyYears();
+testTenYearCorporateActionLedgerAgainstReference();
 testOversellGuard();
+testReverseSplitPreservesEconomicGoal();
+testPriceMissingDoesNotInventLoss();
+testPerShareFourAndEightPaymentTrend();
 testFullSellRebuyAndCashReconciliation();
 testMixedBuyUsesDividendOnce();
 testTenYearGoalAndCashflowRecovery();
-console.log('DividendOS v0.9 domain QA: PASS');
+console.log('DividendOS v0.9.1 domain QA: PASS');
