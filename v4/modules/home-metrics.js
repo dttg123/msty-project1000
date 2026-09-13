@@ -1,0 +1,63 @@
+import { isDate, n } from './utils.js';
+
+const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+const monthKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+const addDays = (date, days) => { const next=new Date(date); next.setDate(next.getDate()+days); return next; };
+const addMonths = (date, months) => { const next=new Date(date); next.setMonth(next.getMonth()+months); return next; };
+
+function average(rows, count) {
+  const values=rows.slice(-count).map(row=>n(row.amountUSD)).filter(value=>value>0);
+  return values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
+}
+
+function projectForecast(calc, today) {
+  const rows=calc.postedDividends.filter(row=>isDate(row.date)&&n(row.amountUSD)>0).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!rows.length)return [];
+  const weekly=calc.project.distributionFrequency==='weekly';
+  const amount=average(rows,weekly?8:3);
+  if(!amount)return [];
+  const last=new Date(`${rows.at(-1).date}T12:00:00`), end=new Date(today.getFullYear(),11,31,12);
+  let next=weekly?addDays(last,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(last,1);
+  const result=[];
+  while(next<=today)next=weekly?addDays(next,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(next,1);
+  while(next<=end&&result.length<60){result.push({projectId:calc.project.id,symbol:calc.project.symbol,date:iso(next),amountUSD:amount,estimated:true});next=weekly?addDays(next,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(next,1);}
+  return result;
+}
+
+export function nextMilestone(calc) {
+  const target=Math.max(1,n(calc.currentTarget));
+  const thresholds=[.25,.5,.75,1].map(ratio=>({ratio,shares:target*ratio}));
+  const next=thresholds.find(item=>calc.shares<item.shares-.000001);
+  return next?{...next,remaining:Math.max(0,next.shares-calc.shares),reached:false}:{ratio:1,shares:target,remaining:0,reached:true};
+}
+
+export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
+  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12),todayString=iso(today),currentMonth=monthKey(today),currentYear=String(today.getFullYear());
+  const activeIds=new Set(calcs.map(calc=>calc.project.id));
+  const actual=(dividendRows||[]).filter(row=>activeIds.has(row.projectId)&&isDate(row.date)&&row.date<=todayString&&n(row.amountUSD)>0);
+  const forecast=calcs.flatMap(calc=>projectForecast(calc,today));
+  const sum=rows=>rows.reduce((total,row)=>total+n(row.amountUSD),0);
+  const monthActual=sum(actual.filter(row=>row.date.startsWith(currentMonth)));
+  const monthForecast=sum(forecast.filter(row=>row.date.startsWith(currentMonth)));
+  const yearActual=sum(actual.filter(row=>row.date.startsWith(currentYear)));
+  const yearForecast=sum(forecast.filter(row=>row.date.startsWith(currentYear)));
+  const stable=calcs.reduce((total,calc)=>total+(calc.estimateReliable?n(calc.monthlyEstimate):0),0);
+  const recent=calcs.reduce((total,calc)=>total+(calc.estimateReliable?n(calc.shortMonthlyEstimate):0),0);
+  const paceChange=stable>0?(recent/stable-1)*100:null;
+  const months=[];
+  for(let offset=-11;offset<=0;offset++){
+    const date=new Date(today.getFullYear(),today.getMonth()+offset,1,12),key=monthKey(date);
+    months.push({key,label:`${date.getMonth()+1}월`,actual:sum(actual.filter(row=>row.date.startsWith(key))),estimated:key===currentMonth?monthForecast:0});
+  }
+  const nextDividend=forecast.sort((a,b)=>a.date.localeCompare(b.date))[0]||null;
+  const goals=calcs.map(calc=>({calc,milestone:nextMilestone(calc)})).sort((a,b)=>{
+    if(a.milestone.reached!==b.milestone.reached)return a.milestone.reached?1:-1;
+    return a.milestone.remaining/Math.max(1,a.calc.currentTarget)-b.milestone.remaining/Math.max(1,b.calc.currentTarget);
+  });
+  return {
+    month:{actual:monthActual,remaining:monthForecast,total:monthActual+monthForecast},
+    year:{actual:yearActual,remaining:yearForecast,total:yearActual+yearForecast},
+    pace:{monthly:recent||stable,annualized:(recent||stable)*12,change:paceChange},
+    months,nextDividend,nextGoal:goals[0]||null
+  };
+}
