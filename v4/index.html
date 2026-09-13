@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <title>DividendOS · v0.9.6</title>
+  <title>DividendOS · v0.9.7</title>
   <meta name="color-scheme" content="light dark" />
   <script>
     (() => {
@@ -23,7 +23,7 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="./styles.css?v=0.9.6-r23" />
+  <link rel="stylesheet" href="./styles.css?v=0.9.7-r24" />
 </head>
 <body>
 
@@ -38,13 +38,12 @@
   <div class="auth-gate" id="authGate" aria-live="polite">
     <div class="auth-card">
       <div class="auth-logo">D</div>
-      <div class="eyebrow">DIVIDEND OS</div>
-      <h2>클라우드로 안전하게 이어서 사용</h2>
-      <p>한 번 로그인하면 자동 로그인되고, 크롬 데이터를 지워도 같은 Google 계정으로 복원됩니다.</p>
+      <div class="auth-copy"><div class="eyebrow">CLOUD BACKUP</div><h2>클라우드 연결</h2>
+      <p>Google 계정으로 연결하면 이 기기의 기록을 복원할 수 있습니다.</p></div>
       <button class="btn primary auth-login-btn" id="googleLoginBtn">
         <span class="google-g">G</span> Google로 로그인
       </button>
-      <button class="btn soft" type="button" data-local-mode style="width:100%;margin-top:10px">기기에서 먼저 사용</button>
+      <button class="btn soft auth-skip-btn" type="button" data-local-mode>로그인 없이 사용</button>
       <div class="tiny muted" id="authGateStatus">로그인 상태 확인 중…</div>
     </div>
   </div>
@@ -91,6 +90,6 @@
   <div class="toast" id="toast"></div>
   <input type="file" id="restoreInput" accept="application/zip,.zip" class="hidden" />
 
-  <script type="module" src="./app.js?v=0.9.6-r23"></script>
+  <script type="module" src="./app.js?v=0.9.7-r24"></script>
 </body>
 </html>

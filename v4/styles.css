@@ -1010,3 +1010,49 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
   .income-split>div { padding-inline:4px; }
   .home-primary-amount { font-size:clamp(28px,10vw,38px); }
 }
+
+/* v0.9.7 calm mobile hierarchy */
+.auth-gate { position:relative; inset:auto; z-index:20; display:block; width:min(100%,760px); margin:0 auto; padding:12px 16px 0; background:transparent; }
+.auth-gate.hidden { display:none; }
+.auth-card { width:100%; padding:16px; border-radius:20px; display:grid; grid-template-columns:1fr 1fr; gap:10px; text-align:left; }
+.auth-logo { display:none; }
+.auth-copy { grid-column:1/-1; }
+.auth-copy .eyebrow { margin-bottom:3px; }
+.auth-card h2 { margin:0; font-size:18px; }
+.auth-card p { margin:5px 0 2px; font-size:13px; line-height:1.45; }
+.auth-login-btn,.auth-skip-btn { width:100%; min-height:44px; font-size:14px; }
+#authGateStatus { grid-column:1/-1; margin:0; min-height:0; font-size:12px; }
+.income-hero { color:var(--text)!important; background:linear-gradient(145deg,rgba(100,91,255,.10),rgba(100,91,255,.025)),var(--surface)!important; border-color:rgba(100,91,255,.18)!important; box-shadow:var(--shadow)!important; }
+.income-hero .card-kicker,.income-hero .sub-number { color:var(--muted)!important; }
+.income-hero .home-primary-amount { color:var(--accent); }
+.income-hero .tag-pill { color:var(--accent); background:var(--accent-soft); }
+.income-hero .income-split>div { background:var(--surface-strong); border:1px solid var(--line); }
+.income-hero .income-split span { color:var(--muted); }
+.income-hero .income-split strong { color:var(--text); }
+.project-hero { color:var(--text); background:var(--surface); border-color:var(--line); border-left:5px solid var(--project-a); box-shadow:var(--shadow); }
+.project-hero .project-name,.project-hero .sub-number,.project-hero .metric-label,.project-hero .tiny { color:var(--muted)!important; }
+.project-hero .metric { background:var(--surface-strong); border-color:var(--line); }
+.project-hero .tag-pill { color:var(--project-a); background:var(--accent-soft); }
+.portfolio-income-main { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.portfolio-income-main>div { min-width:0; padding:12px 13px; border:1px solid var(--line); border-radius:15px; background:var(--surface-strong); }
+.portfolio-income-main>div:first-child { grid-column:1/-1; padding-block:14px; }
+.portfolio-income-main span,.portfolio-income-main strong { display:block; }
+.portfolio-income-main span { color:var(--muted); font-size:12px; font-weight:750; }
+.portfolio-income-main strong { margin-top:5px; font-size:17px; overflow-wrap:anywhere; }
+.portfolio-income-main>div:first-child strong { color:var(--accent); font-size:24px; }
+.income-detail { margin-top:12px; border-top:1px solid var(--line); }
+.income-detail>summary { list-style:none; min-height:48px; display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:13px; font-weight:800; cursor:pointer; }
+.income-detail>summary::-webkit-details-marker { display:none; }
+.income-detail[open]>summary .chev { transform:rotate(180deg); }
+.income-detail-body { padding-bottom:2px; }
+html[data-theme="dark"] .income-hero { background:linear-gradient(145deg,rgba(100,91,255,.12),rgba(100,91,255,.025)),var(--surface)!important; }
+html[data-theme="dark"] .project-hero { background:var(--surface); border-color:var(--line); }
+@media (max-width:430px) {
+  .auth-card { grid-template-columns:1fr; }
+  .auth-copy,.auth-login-btn,.auth-skip-btn,#authGateStatus { grid-column:1; }
+  .auth-card p { font-size:12px; }
+  .section-title { font-size:20px; }
+  .card { padding:17px; }
+  .quick-grid { grid-template-columns:1fr 1fr; }
+  .quick-grid .btn:first-child { grid-column:1/-1; }
+}
