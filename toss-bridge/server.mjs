@@ -1,7 +1,7 @@
 import express from 'express';
 import { createPublicKey, verify } from 'node:crypto';
 
-const required=['TOSS_CLIENT_ID','TOSS_CLIENT_SECRET','FIREBASE_PROJECT_ID'];
+const required=['TOSS_CLIENT_ID','TOSS_CLIENT_SECRET','FIREBASE_PROJECT_ID','ALLOWED_FIREBASE_UID'];
 for(const key of required)if(!process.env[key])throw new Error(`Missing server environment: ${key}`);
 
 const app=express();
@@ -46,6 +46,7 @@ async function authorize(req,res,next){
     const match=String(req.get('authorization')||'').match(/^Bearer (.+)$/);
     if(!match)return res.status(401).json({code:'login-required',message:'Google 로그인이 필요합니다.'});
     req.user=await verifyFirebaseIdToken(match[1]);
+    if(req.user.sub!==process.env.ALLOWED_FIREBASE_UID)return res.status(403).json({code:'owner-only',message:'이 계정은 토스 연동 사용 권한이 없습니다.'});
     const last=lastRequestByUser.get(req.user.sub)||0,now=Date.now();
     if(now-last<2000)return res.status(429).json({code:'too-many-requests',message:'잠시 후 다시 조회해 주세요.'});
     lastRequestByUser.set(req.user.sub,now);
@@ -78,6 +79,10 @@ async function tossGet(path,accountSeq){
 }
 
 function validDate(value,fallback){return /^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?String(value):fallback;}
+function validSymbols(value){
+  const seen=new Set();
+  return String(value||'').split(',').map(item=>item.trim().toUpperCase()).filter(symbol=>/^[A-Z0-9.-]{1,16}$/.test(symbol)&&!seen.has(symbol)&&seen.add(symbol)).slice(0,200);
+}
 function maskAccount(value){const text=String(value||'');return text?`토스증권 •${text.slice(-4)}`:'토스증권 계좌';}
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
@@ -104,10 +109,15 @@ app.get('/v1/toss/snapshot',authorize,async(req,res)=>{
     const configured=process.env.TOSS_ACCOUNT_SEQ;
     const account=accounts.find(row=>configured&&String(row.accountSeq)===String(configured))||accounts.find(row=>row.accountType==='BROKERAGE')||accounts[0];
     if(!account)return res.status(404).json({code:'no-account',message:'조회 가능한 토스증권 종합매매 계좌가 없습니다.'});
-    const [holdingResult,orderResult]=await Promise.all([tossGet('/api/v1/holdings',account.accountSeq),closedOrders(account.accountSeq,from,today)]);
+    const symbols=validSymbols(req.query.symbols);
+    const [holdingResult,orderResult,priceResult]=await Promise.all([
+      tossGet('/api/v1/holdings',account.accountSeq),
+      closedOrders(account.accountSeq,from,today),
+      symbols.length?tossGet(`/api/v1/prices?${new URLSearchParams({symbols:symbols.join(',')})}`):Promise.resolve([])
+    ]);
     res.set('Cache-Control','no-store').json({
       accountLabel:maskAccount(account.accountNo),fetchedAt:new Date().toISOString(),from,
-      holdings:Array.isArray(holdingResult?.items)?holdingResult.items:[],orders:orderResult.orders,historyTruncated:orderResult.truncated
+      holdings:Array.isArray(holdingResult?.items)?holdingResult.items:[],prices:Array.isArray(priceResult)?priceResult:[],orders:orderResult.orders,historyTruncated:orderResult.truncated
     });
   }catch(error){
     console.error('Toss read-only sync failed',{code:error.code,status:error.status,message:error.message});
