@@ -11,7 +11,8 @@ const modules=['constants.js','utils.js','state.js','portfolio.js','format.js','
 for (const file of modules) assert.ok(existsSync(resolve(root,'modules',file)),`missing modules/${file}`);
 
 const index=readFileSync(resolve(root,'index.html'),'utf8');
-assert.ok(index.includes('<link rel="stylesheet" href="./styles.css" />'));
+assert.ok(index.includes('<link rel="stylesheet" href="./styles.css?v=0.9-r1" />'));
+assert.ok(index.includes('<script type="module" src="./app.js?v=0.9-r1"></script>'));
 assert.ok(!index.includes('<style>'));
 for (const id of ['page-home','page-projects','page-goal','page-settings','modalBackdrop','restoreInput']) assert.ok(index.includes(`id="${id}"`),`missing DOM id ${id}`);
 
@@ -25,7 +26,7 @@ for (const file of ['styles.css',...modules.map(name=>`modules/${name}`)]) {
   assert.ok(sw.includes(`./${file}`),`service worker missing ${file}`);
   assert.ok(backup.includes(`'${file}'`),`portable backup missing ${file}`);
 }
-assert.ok(sw.includes("dividend-os-v0.9"));
+assert.ok(sw.includes("dividend-os-v0.9-r1"));
 assert.ok(backup.includes("APP_VERSION = '0.9'"));
 assert.ok(app.includes('name="amountUSD" type="number" min="0.01" step="0.01" required'));
 console.log('DividendOS v0.9 static QA: PASS');
