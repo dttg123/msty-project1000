@@ -1,5 +1,5 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.1-r16';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.2-r17';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
@@ -9,7 +9,7 @@ import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9.1-r16';
+import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9.2-r17';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -257,7 +257,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       const snapshot=await fetchTossSnapshot({symbols:activeProjects().map(project=>project.symbol)});
       const appPositions=activeProjects().map(project=>({symbol:project.symbol,shares:computeProject(project).shares}));
       const result=buildTossSync(snapshot,{existingTrades:state.trades,appPositions});
-      Object.assign(toss,{status:'connected',lastSyncAt:result.fetchedAt,lastError:'',accountLabel:result.accountLabel,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates)});
+      Object.assign(toss,{status:'connected',lastSyncAt:result.fetchedAt,lastError:'',accountLabel:result.accountLabel,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,matchedExistingCount:result.matchedExistingCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates)});
       for(const price of result.prices||[]){
         if(price.currency!=='USD')continue;
         const project=state.projects.find(item=>item.symbol===price.symbol&&!item.archived);
@@ -270,11 +270,13 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
 
   function reviewTossCandidates() {
-    const candidates=state.integrations.toss.candidates||[];
+    const candidates=mergeTossCandidates(state.integrations.toss.candidates||[],[]);state.integrations.toss.candidates=candidates;
     if(!candidates.length){toast('검토할 신규 거래가 없습니다.');return;}
     openModal(`<h3 class="modal-title">토스 신규 거래 검토</h3><p class="modal-desc">선택한 거래만 저장합니다. 자동으로 기존 기록을 덮어쓰지 않습니다.</p><form id="tossReviewForm" class="form-grid"><div class="list">${candidates.map((row,index)=>`<label class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${row.type==='sell'?'매도':'매수'} ${fmtShares(row.shares)}주</div><div class="row-sub">${fmtDate(row.date)} · 단가 ${fmtMoney(row.price)}</div></div><input type="checkbox" name="candidate" value="${index}" checked></label>`).join('')}</div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">선택 거래 저장</button></div></form>`);
     document.getElementById('tossReviewForm').onsubmit=async event=>{
-      event.preventDefault();const selected=new Set(new FormData(event.currentTarget).getAll('candidate').map(Number));let imported=0;
+      event.preventDefault();const selected=new Set(new FormData(event.currentTarget).getAll('candidate').map(Number));
+      if(!selected.size){toast('저장할 거래를 선택해 주세요.');return;}
+      const projectsBefore=clone(state.projects),tradesBefore=clone(state.trades),importedIds=new Set(),affectedProjectIds=new Set();let imported=0;
       candidates.forEach((row,index)=>{
         if(!selected.has(index))return;
         const normalized=normalizeTossOrder(row);if(!normalized||normalized.currency!=='USD')return;
@@ -282,9 +284,12 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
         if(!project){project=blankProject(normalized.symbol,normalized.name);project.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(project);}
         const externalId=normalized.externalId;
         if(externalId&&state.trades.some(t=>t.source?.provider==='toss'&&t.source.externalId===externalId))return;
-        const trade=tossCandidateToTrade(normalized,{projectId:project.id,id:uid('t')});if(trade){state.trades.push(trade);imported++;}
+        const trade=tossCandidateToTrade(normalized,{projectId:project.id,id:uid('t')});if(trade){state.trades.push(trade);importedIds.add(externalId);affectedProjectIds.add(project.id);imported++;}
       });
-      state.integrations.toss.candidates=candidates.filter((_,index)=>!selected.has(index));state.integrations.toss.lastSyncAt=new Date().toISOString();refreshTossComparisons();await saveState(true);closeModal();renderAll();showPage('settings');toast(`${imported}건을 승인 저장했습니다.`);
+      const invalid=[...affectedProjectIds].some(projectId=>computeProject(projectId).oversells.length);
+      if(invalid){state.projects=projectsBefore;state.trades=tradesBefore;toast('선택한 거래 조합은 과매도를 만들 수 있어 저장하지 않았습니다. 매수 기록도 함께 선택해 주세요.');return;}
+      if(!imported){state.projects=projectsBefore;state.trades=tradesBefore;toast('저장 가능한 신규 거래가 없습니다.');return;}
+      state.integrations.toss.candidates=candidates.filter(row=>!importedIds.has(String(row?.externalId||'')));state.integrations.toss.lastSyncAt=new Date().toISOString();refreshTossComparisons();await saveState(true);closeModal();renderAll();showPage('settings');toast(`${imported}건을 승인 저장했습니다.`);
     };
   }
 
@@ -351,7 +356,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.1-r16').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.2-r17').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

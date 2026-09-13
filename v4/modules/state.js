@@ -22,7 +22,7 @@ export function blankState() {
     version:4,
     settings:{ exchangeRate:1370, displayCurrency:'USD', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
     projects:[project], trades:[], dividends:[], splits:[], cashAdjustments:[],
-    integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastError:'', accountLabel:'', candidates:[], holdings:[], comparisons:[], ignoredCount:0, unsupportedCurrencyCount:0, historyTruncated:false } },
+    integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastError:'', accountLabel:'', candidates:[], holdings:[], comparisons:[], ignoredCount:0, matchedExistingCount:0, unsupportedCurrencyCount:0, historyTruncated:false } },
     meta:{ createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), lastBackupAt:'', lastLocalSaveAt:'', lastCloudSaveAt:'', migratedFrom:'', migrationCheckedAt:'', celebratedMilestones:[] }
   };
 }
