@@ -1,5 +1,5 @@
 import { APP_VERSION } from '../backup.js';
-import { clamp, esc, n } from './utils.js';
+import { clamp, esc, isDate, n } from './utils.js';
 
 export function createViews(context) {
   const {
@@ -21,7 +21,7 @@ export function createViews(context) {
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
   }
   function chartSeries(projectId=null) {
-    const today=new Date().toISOString().slice(0,10),rows=(projectId?projectRows('dividends',projectId):state.dividends).filter(row=>String(row.date)<=today);
+    const today=new Date().toISOString().slice(0,10),rows=(projectId?projectRows('dividends',projectId):state.dividends).filter(row=>isDate(row.date)&&String(row.date)<=today&&n(row.amountUSD)>0);
     const grouped=new Map(); rows.forEach(row=>{const key=periodKey(row.date,getChartMode());if(key)grouped.set(key,(grouped.get(key)||0)+n(row.amountUSD));});
     const count=getChartMode()==='year'?5:6;
     return [...grouped.entries()].sort(([a],[b])=>a.localeCompare(b)).slice(-count).map(([key,value])=>({key,label:getChartMode()==='year'?key:getChartMode()==='month'?`${key.slice(2,4)}.${key.slice(5,7)}`:`${key.slice(2,4)}.${key.slice(5,7)}/${key.slice(8,10)}`,value}));
@@ -87,11 +87,12 @@ export function createViews(context) {
     ].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id)));
   }
   function recordRow(row) {
-    let title='',sub='',value='',cls='';
+    let title='',sub='',value='',cls='';const future=String(row.date)>new Date().toISOString().slice(0,10);
     if(row.kind==='trade'){title=row.type==='sell'?'매도':row.buyType==='reinvest'?'배당재투자':row.buyType==='mixed'?'혼합매수':row.buyType==='opening'?'초기보유':'직접매수';sub=`${fmtDate(row.date)} · ${fmtShares(row.shares)}주 · 단가 ${fmtMoney(row.price)}${row.source?.provider==='toss'?' · 토스 승인':''}`;value=`${row.type==='sell'?'+':'-'}${fmtMoney(n(row.shares)*n(row.price))}`;cls=row.type==='sell'?'positive':'';}
     if(row.kind==='dividend'){const perShare=n(row.sharesAtPayment)>0?n(row.amountUSD)/n(row.sharesAtPayment):0;title='세후배당';sub=`${fmtDate(row.date)}${perShare?` · 주당 ${fmtMoney(perShare,4)}`:''}${row.note?` · ${esc(row.note)}`:''}`;value=`+${fmtMoney(row.amountUSD)}`;cls='positive';}
     if(row.kind==='split'){title=row.type==='reverse'?'역분할':'주식분할';sub=`${fmtDate(row.date)} · ${row.from}:${row.to}`;value='비율 반영';}
     if(row.kind==='cash'){title=row.label||'배당 잔액 보정';sub=fmtDate(row.date);value=fmtSignedMoney(row.amountUSD);cls=n(row.amountUSD)>=0?'positive':'negative';}
+    if(future)sub+=`${sub?' · ':''}미래 기록 · 현재 계산 제외`;
     return `<div class="list-row"><div><div class="row-title">${title}</div><div class="row-sub">${sub}</div></div><div><div class="row-value ${cls}">${value}</div><div class="row-actions"><button class="mini-icon" data-edit-record="${row.kind}:${row.id}">수정</button><button class="mini-icon delete" data-delete-record="${row.kind}:${row.id}">삭제</button></div></div></div>`;
   }
 
