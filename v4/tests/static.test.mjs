@@ -55,6 +55,7 @@ assert.ok(readFileSync(resolve(root,'toss-bridge/server.mjs'),'utf8').includes("
 assert.ok(app.includes('선택한 거래 조합은 과매도를 만들 수 있어 저장하지 않았습니다.'));
 assert.ok(app.includes('fetchCurrentPublicIp'));
 assert.ok(app.includes('testTossDirectConnection'));
+assert.ok(app.includes("'[data-open-project],[data-goal-detail]'"));
 assert.ok(readFileSync(resolve(root,'toss-client.js'),'utf8').includes("dividend-os-toss-direct-v1"));
 assert.ok(!readFileSync(resolve(root,'modules/state.js'),'utf8').includes('clientSecret'));
 console.log('DividendOS v0.9.5 static QA: PASS');
