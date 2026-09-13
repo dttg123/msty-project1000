@@ -1,5 +1,5 @@
 import { blankRecovery } from './state.js';
-import { clamp, n } from './utils.js';
+import { clamp, n, todayISO } from './utils.js';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
@@ -31,14 +31,13 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
   function computeProject(projectOrId) {
     const project = typeof projectOrId === 'string' ? projectById(projectOrId) : projectOrId;
     if (!project) return null;
-    const trades = projectRows('trades',project.id);
-    const dividends = projectRows('dividends',project.id);
-    const adjustments = projectRows('cashAdjustments',project.id);
+    const asOf=todayISO(),trades=projectRows('trades',project.id),dividends=projectRows('dividends',project.id),adjustments=projectRows('cashAdjustments',project.id);
+    const postedTrades=trades.filter(row=>String(row.date)<=asOf),postedDividends=dividends.filter(row=>String(row.date)<=asOf),postedAdjustments=adjustments.filter(row=>String(row.date)<=asOf);
     const targetUnits = Math.max(.000001,n(project.targetUnits));
     let factor=1, shares=0, normalizedShares=0, costBasis=0, realized=0, directBuyCost=0, sellProceeds=0;
     let directShares=0, reinvestShares=0, reinvestAmount=0, reinvestCount=0, targetReachedDate='', targetBasisSuggestion=0;
     const milestoneDates={25:'',50:'',75:'',100:''}, oversells=[], effectiveSells=[];
-    for (const event of sortedEvents(project.id)) {
+    for (const event of sortedEvents(project.id).filter(row=>String(row.date)<=asOf)) {
       if (event.eventType === 'split') {
         const ratio=n(event.to)/n(event.from);
         if (ratio>0 && Number.isFinite(ratio)) { shares*=ratio; directShares*=ratio; reinvestShares*=ratio; factor*=ratio; }
@@ -74,11 +73,11 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     costBasis=Math.max(0,Math.abs(costBasis)<1e-7?0:costBasis);
     const currentPrice=Math.max(0,n(project.currentPrice)), marketValue=shares*currentPrice;
     const priceAvailable=currentPrice>0, unrealized=priceAvailable?marketValue-costBasis:0, avgCost=shares>0?costBasis/shares:0, currentTarget=targetUnits*factor;
-    const dividendsTotal=dividends.reduce((sum,row)=>sum+n(row.amountUSD),0);
+    const dividendsTotal=postedDividends.reduce((sum,row)=>sum+n(row.amountUSD),0);
     const currentYear=String(new Date().getFullYear());
-    const yearDividends=dividends.filter(row=>String(row.date).startsWith(currentYear)).reduce((sum,row)=>sum+n(row.amountUSD),0);
-    const recentDividend=[...dividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
-    const sortedDividends=[...dividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    const yearDividends=postedDividends.filter(row=>String(row.date).startsWith(currentYear)).reduce((sum,row)=>sum+n(row.amountUSD),0);
+    const recentDividend=[...postedDividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
+    const sortedDividends=[...postedDividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
     const stableCount=project.distributionFrequency==='weekly'?8:3, shortCount=project.distributionFrequency==='weekly'?4:1;
     const stableRecent=sortedDividends.slice(0,stableCount),shortRecent=sortedDividends.slice(0,shortCount);
     const monthlyFactor=project.distributionFrequency==='weekly'?4.33:1;
@@ -92,9 +91,9 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const annualizedDistributionPerShare=stablePerShare*(project.distributionFrequency==='weekly'?52:12);
     const annualizedCurrentYield=currentPrice>0?annualizedDistributionPerShare/currentPrice*100:0;
     const currentMonth=new Date().toISOString().slice(0,7);
-    const currentMonthDividends=dividends.filter(row=>String(row.date).startsWith(currentMonth)).reduce((sum,row)=>sum+n(row.amountUSD),0);
+    const currentMonthDividends=postedDividends.filter(row=>String(row.date).startsWith(currentMonth)).reduce((sum,row)=>sum+n(row.amountUSD),0);
     const cutoff=new Date();cutoff.setUTCFullYear(cutoff.getUTCFullYear()-1);const cutoffISO=cutoff.toISOString().slice(0,10);
-    const trailing12Dividends=dividends.filter(row=>String(row.date)>=cutoffISO).reduce((sum,row)=>sum+n(row.amountUSD),0);
+    const trailing12Dividends=postedDividends.filter(row=>String(row.date)>=cutoffISO).reduce((sum,row)=>sum+n(row.amountUSD),0);
     const latestDividendDate=sortedDividends[0]?.date||'';
     const latestDividendAgeDays=latestDividendDate?Math.max(0,Math.floor((Date.now()-new Date(`${latestDividendDate}T12:00:00Z`).getTime())/86400000)):Infinity;
     const recentGaps=stableRecent.slice(0,-1).map((row,index)=>Math.abs(new Date(`${row.date}T12:00:00Z`)-new Date(`${stableRecent[index+1].date}T12:00:00Z`))/86400000).filter(Number.isFinite).sort((a,b)=>a-b);
@@ -102,20 +101,20 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const estimateReliable=project.distributionFrequency==='weekly'
       ? stableRecent.length>=2&&latestDividendAgeDays<=45&&medianGap<=21
       : stableRecent.length>=1&&latestDividendAgeDays<=75&&(stableRecent.length<2||medianGap<=75);
-    const estimateStale=!!dividends.length&&!estimateReliable;
+    const estimateStale=!!postedDividends.length&&!estimateReliable;
     const monthlyEstimate=estimateReliable?rawMonthlyEstimate:0,shortMonthlyEstimate=estimateReliable?rawShortMonthlyEstimate:0;
-    const adjustmentTotal=adjustments.reduce((sum,row)=>sum+n(row.amountUSD),0);
+    const adjustmentTotal=postedAdjustments.reduce((sum,row)=>sum+n(row.amountUSD),0);
     const dividendAvailable=Math.max(0,n(project.initialDividendBalance))+dividendsTotal+adjustmentTotal-reinvestAmount;
     const cashLedger=[
       ...(n(project.initialDividendBalance)?[{id:'opening-balance',date:project.initialDividendBalanceDate||'0000-01-01',createdAt:'',kind:'opening',amountUSD:Math.max(0,n(project.initialDividendBalance))}]:[]),
-      ...dividends.map(row=>({...row,kind:'dividend',amountUSD:n(row.amountUSD)})),
-      ...adjustments.map(row=>({...row,kind:'adjustment',amountUSD:n(row.amountUSD)})),
-      ...trades.filter(row=>row.type==='buy'&&(row.buyType==='reinvest'||row.buyType==='mixed')).map(row=>({...row,kind:'reinvest',amountUSD:-(row.buyType==='mixed'?clamp(n(row.reinvestAmountUSD),0,n(row.shares)*n(row.price)):n(row.shares)*n(row.price))}))
+      ...postedDividends.map(row=>({...row,kind:'dividend',amountUSD:n(row.amountUSD)})),
+      ...postedAdjustments.map(row=>({...row,kind:'adjustment',amountUSD:n(row.amountUSD)})),
+      ...postedTrades.filter(row=>row.type==='buy'&&(row.buyType==='reinvest'||row.buyType==='mixed')).map(row=>({...row,kind:'reinvest',amountUSD:-(row.buyType==='mixed'?clamp(n(row.reinvestAmountUSD),0,n(row.shares)*n(row.price)):n(row.shares)*n(row.price))}))
     ].sort((a,b)=>String(a.date).localeCompare(String(b.date))||({opening:0,dividend:1,adjustment:2,reinvest:3}[a.kind]-{opening:0,dividend:1,adjustment:2,reinvest:3}[b.kind])||String(a.createdAt||a.id).localeCompare(String(b.createdAt||b.id)));
     let cashBalance=0,minDividendBalance=0;const cashDeficitEvents=[];
     for(const row of cashLedger){cashBalance+=n(row.amountUSD);minDividendBalance=Math.min(minDividendBalance,cashBalance);if(n(row.amountUSD)<0&&cashBalance<-.0001)cashDeficitEvents.push({...row,balance:cashBalance});}
     return {
-      project,trades,dividends,adjustments,factor,shares,normalizedShares,costBasis,realized,directBuyCost,sellProceeds,
+      project,trades,dividends,adjustments,postedTrades,postedDividends,postedAdjustments,factor,shares,normalizedShares,costBasis,realized,directBuyCost,sellProceeds,
       directShares,reinvestAmount,reinvestCount,reinvestShares,currentPrice,priceAvailable,marketValue,unrealized,avgCost,
       currentTarget,progress:currentTarget>0?shares/currentTarget:0,dividendsTotal,yearDividends,currentMonthDividends,trailing12Dividends,
       recentDividend,monthlyEstimate,shortMonthlyEstimate,rawMonthlyEstimate,rawShortMonthlyEstimate,estimateReliable,medianDividendGapDays:medianGap,
@@ -129,11 +128,11 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
   function recoveryStats(calc) {
     const recovery=calc.project.recovery || blankRecovery();
     if (!recovery.locked) return {dividendRecovery:0,sellRecovery:0,total:0,remaining:0,pct:0,milestoneDates:{25:'',50:'',75:'',100:''}};
-    const dividendRecovery=calc.dividends.filter(row=>row.date>=recovery.startDate).reduce((sum,row)=>sum+n(row.amountUSD),0);
+    const dividendRecovery=calc.postedDividends.filter(row=>row.date>=recovery.startDate).reduce((sum,row)=>sum+n(row.amountUSD),0);
     const sellRecovery=calc.effectiveSells.filter(row=>row.date>=recovery.startDate).reduce((sum,row)=>sum+n(row.effectiveProceeds),0);
     const total=dividendRecovery+sellRecovery, basis=Math.max(0,n(recovery.basis));
     const events=[
-      ...calc.dividends.filter(row=>row.date>=recovery.startDate).map(row=>({date:row.date,amount:n(row.amountUSD),order:0})),
+      ...calc.postedDividends.filter(row=>row.date>=recovery.startDate).map(row=>({date:row.date,amount:n(row.amountUSD),order:0})),
       ...calc.effectiveSells.filter(row=>row.date>=recovery.startDate).map(row=>({date:row.date,amount:n(row.effectiveProceeds),order:1}))
     ].sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.order-b.order);
     const milestoneDates={25:'',50:'',75:'',100:''};let running=0;
