@@ -5,6 +5,9 @@ export function blankRecovery() {
   return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'' };
 }
 
+const HIGH_YIELD_SYMBOLS = new Set(['MSTY','CONY','NVDY','TSLY','ULTY','YMAX','YMAG','AMZY','APLY','GOOY','NFLY','OARK']);
+export function inferProjectCategory(symbol='') { return HIGH_YIELD_SYMBOLS.has(String(symbol).toUpperCase())?'highYield':'dividend'; }
+
 export function blankProject(symbol = 'MSTY', name = 'YieldMax MSTR Option Income') {
   return {
     id: `p-${symbol.toLowerCase()}-${Date.now()}`,
@@ -12,7 +15,7 @@ export function blankProject(symbol = 'MSTY', name = 'YieldMax MSTR Option Incom
     targetUnits: symbol === 'MSTY' ? 1000 : 500, monthlyPlanShares:0, projectStart:todayISO(),
     currentPrice:0, priceSource:'manual', priceUpdatedAt:'', distributionFrequency:symbol === 'MSTY' ? 'weekly' : 'monthly',
     initialDividendBalance:0, initialDividendBalanceDate:'', afterGoalMode:'cashflow',
-    recovery:blankRecovery(), category:symbol === 'MSTY' ? 'highYield' : 'dividend', colorIndex:0, archived:false
+    recovery:blankRecovery(), category:inferProjectCategory(symbol), colorIndex:0, archived:false
   };
 }
 
@@ -80,7 +83,7 @@ export function normalizeV4(raw) {
   result.projects = Array.isArray(raw.projects) ? raw.projects.map((project,index) => ({
     ...blankProject(project.symbol || `ASSET${index+1}`,project.name || project.symbol || '배당 종목'), ...project,
     id:project.id || uid('p'), symbol:String(project.symbol || `ASSET${index+1}`).toUpperCase(),
-    recovery:{...blankRecovery(), ...(project.recovery || {})}, category:project.category==='dividend'?'dividend':'highYield', colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
+    recovery:{...blankRecovery(), ...(project.recovery || {})}, category:['dividend','highYield'].includes(project.category)?project.category:inferProjectCategory(project.symbol), colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
   })) : base.projects;
   for (const key of ['trades','dividends','splits','cashAdjustments']) result[key] = Array.isArray(raw[key]) ? raw[key] : [];
   result.integrations = {toss:{...base.integrations.toss, ...(raw.integrations?.toss || {})}};
