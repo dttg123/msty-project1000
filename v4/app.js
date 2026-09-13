@@ -249,9 +249,16 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
 
   function bindStaticEvents() {
+    document.addEventListener('submit',event=>{
+      const form=event.target;if(!(form instanceof HTMLFormElement))return;
+      if(form.dataset.submitting==='true'){event.preventDefault();event.stopImmediatePropagation();return;}
+      form.dataset.submitting='true';
+      const buttons=[...form.querySelectorAll('button[type="submit"]')];buttons.forEach(button=>button.disabled=true);
+      setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;buttons.forEach(button=>button.disabled=false);},800);
+    },true);
     document.addEventListener('click',handleClick);
     document.getElementById('modalBackdrop').addEventListener('click',event=>{if(event.target.id==='modalBackdrop')closeModal();});
-    document.addEventListener('keydown',event=>{if(event.key==='Escape')closeModal();});
+    document.addEventListener('keydown',event=>{const card=event.target.closest?.('[data-open-project]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')closeModal();});
     document.getElementById('restoreInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.addEventListener('submit',event=>{if(event.target.id!=='globalSettingsForm')return;event.preventDefault();const form=new FormData(event.target);Object.assign(state.settings,{exchangeRate:Math.max(0,n(form.get('exchangeRate'))),targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW:Math.max(0,n(form.get('warningKRW'))),thresholdKRW:Math.max(1,n(form.get('thresholdKRW'))),appearance:String(form.get('appearance'))});applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast('전체 설정을 저장했습니다.');});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
@@ -265,7 +272,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(existing)state=migrate(existing);else{const legacy=await readLegacyState();state=legacy?migrateLegacy(legacy):blankState();}
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r2').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r3').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
