@@ -82,8 +82,8 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const stableCount=project.distributionFrequency==='weekly'?8:3, shortCount=project.distributionFrequency==='weekly'?4:1;
     const stableRecent=sortedDividends.slice(0,stableCount),shortRecent=sortedDividends.slice(0,shortCount);
     const monthlyFactor=project.distributionFrequency==='weekly'?4.33:1;
-    const monthlyEstimate=stableRecent.length ? stableRecent.reduce((sum,row)=>sum+n(row.amountUSD),0)/stableRecent.length*monthlyFactor : 0;
-    const shortMonthlyEstimate=shortRecent.length ? shortRecent.reduce((sum,row)=>sum+n(row.amountUSD),0)/shortRecent.length*monthlyFactor : 0;
+    const rawMonthlyEstimate=stableRecent.length ? stableRecent.reduce((sum,row)=>sum+n(row.amountUSD),0)/stableRecent.length*monthlyFactor : 0;
+    const rawShortMonthlyEstimate=shortRecent.length ? shortRecent.reduce((sum,row)=>sum+n(row.amountUSD),0)/shortRecent.length*monthlyFactor : 0;
     const perShareRows=sortedDividends.filter(row=>n(row.sharesAtPayment)>0).map(row=>({...row,perShare:n(row.amountUSD)/n(row.sharesAtPayment)}));
     const stablePerShareRows=perShareRows.slice(0,stableCount),shortPerShareRows=perShareRows.slice(0,shortCount);
     const stablePerShare=stablePerShareRows.length?stablePerShareRows.reduce((sum,row)=>sum+row.perShare,0)/stablePerShareRows.length:0;
@@ -97,7 +97,13 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const trailing12Dividends=dividends.filter(row=>String(row.date)>=cutoffISO).reduce((sum,row)=>sum+n(row.amountUSD),0);
     const latestDividendDate=sortedDividends[0]?.date||'';
     const latestDividendAgeDays=latestDividendDate?Math.max(0,Math.floor((Date.now()-new Date(`${latestDividendDate}T12:00:00Z`).getTime())/86400000)):Infinity;
-    const estimateStale=latestDividendAgeDays>(project.distributionFrequency==='weekly'?45:75);
+    const recentGaps=stableRecent.slice(0,-1).map((row,index)=>Math.abs(new Date(`${row.date}T12:00:00Z`)-new Date(`${stableRecent[index+1].date}T12:00:00Z`))/86400000).filter(Number.isFinite).sort((a,b)=>a-b);
+    const medianGap=recentGaps.length?recentGaps[Math.floor(recentGaps.length/2)]:Infinity;
+    const estimateReliable=project.distributionFrequency==='weekly'
+      ? stableRecent.length>=2&&latestDividendAgeDays<=45&&medianGap<=21
+      : stableRecent.length>=1&&latestDividendAgeDays<=75&&(stableRecent.length<2||medianGap<=75);
+    const estimateStale=!!dividends.length&&!estimateReliable;
+    const monthlyEstimate=estimateReliable?rawMonthlyEstimate:0,shortMonthlyEstimate=estimateReliable?rawShortMonthlyEstimate:0;
     const adjustmentTotal=adjustments.reduce((sum,row)=>sum+n(row.amountUSD),0);
     const dividendAvailable=Math.max(0,n(project.initialDividendBalance))+dividendsTotal+adjustmentTotal-reinvestAmount;
     const cashLedger=[
@@ -112,7 +118,8 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
       project,trades,dividends,adjustments,factor,shares,normalizedShares,costBasis,realized,directBuyCost,sellProceeds,
       directShares,reinvestAmount,reinvestCount,reinvestShares,currentPrice,priceAvailable,marketValue,unrealized,avgCost,
       currentTarget,progress:currentTarget>0?shares/currentTarget:0,dividendsTotal,yearDividends,currentMonthDividends,trailing12Dividends,
-      recentDividend,monthlyEstimate,shortMonthlyEstimate,stablePerShare,shortPerShare,perShareTrendPct,annualizedDistributionPerShare,annualizedCurrentYield,
+      recentDividend,monthlyEstimate,shortMonthlyEstimate,rawMonthlyEstimate,rawShortMonthlyEstimate,estimateReliable,medianDividendGapDays:medianGap,
+      stablePerShare,shortPerShare,perShareTrendPct,annualizedDistributionPerShare,annualizedCurrentYield,
       latestDividendAgeDays,estimateStale,dividendAvailable,cashLedger,
       minDividendBalance,cashDeficitEvents,totalReturn:priceAvailable?unrealized+realized+dividendsTotal:null,
       targetReachedDate,targetBasisSuggestion,milestoneDates,oversells,effectiveSells
