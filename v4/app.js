@@ -1,15 +1,15 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.4-r21';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.5-r22';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.9.4-r21';
+import { createViews } from './modules/views.js?v=0.9.5-r22';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.4-r21';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.5-r22';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -22,6 +22,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let selectedProjectId = '';
   let chartMode = 'month';
   let recordsExpanded = false;
+  let portfolioCategory = 'highYield';
   let currentUser = null;
   let cloudUnsubscribe = null;
   let applyingCloudState = false;
@@ -72,12 +73,12 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getCurrentUser:() => currentUser, isTossBridgeConfigured,
+    getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup:() => tossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
-  const { renderHome, renderProjects, renderDividends, renderGoals, renderSettings } = views;
+  const { renderHome, renderProjects, renderGoals, renderSettings } = views;
   function auditLegacyAgainstState(raw,targetState) {
     const project=targetState.projects.find(item=>item.symbol==='MSTY')||targetState.projects[0];
     if(!project)return null;
@@ -104,7 +105,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');
     document.getElementById('krwBtn')?.classList.toggle('active',displayCurrency()==='KRW');
-    renderHome();renderProjects();renderDividends();renderGoals();renderSettings();
+    renderHome();renderProjects();renderGoals();renderSettings();
   }
   function showPage(page) {
     if(!PAGES.includes(page))page='home'; currentPage=page;
@@ -125,6 +126,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       <div><label class="input-label">티커</label><input class="input" name="symbol" maxlength="12" required value="${esc(project?.symbol||'')}"></div>
       <div><label class="input-label">종목명</label><input class="input" name="name" required value="${esc(project?.name||'')}"></div>
       <div><label class="input-label">프로젝트 이름</label><input class="input" name="tag" value="${esc(project?.tag||'배당 프로젝트')}"></div>
+      <div class="form-grid two"><div><label class="input-label">분류</label><select class="input select" name="category"><option value="highYield" ${project?.category!=='dividend'?'selected':''}>고배당주</option><option value="dividend" ${project?.category==='dividend'?'selected':''}>배당주</option></select></div><div><label class="input-label">카드 색상</label><select class="input select" name="colorIndex">${PROJECT_COLORS.map((_,index)=>`<option value="${index}" ${n(project?.colorIndex)===index?'selected':''}>색상 ${index+1}</option>`).join('')}</select></div></div>
       <div class="form-grid two"><div><label class="input-label">목표 주수</label><input class="input" name="targetUnits" type="number" min="0.0001" step="0.0001" required value="${n(project?.targetUnits)||500}"></div><div><label class="input-label">월 매수계획 주수</label><input class="input" name="monthlyPlanShares" type="number" min="0" step="0.0001" value="${n(project?.monthlyPlanShares)}"></div></div>
       <div class="form-grid two"><div><label class="input-label">현재가 USD</label><input class="input" name="currentPrice" type="number" min="0" step="0.0001" value="${n(project?.currentPrice)}"></div><div><label class="input-label">배당 주기</label><select class="input select" name="distributionFrequency"><option value="weekly" ${project?.distributionFrequency==='weekly'?'selected':''}>주배당</option><option value="monthly" ${project?.distributionFrequency!=='weekly'?'selected':''}>월배당</option></select></div></div>
       <div><label class="input-label">프로젝트 시작일</label><input class="input" name="projectStart" type="date" value="${project?.projectStart||todayISO()}"></div>
@@ -138,7 +140,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(state.projects.some(x=>x.id!==project?.id&&x.symbol===symbol&&!x.archived)){toast('이미 등록된 티커입니다.');return;}
       const target=project||blankProject(symbol,String(form.get('name')).trim()||symbol);
       const oldSymbol=target.symbol,currentPrice=Math.max(0,n(form.get('currentPrice')));
-      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:'manual',priceUpdatedAt:currentPrice?new Date().toISOString():'',distributionFrequency:form.get('distributionFrequency')==='weekly'?'weekly':'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
+      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category:form.get('category')==='dividend'?'dividend':'highYield',colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:'manual',priceUpdatedAt:currentPrice?new Date().toISOString():'',distributionFrequency:form.get('distributionFrequency')==='weekly'?'weekly':'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
       if(edit&&oldSymbol!==symbol)for(const key of ['trades','dividends','splits','cashAdjustments'])state[key].filter(row=>row.projectId===target.id).forEach(row=>{row.symbol=symbol;});
       if(!edit){target.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(target);selectedProjectId=target.id;}
       await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
@@ -329,7 +331,10 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     const button=event.target.closest('button,[data-open-project]');if(!button)return;
     if(button.dataset.page){showPage(button.dataset.page);return;}
     if(button.dataset.currency){state.settings.displayCurrency=button.dataset.currency;saveState();renderAll();showPage(currentPage);return;}
-    if(button.dataset.chartMode){chartMode=button.dataset.chartMode;renderHome();renderProjects();renderDividends();return;}
+    if(button.dataset.chartMode){chartMode=button.dataset.chartMode;renderHome();renderProjects();return;}
+    if(button.dataset.portfolioCategory){portfolioCategory=button.dataset.portfolioCategory;const first=activeProjects().find(project=>project.category===portfolioCategory);if(first)selectedProjectId=first.id;recordsExpanded=false;renderProjects();return;}
+    if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');return;}
+    if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
     if(button.dataset.openProject){selectedProjectId=button.dataset.openProject;recordsExpanded=false;renderProjects();showPage('projects');return;}
     if(button.dataset.selectProject){selectedProjectId=button.dataset.selectProject;recordsExpanded=false;renderProjects();return;}
     if('addProject'in button.dataset){openProjectForm();return;}
@@ -379,7 +384,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     document.getElementById('modalBackdrop').addEventListener('click',event=>{if(event.target.id==='modalBackdrop')closeModal();});
     document.addEventListener('keydown',event=>{const card=event.target.closest?.('[data-open-project]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')closeModal();});
     document.getElementById('restoreInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
-    document.addEventListener('submit',event=>{if(event.target.id!=='globalSettingsForm')return;event.preventDefault();const form=new FormData(event.target),thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));Object.assign(state.settings,{exchangeRate:Math.max(0,n(form.get('exchangeRate'))),targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW,appearance:String(form.get('appearance'))});applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast('전체 설정을 저장했습니다.');});});
+    document.addEventListener('submit',event=>{if(event.target.id!=='globalSettingsForm')return;event.preventDefault();const form=new FormData(event.target),thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));Object.assign(state.settings,{exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW,appearance:String(form.get('appearance'))});applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast('전체 설정을 저장했습니다.');});});
     document.addEventListener('submit',event=>{if(event.target.id!=='tossDirectForm')return;event.preventDefault();try{const form=new FormData(event.target);saveTossLocalConfig({clientId:form.get('clientId'),clientSecret:form.get('clientSecret')});tossSetup={...tossSetup,message:'이 기기에만 저장했습니다. 현재 IP 등록 후 연결 시험을 눌러 주세요.'};state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';renderSettings();showPage('settings');toast('토스 연결정보를 기기에 저장했습니다.');}catch(error){toast(error?.message||'토스 연결정보를 저장하지 못했습니다.');}});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
@@ -395,7 +400,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.4-r21').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.5-r22').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
