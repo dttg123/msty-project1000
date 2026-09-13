@@ -1,9 +1,9 @@
-const CACHE = 'dividend-os-v0.9-r3';
+const CACHE = 'dividend-os-v0.9-r4';
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js',
   './modules/constants.js', './modules/utils.js', './modules/state.js',
-  './modules/portfolio.js', './modules/format.js', './modules/views.js'
+  './modules/portfolio.js', './modules/format.js', './modules/views.js', './modules/migration.js'
 ];
 
 self.addEventListener('install', event => {
