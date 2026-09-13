@@ -64,8 +64,13 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
   });
 
   onAuthStateChanged(auth, user => {
-    if (user) onSignedIn?.(user);
-    else onSignedOut?.();
+    if (user) {
+      if(status)status.textContent='클라우드 계정을 연결했습니다.';
+      onSignedIn?.(user);
+    } else {
+      if(status)status.textContent='로그인하지 않아도 모든 기능을 사용할 수 있습니다.';
+      onSignedOut?.();
+    }
   }, error => {
     console.error('Auth state error', error);
     const message = friendlyAuthError(error);

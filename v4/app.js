@@ -105,6 +105,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');
     document.getElementById('krwBtn')?.classList.toggle('active',displayCurrency()==='KRW');
+    document.getElementById('usdBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='USD'));
+    document.getElementById('krwBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='KRW'));
     renderHome();renderProjects();renderGoals();renderSettings();
   }
   function showPage(page) {
@@ -403,7 +405,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.7-r24').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.7-r25').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
