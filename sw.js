@@ -1,4 +1,4 @@
-const CACHE = 'dividend-os-v0.9-r7';
+const CACHE = 'dividend-os-v0.9-r8';
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js', './runtime-config.js', './toss-client.js',
