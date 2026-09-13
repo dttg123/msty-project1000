@@ -277,4 +277,4 @@ testFutureActualRecordsAreExcluded();
 testFullSellRebuyAndCashReconciliation();
 testMixedBuyUsesDividendOnce();
 testTenYearGoalAndCashflowRecovery();
-console.log('DividendOS v0.9.1 domain QA: PASS');
+console.log('DividendOS v0.9.2 domain QA: PASS');

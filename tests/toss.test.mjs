@@ -29,14 +29,26 @@ assert.equal(tossCandidateToTrade({...result.candidates[0],currency:'KRW'},{proj
 assert.equal(result.unsupportedCurrencyCount,1);
 assert.equal(result.comparisons[0].difference,2.5);
 assert.equal(result.comparisons[1].supported,false);
+assert.equal(result.matchedExistingCount,0);
 assert.equal(normalizeTossOrder({}),null);
 assert.equal(normalizeTossOrder({orderId:'invalid-date',symbol:'MSTY',side:'BUY',currency:'USD',orderedAt:'2026-99-99',filledQuantity:1,averageFilledPrice:10}),null);
+const tomorrow=new Date();tomorrow.setUTCDate(tomorrow.getUTCDate()+1);
+assert.equal(normalizeTossOrder({orderId:'future',symbol:'MSTY',side:'BUY',currency:'USD',orderedAt:tomorrow.toISOString(),filledQuantity:1,averageFilledPrice:10}),null);
+assert.equal(normalizeTossOrder({orderId:'huge',symbol:'MSTY',side:'BUY',currency:'USD',orderedAt:'2026-09-01',filledQuantity:1e10,averageFilledPrice:10}),null);
 assert.equal(normalizeTossPrice({symbol:'MSTY',currency:'USD',lastPrice:'0'}),null);
 assert.deepEqual(mergeTossCandidates(result.candidates,result.candidates).map(row=>row.externalId),['new']);
+assert.deepEqual(mergeTossCandidates([{externalId:'bad',symbol:'MSTY',date:'bad',type:'buy',shares:1,price:1,currency:'USD'}],result.candidates).map(row=>row.externalId),['new']);
+
+const manualMatched=buildTossSync({orders:[
+  {orderId:'same-1',symbol:'MSTY',side:'BUY',currency:'USD',orderedAt:'2026-09-01',filledQuantity:2,averageFilledPrice:15},
+  {orderId:'same-2',symbol:'MSTY',side:'BUY',currency:'USD',orderedAt:'2026-09-01',filledQuantity:2,averageFilledPrice:15}
+]},{existingTrades:[{id:'manual',symbol:'MSTY',date:'2026-09-01',type:'buy',shares:2,price:15}]});
+assert.equal(manualMatched.matchedExistingCount,1);
+assert.deepEqual(manualMatched.candidates.map(row=>row.externalId),['same-2']);
 
 const longOrders=[];
 for(let month=0;month<120;month++){
-  const year=2017+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
+  const year=2016+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
   for(let index=0;index<10;index++)longOrders.push({orderId:`${year}-${mm}-${index}`,symbol:index%2?'MSTY':'CONY',side:index%3?'BUY':'SELL',currency:'USD',orderedAt:`${year}-${mm}-05T10:00:00+09:00`,execution:{filledQuantity:String(index+1),averageFilledPrice:String(10+index),filledAt:`${year}-${mm}-05T10:01:00+09:00`}});
 }
 const longResult=buildTossSync({orders:longOrders,holdings:[]});
@@ -44,4 +56,4 @@ assert.equal(longResult.candidates.length,1200);
 assert.equal(new Set(longResult.candidates.map(row=>row.externalId)).size,1200);
 assert.ok(longResult.candidates.every(row=>Number.isFinite(row.shares)&&Number.isFinite(row.price)));
 assert.equal(buildTossSync({orders:[],historyTruncated:true}).historyTruncated,true);
-console.log('DividendOS v0.9.1 Toss QA: PASS');
+console.log('DividendOS v0.9.2 Toss QA: PASS');
