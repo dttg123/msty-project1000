@@ -5,13 +5,15 @@ export function isTossBridgeConfigured() {
   return /^https:\/\//i.test(String(TOSS_BRIDGE_URL||'').trim());
 }
 
-export async function fetchTossSnapshot({from=TOSS_SYNC_FROM}={}) {
+export async function fetchTossSnapshot({from=TOSS_SYNC_FROM,symbols=[]}={}) {
   if(!isTossBridgeConfigured())throw Object.assign(new Error('토스 중계 서버가 아직 설정되지 않았습니다.'),{code:'not-configured'});
   const idToken=await getGoogleIdToken();
   if(!idToken)throw Object.assign(new Error('Google 로그인 후 토스 계좌를 조회할 수 있습니다.'),{code:'login-required'});
   const base=String(TOSS_BRIDGE_URL).replace(/\/+$/,'');
   const url=new URL(`${base}/v1/toss/snapshot`);
   if(from)url.searchParams.set('from',from);
+  const cleanSymbols=[...new Set(symbols.map(value=>String(value||'').trim().toUpperCase()).filter(value=>/^[A-Z0-9.-]{1,16}$/.test(value)))].slice(0,200);
+  if(cleanSymbols.length)url.searchParams.set('symbols',cleanSymbols.join(','));
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),30000);
   try{
