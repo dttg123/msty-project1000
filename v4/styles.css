@@ -206,8 +206,16 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .positive { color: var(--green); }
 .negative { color: var(--red); }
+.warning { color: #b77900; }
 .card.accent .positive, .card.green .positive { color: #c9ffe8; }
 .card.accent .negative, .card.green .negative { color: #ffd5d5; }
+
+.milestone-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin-top:12px; }
+.milestone-grid div { padding:9px 6px; border:1px solid var(--line); border-radius:12px; text-align:center; background:#f7f7fa; }
+.milestone-grid span,.milestone-grid strong { display:block; }
+.milestone-grid span { font-size:11px; color:var(--muted); }
+.milestone-grid strong { margin-top:3px; font-size:11px; }
+html[data-theme="dark"] .milestone-grid div { background:#222630; }
 
 .progress-wrap { margin-top: 18px; }
 .progress-meta { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 750; margin-bottom: 8px; }
