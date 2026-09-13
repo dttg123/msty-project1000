@@ -1,5 +1,5 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.3-r18';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.4-r19';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
@@ -9,7 +9,7 @@ import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.3-r18';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.4-r19';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -77,7 +77,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
-  const { renderHome, renderProjects, renderGoals, renderSettings } = views;
+  const { renderHome, renderProjects, renderDividends, renderGoals, renderSettings } = views;
   function auditLegacyAgainstState(raw,targetState) {
     const project=targetState.projects.find(item=>item.symbol==='MSTY')||targetState.projects[0];
     if(!project)return null;
@@ -104,7 +104,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');
     document.getElementById('krwBtn')?.classList.toggle('active',displayCurrency()==='KRW');
-    renderHome();renderProjects();renderGoals();renderSettings();
+    renderHome();renderProjects();renderDividends();renderGoals();renderSettings();
   }
   function showPage(page) {
     if(!PAGES.includes(page))page='home'; currentPage=page;
@@ -162,14 +162,14 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
 
   function openDividendForm(record=null) {
-    const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project);
+    const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project),returnPage=currentPage==='dividend'?'dividend':'projects';
     openModal(`<h3 class="modal-title">${project.symbol} ${edit?'배당 수정':'배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date||todayISO()}"></div>
       <div><label class="input-label">세후 배당 USD</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${n(record?.amountUSD)}"></div>
       <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record?n(record.sharesAtPayment):round(calc.shares,4)}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record?n(record.referencePrice):n(project.currentPrice)}"></div></div>
       <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
+    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);closeModal();renderAll();showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
   }
 
   function openCashForm(record=null) {
@@ -329,13 +329,14 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     const button=event.target.closest('button,[data-open-project]');if(!button)return;
     if(button.dataset.page){showPage(button.dataset.page);return;}
     if(button.dataset.currency){state.settings.displayCurrency=button.dataset.currency;saveState();renderAll();showPage(currentPage);return;}
-    if(button.dataset.chartMode){chartMode=button.dataset.chartMode;renderHome();renderProjects();return;}
+    if(button.dataset.chartMode){chartMode=button.dataset.chartMode;renderHome();renderProjects();renderDividends();return;}
     if(button.dataset.openProject){selectedProjectId=button.dataset.openProject;recordsExpanded=false;renderProjects();showPage('projects');return;}
     if(button.dataset.selectProject){selectedProjectId=button.dataset.selectProject;recordsExpanded=false;renderProjects();return;}
     if('addProject'in button.dataset){openProjectForm();return;}
     if('projectSettings'in button.dataset){openProjectForm(projectById());return;}
     if('addTrade'in button.dataset){openTradeForm();return;}
     if('addDividend'in button.dataset){openDividendForm();return;}
+    if(button.dataset.addDividendFor){selectedProjectId=button.dataset.addDividendFor;openDividendForm();return;}
     if('addCash'in button.dataset){openCashForm();return;}
     if('addSplit'in button.dataset){openSplitForm();return;}
     if(button.dataset.editRecord){editRecord(button.dataset.editRecord);return;}
@@ -394,7 +395,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.3-r18').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.4-r19').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
