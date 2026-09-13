@@ -10,7 +10,7 @@ export function blankProject(symbol = 'MSTY', name = 'YieldMax MSTR Option Incom
     id: `p-${symbol.toLowerCase()}-${Date.now()}`,
     symbol: symbol.toUpperCase(), name, tag: symbol === 'MSTY' ? 'PROJECT1000' : '배당 프로젝트',
     targetUnits: symbol === 'MSTY' ? 1000 : 500, monthlyPlanShares:0, projectStart:todayISO(),
-    currentPrice:0, distributionFrequency:symbol === 'MSTY' ? 'weekly' : 'monthly',
+    currentPrice:0, priceSource:'manual', priceUpdatedAt:'', distributionFrequency:symbol === 'MSTY' ? 'weekly' : 'monthly',
     initialDividendBalance:0, initialDividendBalanceDate:'', afterGoalMode:'cashflow',
     recovery:blankRecovery(), colorIndex:0, archived:false
   };
