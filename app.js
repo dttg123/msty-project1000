@@ -1,5 +1,5 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9-r8';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.1-r12';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
@@ -9,7 +9,7 @@ import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9-r8';
+import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9.1-r12';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -111,7 +111,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     window.scrollTo({top:0,behavior:'instant'});
   }
   function openModal(html) { const modal=document.getElementById('modal');modal.innerHTML=`<div class="modal-handle"></div>${html}`;document.getElementById('modalBackdrop').classList.add('show'); }
-  function closeModal() { document.getElementById('modalBackdrop').classList.remove('show'); }
+  function closeModal() { document.getElementById('modalBackdrop').classList.remove('show');document.getElementById('modal').innerHTML=''; }
   function confirmAction(title,message,action,confirmText='확인') {
     openModal(`<h3 class="modal-title">${esc(title)}</h3><p class="modal-desc">${esc(message)}</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn danger" id="modalConfirm">${esc(confirmText)}</button></div>`);
     document.getElementById('modalConfirm').onclick=async()=>{await action();closeModal();};
@@ -132,10 +132,12 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     </form>`);
     document.getElementById('projectForm').onsubmit=async event=>{
       event.preventDefault();const form=new FormData(event.currentTarget),symbol=String(form.get('symbol')).trim().toUpperCase();
-      if(!symbol){toast('티커를 입력해 주세요.');return;}
-      if(!edit&&state.projects.some(x=>x.symbol===symbol&&!x.archived)){toast('이미 등록된 티커입니다.');return;}
+      if(!/^[A-Z0-9.-]{1,16}$/.test(symbol)){toast('티커는 영문·숫자·점·하이픈만 입력해 주세요.');return;}
+      if(state.projects.some(x=>x.id!==project?.id&&x.symbol===symbol&&!x.archived)){toast('이미 등록된 티커입니다.');return;}
       const target=project||blankProject(symbol,String(form.get('name')).trim()||symbol);
-      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice:Math.max(0,n(form.get('currentPrice'))),distributionFrequency:form.get('distributionFrequency')==='weekly'?'weekly':'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
+      const oldSymbol=target.symbol,currentPrice=Math.max(0,n(form.get('currentPrice')));
+      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:'manual',priceUpdatedAt:currentPrice?new Date().toISOString():'',distributionFrequency:form.get('distributionFrequency')==='weekly'?'weekly':'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
+      if(edit&&oldSymbol!==symbol)for(const key of ['trades','dividends','splits','cashAdjustments'])state[key].filter(row=>row.projectId===target.id).forEach(row=>{row.symbol=symbol;});
       if(!edit){target.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(target);selectedProjectId=target.id;}
       await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
     };
@@ -146,12 +148,15 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     const project=projectById(record?.projectId||selectedProjectId),edit=!!record;
     openModal(`<h3 class="modal-title">${project.symbol} ${edit?'거래 수정':'거래 입력'}</h3><p class="modal-desc">모든 원본 금액은 USD로 저장됩니다.</p><form id="tradeForm" class="form-grid">
       <div><label class="input-label">날짜</label><input class="input" name="date" type="date" required value="${record?.date||todayISO()}"></div>
-      <div class="form-grid two"><div><label class="input-label">거래</label><select class="input select" name="type"><option value="buy" ${record?.type!=='sell'?'selected':''}>매수</option><option value="sell" ${record?.type==='sell'?'selected':''}>매도</option></select></div><div><label class="input-label">매수 구분</label><select class="input select" name="buyType"><option value="direct" ${record?.buyType==='direct'?'selected':''}>직접매수</option><option value="reinvest" ${record?.buyType==='reinvest'?'selected':''}>배당재투자</option><option value="mixed" ${record?.buyType==='mixed'?'selected':''}>혼합매수</option><option value="opening" ${record?.buyType==='opening'?'selected':''}>초기보유</option></select></div></div>
+      <div class="form-grid two"><div><label class="input-label">거래</label><select class="input select" name="type"><option value="buy" ${record?.type!=='sell'?'selected':''}>매수</option><option value="sell" ${record?.type==='sell'?'selected':''}>매도</option></select></div><div data-buy-only><label class="input-label">매수 구분</label><select class="input select" name="buyType"><option value="direct" ${record?.buyType==='direct'?'selected':''}>직접매수</option><option value="reinvest" ${record?.buyType==='reinvest'?'selected':''}>배당재투자</option><option value="mixed" ${record?.buyType==='mixed'?'selected':''}>혼합매수</option><option value="opening" ${record?.buyType==='opening'?'selected':''}>초기보유</option></select></div></div>
       <div class="form-grid two"><div><label class="input-label">주수</label><input class="input" name="shares" type="number" min="0.0001" step="0.0001" required value="${n(record?.shares)||1}"></div><div><label class="input-label">단가 USD</label><input class="input" name="price" type="number" min="0" step="0.0001" required value="${record?n(record.price):n(project.currentPrice)}"></div></div>
-      <div><label class="input-label">혼합매수 배당 사용액 USD</label><input class="input" name="reinvestAmountUSD" type="number" min="0" step="0.01" value="${n(record?.reinvestAmountUSD)}"></div>
+      <div data-mixed-only><label class="input-label">혼합매수 배당 사용액 USD</label><input class="input" name="reinvestAmountUSD" type="number" min="0" step="0.01" value="${n(record?.reinvestAmountUSD)}"></div>
       <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-    document.getElementById('tradeForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),type=form.get('type'),shares=n(form.get('shares')),price=n(form.get('price')),buyType=type==='sell'?'':String(form.get('buyType')),reinvestAmountUSD=buyType==='mixed'?n(form.get('reinvestAmountUSD')):0;if(shares<=0||price<0){toast('주수와 단가를 확인해 주세요.');return;}if(reinvestAmountUSD>shares*price+.0001){toast('배당 사용액이 총 매수액보다 큽니다.');return;}const row=record||{id:uid('t'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date:String(form.get('date')),type,buyType,shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()});if(!edit)state.trades.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'거래를 수정했습니다.':'거래를 저장했습니다.');};
+    const tradeForm=document.getElementById('tradeForm'),typeInput=tradeForm.elements.type,buyTypeInput=tradeForm.elements.buyType;
+    const syncTradeFields=()=>{const selling=typeInput.value==='sell';tradeForm.querySelector('[data-buy-only]').hidden=selling;tradeForm.querySelector('[data-mixed-only]').hidden=selling||buyTypeInput.value!=='mixed';};
+    typeInput.onchange=syncTradeFields;buyTypeInput.onchange=syncTradeFields;syncTradeFields();
+    tradeForm.onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),type=form.get('type'),shares=n(form.get('shares')),price=n(form.get('price')),buyType=type==='sell'?'':String(form.get('buyType')),reinvestAmountUSD=buyType==='mixed'?n(form.get('reinvestAmountUSD')):0;if(!isDate(date)||shares<=0||price<0){toast('날짜·주수·단가를 확인해 주세요.');return;}if(reinvestAmountUSD>shares*price+.0001){toast('배당 사용액이 총 매수액보다 큽니다.');return;}const row=record||{id:uid('t'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()},before=record?clone(record):null;Object.assign(row,{date,type,buyType,shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()});if(!edit)state.trades.push(row);const invalid=computeProject(project).oversells.length;if(invalid){if(edit)Object.assign(row,before);else state.trades=state.trades.filter(item=>item!==row);toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');return;}await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'거래를 수정했습니다.':'거래를 저장했습니다.');};
   }
 
   function openDividendForm(record=null) {
@@ -162,46 +167,49 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record?n(record.sharesAtPayment):round(calc.shares,4)}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record?n(record.referencePrice):n(project.currentPrice)}"></div></div>
       <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),amountUSD=n(form.get('amountUSD'));if(amountUSD<=0){toast('배당금은 0보다 커야 합니다.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date:String(form.get('date')),amountUSD,sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
+    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
   }
 
   function openCashForm(record=null) {
     const project=projectById(record?.projectId||selectedProjectId),edit=!!record;
     openModal(`<h3 class="modal-title">${project.symbol} 잔액 ${edit?'수정':'보정'}</h3><p class="modal-desc">실제 사용 가능 배당과 앱 잔액이 다를 때만 더하거나 뺍니다.</p><form id="cashForm" class="form-grid"><div><label class="input-label">날짜</label><input class="input" name="date" type="date" value="${record?.date||todayISO()}" required></div><div><label class="input-label">보정액 USD (+/−)</label><input class="input" name="amountUSD" type="number" step="0.01" value="${n(record?.amountUSD)}" required></div><div><label class="input-label">사유</label><input class="input" name="label" value="${esc(record?.label||'잔액 보정')}" required></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-    document.getElementById('cashForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),amountUSD=n(form.get('amountUSD'));if(!amountUSD){toast('0이 아닌 보정액을 입력해 주세요.');return;}const row=record||{id:uid('c'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date:String(form.get('date')),amountUSD,label:String(form.get('label')).trim()||'잔액 보정'});if(!edit)state.cashAdjustments.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast('잔액 보정을 저장했습니다.');};
+    document.getElementById('cashForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||!amountUSD){toast('날짜와 0이 아닌 보정액을 입력해 주세요.');return;}const row=record||{id:uid('c'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,label:String(form.get('label')).trim()||'잔액 보정'});if(!edit)state.cashAdjustments.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast('잔액 보정을 저장했습니다.');};
   }
 
   function openSplitForm(record=null) {
     const project=projectById(record?.projectId||selectedProjectId),edit=!!record;
     openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균단가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date||todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from)||2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to)||1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">적용</button></div></form>`);
-    document.getElementById('splitForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),from=n(form.get('from')),to=n(form.get('to'));if(from<=0||to<=0){toast('분할 비율을 확인해 주세요.');return;}const row=record||{id:uid('s'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date:String(form.get('date')),from,to,type:to<from?'reverse':'forward'});if(!edit)state.splits.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast('분할 비율을 반영했습니다.');};
+    document.getElementById('splitForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),from=n(form.get('from')),to=n(form.get('to'));if(!isDate(date)||from<=0||to<=0){toast('분할 날짜와 비율을 확인해 주세요.');return;}const row=record||{id:uid('s'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()},before=record?clone(record):null;Object.assign(row,{date,from,to,type:to<from?'reverse':'forward'});if(!edit)state.splits.push(row);if(computeProject(project).oversells.length){if(edit)Object.assign(row,before);else state.splits=state.splits.filter(item=>item!==row);toast('이 분할을 반영하면 이후 매도 기록이 보유주수를 초과합니다.');return;}await saveState(true);closeModal();renderAll();showPage('projects');toast('분할 비율을 반영했습니다.');};
   }
 
   function recordByToken(token) {
     const [kind,id]=String(token).split(':');const key={trade:'trades',dividend:'dividends',split:'splits',cash:'cashAdjustments'}[kind];return {kind,key,row:key?state[key].find(x=>String(x.id)===id):null};
   }
   function editRecord(token) { const {kind,row}=recordByToken(token);if(!row)return;if(kind==='trade')openTradeForm(row);if(kind==='dividend')openDividendForm(row);if(kind==='cash')openCashForm(row);if(kind==='split')openSplitForm(row); }
-  function deleteRecord(token) { const {key,row}=recordByToken(token);if(!row)return;confirmAction('기록 삭제',`${fmtDate(row.date)} 기록을 삭제합니다.`,async()=>{state[key]=state[key].filter(x=>x.id!==row.id);await saveState(true);renderAll();showPage('projects');toast('기록을 삭제했습니다.');},'삭제'); }
+  function deleteRecord(token) { const {key,row}=recordByToken(token);if(!row)return;confirmAction('기록 삭제',`${fmtDate(row.date)} 기록을 삭제합니다.`,async()=>{await storageSet(SAFETY_KEY,clone(state));const previous=state[key];state[key]=state[key].filter(x=>x.id!==row.id);if((key==='trades'||key==='splits')&&computeProject(row.projectId).oversells.length){state[key]=previous;toast('이 기록을 삭제하면 이후 매도가 보유주수를 초과하므로 삭제하지 않았습니다.');return;}await saveState(true);renderAll();showPage('projects');toast('기록을 삭제했습니다.');},'삭제'); }
 
   function projectIssues(projectId=null) {
     const projects=projectId?[projectById(projectId)]:state.projects, issues=[];
     for(const project of projects.filter(Boolean)){
       const calc=computeProject(project),prefix=`${project.symbol}: `;
       if(calc.oversells.length)issues.push(`${prefix}보유량 초과 매도 ${calc.oversells.length}건`);
-      if(calc.dividendAvailable<-.0001)issues.push(`${prefix}배당 사용액이 잔액보다 ${fmtMoney(Math.abs(calc.dividendAvailable))} 많음`);
+      if(calc.cashDeficitEvents.length)issues.push(`${prefix}날짜순 배당 원장에서 잔액 부족 ${calc.cashDeficitEvents.length}건 · 최대 ${fmtMoney(Math.abs(calc.minDividendBalance))}`);
+      if(!calc.priceAvailable&&calc.shares>0)issues.push(`${prefix}현재가 미입력으로 평가금액·총손익 계산 대기`);
       const badTrade=calc.trades.filter(x=>!isDate(x.date)||n(x.shares)<=0||n(x.price)<0);if(badTrade.length)issues.push(`${prefix}잘못된 거래 ${badTrade.length}건`);
       const badDividend=calc.dividends.filter(x=>!isDate(x.date)||n(x.amountUSD)<=0);if(badDividend.length)issues.push(`${prefix}잘못된 배당 ${badDividend.length}건`);
       const badSplit=projectRows('splits',project.id).filter(x=>!isDate(x.date)||n(x.from)<=0||n(x.to)<=0);if(badSplit.length)issues.push(`${prefix}잘못된 분할 ${badSplit.length}건`);
       const tradeKeys=new Set();let duplicates=0;calc.trades.forEach(x=>{const key=[x.date,x.type,x.buyType,n(x.shares).toFixed(8),n(x.price).toFixed(8)].join('|');if(tradeKeys.has(key))duplicates++;tradeKeys.add(key);});if(duplicates)issues.push(`${prefix}중복 가능 거래 ${duplicates}건`);
+      const dividendKeys=new Set();let duplicateDividends=0;calc.dividends.forEach(x=>{const key=[x.date,n(x.amountUSD).toFixed(2),n(x.sharesAtPayment).toFixed(4)].join('|');if(dividendKeys.has(key))duplicateDividends++;dividendKeys.add(key);});if(duplicateDividends)issues.push(`${prefix}중복 가능 배당 ${duplicateDividends}건`);
     }
     return issues;
   }
   function showIssues(projectId=null) { const issues=projectIssues(projectId);openModal(`<h3 class="modal-title">${projectId?'프로젝트':'전체'} 점검</h3>${issues.length?`<div class="check-list">${issues.map(x=>`<div class="check-item">${esc(x)}</div>`).join('')}</div>`:'<div class="check-ok">오류가 발견되지 않았습니다.</div>'}<button class="btn primary" style="width:100%;margin-top:14px" data-close-modal>확인</button>`); }
 
-  function lockRecovery(projectId) {
+  function lockRecovery(projectId,editing=false) {
     const calc=computeProject(projectId),project=calc.project;
-    openModal(`<h3 class="modal-title">${project.symbol} 원금회수 기준</h3><p class="modal-desc">목표 달성 전 직접매수금액에서 매도대금을 뺀 자동 제안값입니다. 확정 후에는 자동으로 바뀌지 않습니다.</p><form id="recoveryForm" class="form-grid"><div><label class="input-label">기준원금 USD</label><input class="input" name="basis" type="number" min="0" step="0.01" value="${round(calc.targetBasisSuggestion,2)}"></div><div><label class="input-label">회수 시작일</label><input class="input" name="startDate" type="date" value="${calc.targetReachedDate||todayISO()}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">확정</button></div></form>`);
-    document.getElementById('recoveryForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget);project.recovery={locked:true,basis:Math.max(0,n(form.get('basis'))),startDate:String(form.get('startDate')),targetReachedDate:calc.targetReachedDate,calculatedBasisAtLock:calc.targetBasisSuggestion,confirmedAt:new Date().toISOString()};await saveState(true);closeModal();renderAll();showPage('goal');toast('원금회수 기준을 확정했습니다.');};
+    const basis=editing&&project.recovery?.locked?n(project.recovery.basis):calc.targetBasisSuggestion,startDate=editing&&project.recovery?.locked?project.recovery.startDate:(calc.targetReachedDate||todayISO());
+    openModal(`<h3 class="modal-title">${project.symbol} 원금회수 기준 ${editing?'수정':'확정'}</h3><p class="modal-desc">직접매수 원금에서 목표 달성 전 매도 회수액을 뺀 제안값입니다. 확정 뒤 기록을 바꾸어도 기준은 자동 변경되지 않습니다.</p><form id="recoveryForm" class="form-grid"><div><label class="input-label">기준원금 USD</label><input class="input" name="basis" type="number" min="0.01" step="0.01" required value="${round(basis,2)}"></div><div><label class="input-label">회수 시작일</label><input class="input" name="startDate" type="date" required value="${startDate}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">${editing?'수정 저장':'확정'}</button></div></form>`);
+    document.getElementById('recoveryForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),nextBasis=n(form.get('basis')),nextStartDate=String(form.get('startDate'));if(nextBasis<=0||!isDate(nextStartDate)){toast('기준원금과 시작일을 확인해 주세요.');return;}project.recovery={locked:true,basis:nextBasis,startDate:nextStartDate,targetReachedDate:calc.targetReachedDate||project.recovery?.targetReachedDate||nextStartDate,calculatedBasisAtLock:calc.targetBasisSuggestion,confirmedAt:new Date().toISOString()};await saveState(true);closeModal();renderAll();showPage('goal');toast(editing?'원금회수 기준을 수정했습니다.':'원금회수 기준을 확정했습니다.');};
   }
 
   function downloadFile(filename,content,type='application/octet-stream') { const blob=content instanceof Blob?content:new Blob([content],{type});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
@@ -252,7 +260,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       for(const price of result.prices||[]){
         if(price.currency!=='USD')continue;
         const project=state.projects.find(item=>item.symbol===price.symbol&&!item.archived);
-        if(project)project.currentPrice=price.lastPrice;
+        if(project){project.currentPrice=price.lastPrice;project.priceSource='toss';project.priceUpdatedAt=price.timestamp||new Date().toISOString();}
       }
       await saveState(true);renderAll();showPage('settings');toast(result.candidates.length?`토스 신규 체결 ${result.candidates.length}건을 찾았습니다.`:'토스 계좌와 대조했습니다. 신규 체결은 없습니다.');
     }catch(error){
@@ -299,6 +307,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('allCheck'in button.dataset){showIssues();return;}
     if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project=projectById(id);if(project){project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');toast('목표 달성 후 운용 방식을 저장했습니다.');});}return;}
     if(button.dataset.lockRecovery){lockRecovery(button.dataset.lockRecovery);return;}
+    if(button.dataset.editRecovery){lockRecovery(button.dataset.editRecovery,true);return;}
     if(button.dataset.restoreProject){const project=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
     if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('기기 저장');return;}
     if('showLogin'in button.dataset){localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');document.getElementById('authGate')?.classList.remove('hidden');return;}
@@ -324,7 +333,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     document.getElementById('modalBackdrop').addEventListener('click',event=>{if(event.target.id==='modalBackdrop')closeModal();});
     document.addEventListener('keydown',event=>{const card=event.target.closest?.('[data-open-project]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')closeModal();});
     document.getElementById('restoreInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
-    document.addEventListener('submit',event=>{if(event.target.id!=='globalSettingsForm')return;event.preventDefault();const form=new FormData(event.target);Object.assign(state.settings,{exchangeRate:Math.max(0,n(form.get('exchangeRate'))),targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW:Math.max(0,n(form.get('warningKRW'))),thresholdKRW:Math.max(1,n(form.get('thresholdKRW'))),appearance:String(form.get('appearance'))});applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast('전체 설정을 저장했습니다.');});});
+    document.addEventListener('submit',event=>{if(event.target.id!=='globalSettingsForm')return;event.preventDefault();const form=new FormData(event.target),thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));Object.assign(state.settings,{exchangeRate:Math.max(0,n(form.get('exchangeRate'))),targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW,appearance:String(form.get('appearance'))});applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast('전체 설정을 저장했습니다.');});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
   }
@@ -339,7 +348,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9-r11').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.1-r12').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
