@@ -2,10 +2,21 @@ const DB_NAME = 'DividendOSDB_V4';
 const DB_VERSION = 1;
 const STORE_NAME = 'kv';
 let database;
+let storageMode = 'indexeddb';
+const memoryStore = new Map();
+const FALLBACK_PREFIX = 'dividend-os-v4:';
 const LEGACY_DB_NAME = 'MSTYProject1000DB_V3';
+
+function enableFallback() {
+  try {
+    const probe=`${FALLBACK_PREFIX}probe`;
+    localStorage.setItem(probe,'1');localStorage.removeItem(probe);storageMode='localstorage';
+  } catch (_) { storageMode='memory'; }
+}
 
 export function openStorage() {
   return new Promise((resolve, reject) => {
+    if(typeof indexedDB==='undefined'){enableFallback();resolve(null);return;}
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -15,11 +26,16 @@ export function openStorage() {
       database = request.result;
       resolve(database);
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => { console.warn('IndexedDB unavailable; using fallback storage.',request.error);enableFallback();resolve(null); };
+    request.onblocked = () => { console.warn('IndexedDB blocked; using fallback storage.');enableFallback();resolve(null); };
   });
 }
 
 export function storageGet(key) {
+  if(storageMode==='memory')return Promise.resolve(memoryStore.get(key));
+  if(storageMode==='localstorage'){
+    try{const value=localStorage.getItem(`${FALLBACK_PREFIX}${key}`);return Promise.resolve(value?JSON.parse(value):undefined);}catch(error){return Promise.reject(error);}
+  }
   return new Promise((resolve, reject) => {
     const tx = database.transaction(STORE_NAME, 'readonly');
     const request = tx.objectStore(STORE_NAME).get(key);
@@ -29,6 +45,10 @@ export function storageGet(key) {
 }
 
 export function storageSet(key, value) {
+  if(storageMode==='memory'){memoryStore.set(key,value);return Promise.resolve();}
+  if(storageMode==='localstorage'){
+    try{localStorage.setItem(`${FALLBACK_PREFIX}${key}`,JSON.stringify(value));return Promise.resolve();}catch(error){return Promise.reject(error);}
+  }
   return new Promise((resolve, reject) => {
     const tx = database.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).put(value, key);
@@ -38,6 +58,10 @@ export function storageSet(key, value) {
 }
 
 export function storageDelete(key) {
+  if(storageMode==='memory'){memoryStore.delete(key);return Promise.resolve();}
+  if(storageMode==='localstorage'){
+    try{localStorage.removeItem(`${FALLBACK_PREFIX}${key}`);return Promise.resolve();}catch(error){return Promise.reject(error);}
+  }
   return new Promise((resolve, reject) => {
     const tx = database.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).delete(key);
