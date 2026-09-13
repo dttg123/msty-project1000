@@ -130,7 +130,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project);
     openModal(`<h3 class="modal-title">${project.symbol} ${edit?'배당 수정':'배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date||todayISO()}"></div>
-      <div><label class="input-label">세후 배당 USD</label><input class="input" name="amountUSD" type="number" min="0.0001" step="0.01" required value="${n(record?.amountUSD)}"></div>
+      <div><label class="input-label">세후 배당 USD</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${n(record?.amountUSD)}"></div>
       <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record?n(record.sharesAtPayment):round(calc.shares,4)}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record?n(record.referencePrice):n(project.currentPrice)}"></div></div>
       <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
