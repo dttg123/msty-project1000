@@ -6,7 +6,7 @@ const APP_FILES = [
   'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js',
   'backup.js', 'sw.js',
   'modules/constants.js', 'modules/utils.js', 'modules/state.js',
-  'modules/portfolio.js', 'modules/format.js', 'modules/views.js'
+  'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/migration.js'
 ];
 
 const encoder = new TextEncoder();
