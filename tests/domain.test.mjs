@@ -187,6 +187,15 @@ function testPerShareFourAndEightPaymentTrend() {
   nearly(calc.perShareTrendPct,44.44444444444444);
   nearly(calc.annualizedDistributionPerShare,234);
   nearly(calc.annualizedCurrentYield,1170);
+  assert.equal(calc.estimateReliable,false);
+  nearly(calc.monthlyEstimate,0);
+}
+
+function testFreshWeeklyIncomeEstimate() {
+  const state=blankState(),project=state.projects[0];project.id='p-msty';project.distributionFrequency='weekly';
+  for(let index=0;index<8;index++){const date=new Date();date.setUTCDate(date.getUTCDate()-index*7);state.dividends.push({id:`fresh-${index}`,projectId:project.id,date:date.toISOString().slice(0,10),amountUSD:10,sharesAtPayment:100});}
+  const calc=engineFor(state).computeProject(project);
+  assert.equal(calc.estimateReliable,true);nearly(calc.medianDividendGapDays,7);nearly(calc.monthlyEstimate,43.3);
 }
 
 function testFullSellRebuyAndCashReconciliation() {
@@ -251,6 +260,7 @@ testOversellGuard();
 testReverseSplitPreservesEconomicGoal();
 testPriceMissingDoesNotInventLoss();
 testPerShareFourAndEightPaymentTrend();
+testFreshWeeklyIncomeEstimate();
 testFullSellRebuyAndCashReconciliation();
 testMixedBuyUsesDividendOnce();
 testTenYearGoalAndCashflowRecovery();
