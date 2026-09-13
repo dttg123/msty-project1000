@@ -941,8 +941,72 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .goal-step-card>.btn { width:calc(100% - 36px); margin-bottom:18px; }
 .goal-recovery { margin-top:12px; margin-bottom:10px; }
 .project-color-dot { display:inline-block; width:9px; height:9px; margin-right:7px; border-radius:50%; }
+
+/* v0.9.6 usability pass: readable type, calm sync feedback, compact detail sections */
+.save-pill:empty { display:none; }
+.save-pill.cloud-busy,.save-pill.cloud-error { display:block; }
+.card-title { font-size:15px; color:var(--text); }
+.sub-number { font-size:13px; line-height:1.45; }
+.metric-label { font-size:12px; line-height:1.35; }
+.tiny { font-size:12px; }
+.row-sub { font-size:13px; }
+.input-label { font-size:13px; }
+.input-hint { font-size:12px; }
+.nav-btn { font-size:12px; }
+.mini-icon { min-width:44px; min-height:44px; padding:0 11px; border-radius:13px; font-size:13px; }
+.inline-actions .mini-icon { min-width:44px; }
+.project-tab { min-height:44px; font-size:14px; }
+.chart-period button { min-width:42px; min-height:40px; padding:7px 10px; font-size:12px; }
+.goal-choice button { min-height:48px; font-size:13px; }
+.income-split span { font-size:11px; }
+.income-split strong { font-size:15px; }
+.home-row-card>div:first-child small { font-size:12px; }
+.home-row-sub { font-size:12px; }
+.pace-badge { font-size:12px; }
+.next-line span { font-size:12px; }
+.next-card p { font-size:12px; }
+.empty-inline { font-size:13px; }
+.records-disclosure { min-height:50px; font-size:14px; }
+.goal-symbol { font-size:13px; }
+.goal-step-card summary small { font-size:13px; }
+.goal-cashflow span { font-size:12px; }
+.goal-cashflow strong { font-size:16px; }
+.project-name { font-size:13px; }
+.tag-pill { font-size:11px; }
+.setup-step small,.ip-box small,.text-button { font-size:12px; }
+.cashflow-legend { display:flex; justify-content:flex-end; gap:14px; margin-top:4px; color:var(--muted); font-size:11px; font-weight:750; }
+.cashflow-legend span { display:flex; align-items:center; gap:5px; }
+.cashflow-legend i { width:9px; height:9px; border-radius:3px; }
+.cashflow-legend .actual-dot { background:var(--accent); }
+.cashflow-legend .estimate-dot { background:rgba(100,91,255,.18); border:1px dashed rgba(100,91,255,.7); }
+.cashflow-month span { font-size:10px; }
+.compact-section { padding:0; }
+.compact-section>summary,.settings-section>summary { list-style:none; min-height:72px; padding:16px 18px; display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:12px; align-items:center; cursor:pointer; }
+.compact-section>summary::-webkit-details-marker,.settings-section>summary::-webkit-details-marker,.form-advanced>summary::-webkit-details-marker { display:none; }
+.compact-section>summary .sub-number,.settings-section>summary .sub-number { margin-top:4px; }
+.compact-section>summary>.chev,.settings-section>summary>.chev { color:var(--muted); font-size:16px; }
+.compact-section[open]>summary>.chev,.settings-section[open]>summary>.chev { transform:rotate(180deg); }
+.compact-section-body,.settings-section-body { padding:0 18px 18px; border-top:1px solid var(--line); }
+.compact-section-body>.progress-track { margin-top:18px; }
+.chart-toolbar { display:flex; justify-content:flex-end; padding-top:14px; }
+.settings-section { padding:0; }
+.settings-section-body { padding-top:16px; }
+.advanced-settings { display:grid; gap:20px; }
+.advanced-settings>section+section { padding-top:18px; border-top:1px solid var(--line); }
+.danger-zone { padding:16px; border-radius:16px; background:var(--red-soft); }
+.form-advanced { border:1px solid var(--line); border-radius:16px; background:var(--surface); overflow:hidden; }
+.form-advanced>summary { min-height:54px; padding:10px 14px; display:flex; flex-direction:column; justify-content:center; cursor:pointer; font-size:14px; font-weight:850; }
+.form-advanced>summary span { margin-top:3px; color:var(--muted); font-size:12px; font-weight:650; }
+.form-advanced>.form-grid { padding:14px; border-top:1px solid var(--line); }
+.toast { font-size:13px; }
 @media (max-width:380px) {
   .save-pill { display:none; }
   .topbar { align-items:flex-start; }
   .metric-grid.three { grid-template-columns:1fr 1fr; }
+}
+@media (max-width:430px) {
+  .metric-grid.three { grid-template-columns:1fr 1fr; }
+  .income-split { gap:5px; }
+  .income-split>div { padding-inline:4px; }
+  .home-primary-amount { font-size:clamp(28px,10vw,38px); }
 }
