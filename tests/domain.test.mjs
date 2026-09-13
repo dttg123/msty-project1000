@@ -99,7 +99,7 @@ function testProjectIsolationAndThirtyYears() {
   }
   let tradeCount=0, dividendCount=0;
   for (let month=0; month<360; month++) {
-    const year=2026+Math.floor(month/12), mm=String(month%12+1).padStart(2,'0');
+    const year=1990+Math.floor(month/12), mm=String(month%12+1).padStart(2,'0');
     for (let index=0; index<state.projects.length; index++) {
       const project=state.projects[index];
       state.trades.push({id:`t-${month}-${index}`,projectId:project.id,symbol:project.symbol,date:`${year}-${mm}-05`,type:'buy',buyType:month%3===0?'reinvest':'direct',shares:index+1,price:8+index+month/100,createdAt:`${month}-${index}`});
@@ -129,7 +129,7 @@ function testTenYearCorporateActionLedgerAgainstReference() {
   const state=blankState(),project=state.projects[0];project.id='p-msty';project.currentPrice=17;project.targetUnits=1000;
   let shares=0,costBasis=0,realized=0,sellProceeds=0,factor=1,normalizedShares=0,dividendsTotal=0,reinvestAmount=0;
   for(let month=0;month<120;month++){
-    const year=2017+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
+    const year=2016+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
     if(month>0&&month%36===0){const ratio=month%72===0?.5:2;state.splits.push({id:`sp-${month}`,projectId:project.id,date:`${year}-${mm}-01`,from:ratio===2?1:2,to:ratio===2?2:1});shares*=ratio;costBasis=costBasis;factor*=ratio;}
     const quantity=1+(month%7),price=8+(month%13)*.37,buyType=month%4===0?'reinvest':'direct';
     state.trades.push({id:`b-${month}`,projectId:project.id,date:`${year}-${mm}-05`,type:'buy',buyType,shares:quantity,price,createdAt:`a-${month}`});
@@ -198,6 +198,16 @@ function testFreshWeeklyIncomeEstimate() {
   assert.equal(calc.estimateReliable,true);nearly(calc.medianDividendGapDays,7);nearly(calc.monthlyEstimate,43.3);
 }
 
+function testFutureActualRecordsAreExcluded() {
+  const state=blankState(),project=state.projects[0];project.id='p-msty';project.currentPrice=10;
+  const tomorrow=new Date();tomorrow.setUTCDate(tomorrow.getUTCDate()+1);const future=tomorrow.toISOString().slice(0,10);
+  state.trades=[{id:'past',projectId:project.id,date:'2026-01-01',type:'buy',buyType:'direct',shares:10,price:10},{id:'future-buy',projectId:project.id,date:future,type:'buy',buyType:'direct',shares:100,price:10}];
+  state.dividends=[{id:'future-dividend',projectId:project.id,date:future,amountUSD:500}];
+  state.splits=[{id:'future-split',projectId:project.id,date:future,from:1,to:10}];
+  const calc=engineFor(state).computeProject(project);
+  nearly(calc.shares,10);nearly(calc.factor,1);nearly(calc.dividendsTotal,0);assert.equal(calc.trades.length,2);assert.equal(calc.postedTrades.length,1);
+}
+
 function testFullSellRebuyAndCashReconciliation() {
   const state=blankState();
   const project=state.projects[0]; project.id='p-cony'; project.currentPrice=11;
@@ -237,16 +247,16 @@ function testTenYearGoalAndCashflowRecovery() {
   const state=blankState(),project=state.projects[0];
   project.id='p-msty';project.targetUnits=1000;project.currentPrice=20;project.afterGoalMode='cashflow';
   for(let month=0;month<120;month++){
-    const year=2017+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
+    const year=2016+Math.floor(month/12),mm=String(month%12+1).padStart(2,'0');
     state.trades.push({id:`goal-t-${month}`,projectId:project.id,date:`${year}-${mm}-05`,type:'buy',buyType:'direct',shares:10,price:10+month/20,createdAt:String(month)});
     state.dividends.push({id:`goal-d-${month}`,projectId:project.id,date:`${year}-${mm}-20`,amountUSD:25,createdAt:String(month)});
   }
   const calc=engineFor(state).computeProject(project);
   nearly(calc.shares,1200);nearly(calc.progress,1.2);
-  assert.equal(calc.targetReachedDate,'2025-04-05');
+  assert.equal(calc.targetReachedDate,'2024-04-05');
   nearly(calc.targetBasisSuggestion,12475);
   project.recovery={locked:true,basis:calc.targetBasisSuggestion,startDate:calc.targetReachedDate};
-  state.trades.push({id:'goal-sell',projectId:project.id,date:'2026-12-01',type:'sell',shares:100,price:21,createdAt:'sell'});
+  state.trades.push({id:'goal-sell',projectId:project.id,date:'2026-08-01',type:'sell',shares:100,price:21,createdAt:'sell'});
   const afterSell=engineFor(state).computeProject(project),recovery=engineFor(state).recoveryStats(afterSell);
   nearly(afterSell.shares,1100);nearly(recovery.sellRecovery,2100);nearly(recovery.dividendRecovery,525);
   nearly(recovery.total,2625);assert.ok(recovery.remaining>0&&recovery.pct>0&&recovery.pct<100);
@@ -261,6 +271,7 @@ testReverseSplitPreservesEconomicGoal();
 testPriceMissingDoesNotInventLoss();
 testPerShareFourAndEightPaymentTrend();
 testFreshWeeklyIncomeEstimate();
+testFutureActualRecordsAreExcluded();
 testFullSellRebuyAndCashReconciliation();
 testMixedBuyUsesDividendOnce();
 testTenYearGoalAndCashflowRecovery();
