@@ -800,6 +800,17 @@ details.clean summary, .mini-icon { position: relative; overflow: hidden; isolat
 .dividend-flow-card strong { display:block; font-size:14px; }
 .dividend-flow-card small { display:block; margin-top:4px; color:var(--accent); font-size:11px; font-weight:750; }
 .dividend-flow-card b { font-size:26px; color:var(--accent); }
+.home-primary-amount { white-space:nowrap; font-size:clamp(28px,8vw,42px); }
+.home-change { margin-top:9px; font-size:12px; font-weight:800; color:rgba(255,255,255,.72); }
+.home-goal-card { cursor:pointer; }
+.home-goal-meta { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:13px; }
+.home-goal-meta span { padding:11px 12px; border-radius:14px; background:var(--surface-strong); border:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:750; }
+.home-goal-meta strong { display:block; margin-top:5px; color:var(--text); font-size:14px; }
+.home-overview { display:grid; padding:0!important; }
+.home-overview button { display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px; min-height:58px; padding:12px 16px; border:0; border-bottom:1px solid var(--line); background:transparent; color:var(--text); text-align:left; }
+.home-overview button:last-child { border-bottom:0; }
+.home-overview span { color:var(--muted); font-size:12px; font-weight:750; }
+.home-overview strong { font-size:15px; white-space:nowrap; }
 .dividend-balance-card { margin-top:0; }
 .dividend-projects { display:grid; gap:10px; }
 .dividend-project-card { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; }
