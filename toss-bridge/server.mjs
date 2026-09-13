@@ -78,7 +78,10 @@ async function tossGet(path,accountSeq){
   return data.result;
 }
 
-function validDate(value,fallback){return /^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?String(value):fallback;}
+function validDate(value,fallback){
+  const text=String(value||''),match=text.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!match)return fallback;
+  const date=new Date(`${text}T00:00:00Z`);return !Number.isNaN(date.getTime())&&date.getUTCFullYear()===Number(match[1])&&date.getUTCMonth()+1===Number(match[2])&&date.getUTCDate()===Number(match[3])?text:fallback;
+}
 function validSymbols(value){
   const seen=new Set();
   return String(value||'').split(',').map(item=>item.trim().toUpperCase()).filter(symbol=>/^[A-Z0-9.-]{1,16}$/.test(symbol)&&!seen.has(symbol)&&seen.add(symbol)).slice(0,200);
@@ -104,7 +107,7 @@ app.get('/health',(_req,res)=>res.json({ok:true,mode:'read-only',ordersEnabled:f
 app.get('/v1/toss/snapshot',authorize,async(req,res)=>{
   try{
     const today=new Date().toISOString().slice(0,10);
-    const from=validDate(req.query.from,process.env.TOSS_DEFAULT_FROM||'2020-01-01');
+    const requestedFrom=validDate(req.query.from,process.env.TOSS_DEFAULT_FROM||'2020-01-01'),from=requestedFrom>today?today:requestedFrom;
     const accounts=await tossGet('/api/v1/accounts');
     const configured=process.env.TOSS_ACCOUNT_SEQ;
     const account=accounts.find(row=>configured&&String(row.accountSeq)===String(configured))||accounts.find(row=>row.accountType==='BROKERAGE')||accounts[0];
