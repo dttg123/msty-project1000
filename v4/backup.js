@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.9.4';
+export const APP_VERSION = '0.9.5';
 export const DATA_SCHEMA_VERSION = 4;
 
 const APP_FILES = [
@@ -6,7 +6,7 @@ const APP_FILES = [
   'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js',
   'backup.js', 'sw.js',
   'modules/constants.js', 'modules/utils.js', 'modules/state.js',
-  'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/dividend-view.js', 'modules/migration.js', 'modules/toss.js'
+  'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
 ];
 
 const encoder = new TextEncoder();
