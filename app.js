@@ -6,7 +6,8 @@ import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constant
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js';\nimport { buildMigrationAudit } from './modules/migration.js';
+import { createViews } from './modules/views.js';
+import { buildMigrationAudit } from './modules/migration.js';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -24,7 +25,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let applyingCloudState = false;
   let saveTimer = null;
   let cloudTimer = null;
-  let toastTimer = null;\n  let legacyMigrationSource = null;
+  let toastTimer = null;
+  let legacyMigrationSource = null;
 
   const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
   const { activeProjects, projectById, projectRows, computeProject, recoveryStats, totals } = portfolio;
@@ -265,7 +267,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
-    if('reviewToss'in button.dataset){reviewTossCandidates();return;}\n    if('migrateV3'in button.dataset){previewLegacyMigration();return;}
+    if('reviewToss'in button.dataset){reviewTossCandidates();return;}
+    if('migrateV3'in button.dataset){previewLegacyMigration();return;}
     if('logout'in button.dataset){logoutGoogle();return;}
     if('reset'in button.dataset){confirmAction('V4 전체 초기화','V4 거래·배당·프로젝트를 초기화합니다. V3.2.1 원본은 유지됩니다.',async()=>{await storageSet(SAFETY_KEY,clone(state));await storageDelete(STATE_KEY);state=blankState();selectedProjectId=state.projects[0].id;await saveState(true);renderAll();showPage('home');toast('V4 데이터를 초기화했습니다.');},'초기화');return;}
     if('closeModal'in button.dataset){closeModal();return;}
