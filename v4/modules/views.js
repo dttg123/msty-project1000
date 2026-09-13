@@ -67,7 +67,7 @@ export function createViews(context) {
   }
   function projectSummaryCard(calc) {
     const colors=projectColors(calc.project), pct=calc.progress*100;
-    return `<article class="card compact project-list-card" data-open-project="${calc.project.id}" style="border-left:4px solid ${colors[0]}">
+    return `<article class="card compact project-list-card" data-open-project="${calc.project.id}" tabindex="0" role="button" aria-label="${esc(calc.project.symbol)} 프로젝트 열기" style="border-left:4px solid ${colors[0]}">
       <div class="card-head"><div><div class="row-title">${esc(calc.project.symbol)} · ${esc(calc.project.tag)}</div><div class="row-sub">${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</div></div><span class="status-pill">${fmtPct(pct)}</span></div>
       ${progress(pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
       <div class="summary-grid" style="margin-top:12px"><div class="summary-chip"><div class="label">월 예상</div><div class="value">${fmtMoney(calc.monthlyEstimate,0)}</div></div><div class="summary-chip"><div class="label">총손익</div><div class="value ${signClass(calc.totalReturn)}">${fmtMoney(calc.totalReturn,0)}</div></div></div>
@@ -153,7 +153,7 @@ export function createViews(context) {
           <div><label class="input-label">참고 환율 (1달러)</label><input class="input" name="exchangeRate" type="number" min="0" step="1" value="${n(state.settings.exchangeRate)}"></div>
           <div><label class="input-label">전체 월배당 목표 USD</label><input class="input" name="targetMonthlyDividend" type="number" min="0" step="1" value="${n(state.settings.targetMonthlyDividend)}"></div>
           <div><label class="input-label">연 배당 경고금액 (원)</label><input class="input" name="warningKRW" type="number" min="0" step="10000" value="${n(state.settings.warningKRW)}"></div>
-          <div><label class="input-label">연 배당 관리기준 (원)</label><input class="input" name="thresholdKRW" type="number" min="1" step="10000" value="${n(state.settings.thresholdKRW)}"></div>
+          <div><label class="input-label">연 배당 관리기준 (원)</label><input class="input" name="thresholdKRW" type="number" min="0" step="10000" value="${n(state.settings.thresholdKRW)}"></div>
           <div><label class="input-label">화면 테마</label><select class="input select" name="appearance"><option value="system" ${state.settings.appearance==='system'?'selected':''}>기기 설정</option><option value="light" ${state.settings.appearance==='light'?'selected':''}>라이트</option><option value="dark" ${state.settings.appearance==='dark'?'selected':''}>다크</option></select></div>
           <button class="btn primary" type="submit">설정 저장</button>
         </form></article>
