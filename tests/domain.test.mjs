@@ -117,8 +117,44 @@ function testOversellGuard() {
   assert.equal(calc.oversells.length,1);
 }
 
+function testFullSellRebuyAndCashReconciliation() {
+  const state=blankState();
+  const project=state.projects[0]; project.id='p-cony'; project.currentPrice=11;
+  state.trades=[
+    {id:'b1',projectId:project.id,date:'2024-01-02',type:'buy',buyType:'direct',shares:100,price:10},
+    {id:'s1',projectId:project.id,date:'2024-03-01',type:'sell',shares:40,price:12},
+    {id:'s2',projectId:project.id,date:'2024-04-01',type:'sell',shares:60,price:8},
+    {id:'b2',projectId:project.id,date:'2024-05-01',type:'buy',buyType:'direct',shares:25,price:9}
+  ];
+  state.dividends=[{id:'d1',projectId:project.id,date:'2024-02-01',amountUSD:50}];
+  state.cashAdjustments=[{id:'c1',projectId:project.id,date:'2024-05-02',amountUSD:5}];
+  const calc=engineFor(state).computeProject(project);
+  nearly(calc.shares,25);
+  nearly(calc.costBasis,225);
+  nearly(calc.avgCost,9);
+  nearly(calc.realized,-40);
+  nearly(calc.dividendAvailable,55);
+  nearly(calc.totalReturn,60);
+}
+
+function testMixedBuyUsesDividendOnce() {
+  const state=blankState();
+  const project=state.projects[0]; project.id='p-jepq'; project.currentPrice=54.25;
+  state.dividends=[{id:'d1',projectId:project.id,date:'2025-01-15',amountUSD:100}];
+  state.trades=[{id:'b1',projectId:project.id,date:'2025-02-02',type:'buy',buyType:'mixed',shares:1,price:50,reinvestAmountUSD:40}];
+  const calc=engineFor(state).computeProject(project);
+  nearly(calc.shares,1);
+  nearly(calc.costBasis,50);
+  nearly(calc.directBuyCost,10);
+  nearly(calc.reinvestAmount,40);
+  nearly(calc.reinvestShares,.8);
+  nearly(calc.dividendAvailable,60);
+}
+
 testLegacyRepairAndMigration();
 testSplitSellAndRecovery();
 testProjectIsolationAndThirtyYears();
 testOversellGuard();
+testFullSellRebuyAndCashReconciliation();
+testMixedBuyUsesDividendOnce();
 console.log('DividendOS v0.9 domain QA: PASS');
