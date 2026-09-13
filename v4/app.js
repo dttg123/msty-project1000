@@ -1,5 +1,5 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.2-r17';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.3-r18';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
@@ -9,7 +9,7 @@ import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { fetchTossSnapshot, isTossBridgeConfigured } from './toss-client.js?v=0.9.2-r17';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.3-r18';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -30,6 +30,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let toastTimer = null;
   let legacyMigrationSource = null;
   let tossSyncRunning = false;
+  let tossSetup = { ip:'', busy:'', message:'' };
   let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
 
   const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
@@ -72,6 +73,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
     getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getCurrentUser:() => currentUser, isTossBridgeConfigured,
+    getTossConnectionMode, getTossLocalConfig, getTossSetup:() => tossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -248,6 +250,36 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     });
   }
 
+  async function showCurrentTossIp() {
+    if(tossSetup.busy)return;
+    tossSetup={...tossSetup,busy:'ip',message:''};renderSettings();showPage('settings');
+    try{tossSetup={ip:await fetchCurrentPublicIp(),busy:'',message:'이 IP를 토스 허용 IP에 등록해 주세요.'};}
+    catch(error){tossSetup={...tossSetup,busy:'',message:error?.message||'현재 IP 확인에 실패했습니다.'};}
+    renderSettings();showPage('settings');
+  }
+
+  async function copyTossIp() {
+    if(!tossSetup.ip){await showCurrentTossIp();if(!tossSetup.ip)return;}
+    try{await navigator.clipboard.writeText(tossSetup.ip);toast('현재 IP를 복사했습니다.');}
+    catch(_){openModal(`<h3 class="modal-title">현재 IP</h3><p class="modal-desc">길게 눌러 복사한 뒤 토스 허용 IP에 붙여넣으세요.</p><input class="input" readonly value="${esc(tossSetup.ip)}" onclick="this.select()"><button class="btn primary" style="width:100%;margin-top:12px" data-close-modal>확인</button>`);}
+  }
+
+  async function testTossBrowser() {
+    if(tossSetup.busy)return;
+    tossSetup={...tossSetup,busy:'test',message:'토스 브라우저 연결을 확인하고 있습니다.'};renderSettings();showPage('settings');
+    try{
+      const result=await testTossDirectConnection();
+      tossSetup={...tossSetup,busy:'',message:`직접 연결 성공 · 계좌 ${result.accountCount}개 확인`};
+      state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';
+      toast('토스 직접 연결에 성공했습니다.');
+    }catch(error){
+      tossSetup={...tossSetup,busy:'',message:error?.message||'토스 연결 시험에 실패했습니다.'};
+      state.integrations.toss.status='error';state.integrations.toss.lastError=tossSetup.message;
+      toast(tossSetup.message);
+    }
+    renderSettings();showPage('settings');
+  }
+
   async function syncTossReadOnly() {
     if(tossSyncRunning)return;
     tossSyncRunning=true;
@@ -320,6 +352,11 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
+    if('checkTossIp'in button.dataset){showCurrentTossIp();return;}
+    if('copyTossIp'in button.dataset){copyTossIp();return;}
+    if('openTossSettings'in button.dataset){window.open(getTossSettingsUrl(),'_blank','noopener,noreferrer');return;}
+    if('testTossDirect'in button.dataset){testTossBrowser();return;}
+    if('clearTossDirect'in button.dataset){confirmAction('토스 연결정보 삭제','이 기기에 저장된 Client ID와 Secret만 삭제합니다.',async()=>{clearTossLocalConfig();tossSetup={ip:tossSetup.ip,busy:'',message:'이 기기의 토스 연결정보를 삭제했습니다.'};state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';renderSettings();showPage('settings');toast('토스 연결정보를 삭제했습니다.');},'삭제');return;}
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('migrateV3'in button.dataset){previewLegacyMigration();return;}
@@ -342,6 +379,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     document.addEventListener('keydown',event=>{const card=event.target.closest?.('[data-open-project]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')closeModal();});
     document.getElementById('restoreInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.addEventListener('submit',event=>{if(event.target.id!=='globalSettingsForm')return;event.preventDefault();const form=new FormData(event.target),thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));Object.assign(state.settings,{exchangeRate:Math.max(0,n(form.get('exchangeRate'))),targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW,appearance:String(form.get('appearance'))});applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast('전체 설정을 저장했습니다.');});});
+    document.addEventListener('submit',event=>{if(event.target.id!=='tossDirectForm')return;event.preventDefault();try{const form=new FormData(event.target);saveTossLocalConfig({clientId:form.get('clientId'),clientSecret:form.get('clientSecret')});tossSetup={...tossSetup,message:'이 기기에만 저장했습니다. 현재 IP 등록 후 연결 시험을 눌러 주세요.'};state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';renderSettings();showPage('settings');toast('토스 연결정보를 기기에 저장했습니다.');}catch(error){toast(error?.message||'토스 연결정보를 저장하지 못했습니다.');}});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
   }
@@ -356,7 +394,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.2-r17').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.3-r18').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
