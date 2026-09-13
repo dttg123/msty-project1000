@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { blankProject, blankState, migrate, migrateLegacy, normalizeV4 } from '../modules/state.js';
-import { createPortfolioEngine } from '../modules/portfolio.js';
+import { createPortfolioEngine } from '../modules/portfolio.js';\nimport { buildMigrationAudit, summarizeLegacyState } from '../modules/migration.js';
 
 function engineFor(state, selected = state.projects[0]?.id || '') {
   return createPortfolioEngine(() => state, () => selected);
@@ -36,6 +36,18 @@ function testLegacyRepairAndMigration() {
   assert.ok(migrated.dividends.every(row => row.projectId === 'p-msty' && row.symbol === 'MSTY'));
   const viaGeneric = migrate(legacy);
   assert.equal(viaGeneric.meta.migratedFrom, 'MSTY PROJECT1000 V3.2.1');
+  assert.equal(migrated.settings.displayCurrency, 'KRW');
+  const calc=engineFor(migrated).computeProject(migrated.projects[0]);
+  const audit=buildMigrationAudit(legacy,migrated,calc);
+  assert.equal(audit.passed,true);
+  assert.equal(audit.source.tradeCount,3);
+  assert.equal(audit.source.dividendCount,3);
+  const summary=summarizeLegacyState(legacy);
+  nearly(summary.shares,10);
+  const changed=structuredClone(migrated);changed.dividends[0].amountUSD+=1;
+  const changedAudit=buildMigrationAudit(legacy,changed,engineFor(changed).computeProject(changed.projects[0]));
+  assert.equal(changedAudit.passed,false);
+  assert.equal(changedAudit.checks.find(check=>check.key==='dividendsTotal').passed,false);
 }
 
 function testSplitSellAndRecovery() {
