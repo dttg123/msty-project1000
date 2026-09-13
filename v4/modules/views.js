@@ -21,10 +21,10 @@ export function createViews(context) {
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
   }
   function chartSeries(projectId=null) {
-    const rows=projectId?projectRows('dividends',projectId):state.dividends;
+    const today=new Date().toISOString().slice(0,10),rows=(projectId?projectRows('dividends',projectId):state.dividends).filter(row=>String(row.date)<=today);
     const grouped=new Map(); rows.forEach(row=>{const key=periodKey(row.date,getChartMode());if(key)grouped.set(key,(grouped.get(key)||0)+n(row.amountUSD));});
     const count=getChartMode()==='year'?5:6;
-    return [...grouped.entries()].sort(([a],[b])=>a.localeCompare(b)).slice(-count).map(([key,value])=>({key,label:getChartMode()==='year'?key:getChartMode()==='month'?`${Number(key.slice(5))}월`:`${Number(key.slice(5,7))}/${Number(key.slice(8))}`,value}));
+    return [...grouped.entries()].sort(([a],[b])=>a.localeCompare(b)).slice(-count).map(([key,value])=>({key,label:getChartMode()==='year'?key:getChartMode()==='month'?`${key.slice(2,4)}.${key.slice(5,7)}`:`${key.slice(2,4)}.${key.slice(5,7)}/${key.slice(8,10)}`,value}));
   }
   function chartHTML(projectId=null) {
     const series=chartSeries(projectId), max=Math.max(1,...series.map(x=>x.value));
