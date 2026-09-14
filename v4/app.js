@@ -1,15 +1,15 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.7-r24';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.8-r26';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.9.7-r24';
+import { createViews } from './modules/views.js?v=0.9.8-r26';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.7-r24';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.8-r26';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -246,7 +246,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       setSaveStatus('','cloud-ok');
     }catch(error){console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
-  async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.toggle('hidden',localOnlySession);},onError:message=>toast(message,{haptic:true})});}
+  async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:message=>toast(message,{haptic:true})});}
 
   function refreshTossComparisons() {
     const toss=state.integrations.toss;
@@ -405,7 +405,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.7-r25').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.8-r26').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

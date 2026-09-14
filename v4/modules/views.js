@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.7-r24';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.8-r26';
 
 export function createViews(context) {
   const {
@@ -48,7 +48,7 @@ export function createViews(context) {
   }
   function renderHome() {
     const total=totals(),metrics=buildHomeMetrics(total.rows,state.dividends),goal=metrics.nextGoal,paceChange=metrics.pace.change;
-    document.getElementById('page-home').innerHTML=`${sectionTitle('배당 현황','실제 입금 중심')}
+    document.getElementById('page-home').innerHTML=`${sectionTitle('홈','배당 현금흐름')}
       <div class="stack home-flow">
         <article class="card accent income-hero"><div class="card-head"><div><div class="card-kicker">이번 달 배당</div><div class="sub-number">실제 입금과 남은 예상</div></div><span class="tag-pill">${new Date().getMonth()+1}월</span></div><div class="big-number home-primary-amount">${fmtMoney(metrics.month.total,0)}</div><div class="income-split"><div><span>입금 완료</span><strong>${fmtMoney(metrics.month.actual,0)}</strong></div><div><span>남은 예상</span><strong>${fmtMoney(metrics.month.remaining,0)}</strong></div><div><span>이번 달 예상</span><strong>${fmtMoney(metrics.month.total,0)}</strong></div></div></article>
         <article class="card compact home-row-card"><div><span>올해 받은 배당</span><small>1월부터 오늘까지</small></div><strong>${fmtMoney(metrics.year.actual,0)}</strong><div class="home-row-sub"><span>연말까지 예상</span><b>${fmtMoney(metrics.year.total,0)}</b></div></article>
@@ -95,48 +95,34 @@ export function createViews(context) {
     if(!selectedProjectId||!projects.some(project=>project.id===selectedProjectId)){selectedProjectId=projects[0]?.id||'';setSelectedProjectId(selectedProjectId);}
     const calc=computeProject(selectedProjectId), page=document.getElementById('page-projects');
     if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<article class="card empty-project"><p>등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
-    const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc), shown=getRecordsExpanded()?rows:rows.slice(0,5);
+    const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc);
     page.innerHTML=`
       <div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
       <div class="portfolio-categories"><button class="${category==='highYield'?'active':''}" data-portfolio-category="highYield"><span>고배당주</span><strong>${allProjects.filter(x=>x.category==='highYield').length}</strong></button><button class="${category==='dividend'?'active':''}" data-portfolio-category="dividend"><span>배당주</span><strong>${allProjects.filter(x=>x.category==='dividend').length}</strong></button></div>
       <div class="project-tabs">${projects.map(x=>`<button class="project-tab ${x.id===p.id?'active':''}" data-select-project="${x.id}">${esc(x.symbol)}</button>`).join('')}</div>
-      <div class="stack">
-        <article class="card project-hero" style="--project-a:${colors[0]};--project-b:${colors[1]}">
-          <div class="card-head"><div><div class="project-symbol">${esc(p.symbol)}</div><div class="project-name">${esc(p.name)}</div></div><span class="tag-pill">${esc(p.tag)}</span></div>
-          <div class="big-number">${calc.priceAvailable?fmtMoney(calc.marketValue):'현재가 입력 필요'}</div><div class="sub-number">${calc.priceAvailable?`평가손익 ${fmtSignedMoney(calc.unrealized)}`:'현재가가 없어 평가손익을 계산하지 않았습니다.'}</div>
-          <div class="metric-grid"><div class="metric"><div class="metric-label">보유주수</div><div class="metric-value">${fmtShares(calc.shares)}주</div></div><div class="metric"><div class="metric-label">평균단가</div><div class="metric-value">${fmtMoney(calc.avgCost)}</div></div></div>
-          <div class="tiny muted" style="margin-top:10px">현재가 ${calc.priceAvailable?fmtMoney(calc.currentPrice):'미입력'} · ${p.priceSource==='toss'?'토스 조회':'직접 입력'}${p.priceUpdatedAt?` · ${fmtDate(String(p.priceUpdatedAt).slice(0,10))}`:''}</div>
+      <div class="stack portfolio-stack">
+        <article class="card portfolio-summary" style="--project-a:${colors[0]};--project-b:${colors[1]}">
+          <div class="portfolio-heading"><div><div class="project-symbol">${esc(p.symbol)}</div><div class="project-name">${esc(p.name)}</div></div><span class="tag-pill">${esc(p.tag)}</span></div>
+          <div class="holding-row"><div><span>보유주수</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>평균단가</span><strong>${fmtMoney(calc.avgCost)}</strong></div></div>
+          <div class="value-line"><span>평가금액</span><strong>${calc.priceAvailable?fmtMoney(calc.marketValue):'현재가 미입력'}</strong><small class="${calc.priceAvailable?signClass(calc.unrealized):''}">${calc.priceAvailable?`평가손익 ${fmtSignedMoney(calc.unrealized)}`:'설정에서 현재가를 입력하면 계산됩니다.'}</small></div>
         </article>
-        <article class="card portfolio-income-card">
-          <div class="card-head"><div><div class="card-title">배당</div><div class="sub-number">세후 실제 입금 기준</div></div><span class="status-pill">${p.distributionFrequency==='weekly'?'주배당':'월배당'}</span></div>
-          <div class="portfolio-income-main"><div><span>최근 월환산</span><strong>${calc.estimateReliable?fmtMoney(calc.monthlyEstimate,0):'기록 부족'}</strong></div><div><span>이번 달 입금</span><strong>${fmtMoney(calc.currentMonthDividends,0)}</strong></div><div><span>사용 가능</span><strong class="${signClass(calc.dividendAvailable)}">${fmtMoney(calc.dividendAvailable,0)}</strong></div></div>
-          ${calc.estimateStale?'<div class="tiny warning" style="margin-top:10px">최근 지급 간격이 설정한 배당 주기와 달라 월환산을 숨겼습니다.</div>':''}
-          <div class="quick-grid"><button class="btn primary" data-add-trade>거래 입력</button><button class="btn secondary" data-add-dividend>배당 입력</button><button class="btn soft" data-add-cash>잔액 보정</button></div>
-          <details class="income-detail"><summary>배당 상세 보기 <b class="chev">⌄</b></summary><div class="income-detail-body">${calc.stablePerShare?`<div class="list"><div class="list-row"><div><div class="row-title">주당 분배금 흐름</div><div class="row-sub">최근 ${p.distributionFrequency==='weekly'?'4회':'1회'} ${fmtMoney(calc.shortPerShare,4)} · ${p.distributionFrequency==='weekly'?'8회':'3회'} ${fmtMoney(calc.stablePerShare,4)}</div></div><div class="row-value ${signClass(calc.perShareTrendPct)}">${calc.perShareTrendPct>=0?'+':''}${fmtPct(calc.perShareTrendPct)}</div></div>${calc.priceAvailable&&calc.estimateReliable?`<div class="list-row"><div><div class="row-title">현재가 기준 단순 연환산 분배율</div><div class="row-sub">최근 주당 평균을 연환산한 참고값</div></div><div class="row-value">${fmtPct(calc.annualizedCurrentYield)}</div></div>`:''}<div class="list-row"><div><div class="row-title">누적 세후배당</div><div class="row-sub">입력한 실입금 합계</div></div><div class="row-value positive">${fmtMoney(calc.dividendsTotal)}</div></div></div>`:'<div class="empty-inline">배당 기록이 쌓이면 주당 흐름을 보여줍니다.</div>'}</div></details>
+        <article class="card portfolio-cashflow">
+          <div class="portfolio-heading"><div><div class="card-title">배당 현금흐름</div><div class="sub-number">세후 실제 입금 기준</div></div><span class="status-pill">${p.distributionFrequency==='weekly'?'주배당':'월배당'}</span></div>
+          <div class="cashflow-primary"><span>최근 월환산</span><strong>${calc.estimateReliable?fmtMoney(calc.monthlyEstimate,0):'기록 부족'}</strong></div>
+          <div class="cashflow-secondary"><div><span>이번 달 입금</span><strong>${fmtMoney(calc.currentMonthDividends,0)}</strong></div><div><span>사용 가능</span><strong class="${signClass(calc.dividendAvailable)}">${fmtMoney(calc.dividendAvailable,0)}</strong></div></div>
+          ${calc.estimateStale?'<div class="tiny warning" style="margin-top:10px">최근 지급 간격이 달라 월환산을 숨겼습니다.</div>':''}
+          <div class="entry-actions"><button class="btn primary" data-add-trade>거래</button><button class="btn secondary" data-add-dividend>배당금 입금</button><button class="btn soft" data-add-cash>잔액 보정</button></div>
         </article>
-        <details class="card compact-section">
-          <summary><div><div class="card-title">성과 구성</div><div class="sub-number">가격손익과 배당을 분리</div></div><strong class="${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtSignedMoney(calc.totalReturn):'계산 대기'}</strong><b class="chev">⌄</b></summary>
-          <div class="compact-section-body">
-          <div class="metric-grid three"><div class="metric"><div class="metric-label">평가손익</div><div class="metric-value ${calc.priceAvailable?signClass(calc.unrealized):''}">${pricedMoney(calc,calc.unrealized)}</div></div><div class="metric"><div class="metric-label">실현손익</div><div class="metric-value ${signClass(calc.realized)}">${fmtSignedMoney(calc.realized)}</div></div><div class="metric"><div class="metric-label">누적배당</div><div class="metric-value positive">${fmtMoney(calc.dividendsTotal)}</div></div></div>
+        <details class="card portfolio-details">
+          <summary><div><strong>상세정보 · 기록</strong><span>성과, 목표, 그래프, 거래내역</span></div><b class="chev">⌄</b></summary>
+          <div class="portfolio-details-body">
+            <section class="detail-block"><div class="detail-title"><strong>성과</strong><span class="${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtSignedMoney(calc.totalReturn):'현재가 필요'}</span></div><div class="detail-grid"><div><span>평가손익</span><strong class="${calc.priceAvailable?signClass(calc.unrealized):''}">${pricedMoney(calc,calc.unrealized)}</strong></div><div><span>누적배당</span><strong class="positive">${fmtMoney(calc.dividendsTotal)}</strong></div></div></section>
+            <section class="detail-block"><div class="detail-title"><strong>목표</strong><span>${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</span></div>${progress(pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="detail-note">${fmtShares(Math.max(0,calc.currentTarget-calc.shares))}주 남음 · 재투자 ${fmtShares(calc.reinvestShares)}주</div></section>
+            ${p.recovery?.locked?`<section class="detail-block"><div class="detail-title"><strong>원금회수</strong><span>${fmtPct(rec.pct)}</span></div>${progress(rec.pct)}<div class="detail-note">회수 ${fmtMoney(rec.total)} · 남은 원금 ${fmtMoney(rec.remaining)}</div><button class="btn soft small" data-edit-recovery="${p.id}">회수 기준 수정</button></section>`:''}
+            <section class="detail-block"><div class="detail-title"><strong>배당 흐름</strong><div class="chart-period">${[['week','주'],['month','월'],['year','년']].map(([mode,label])=>`<button type="button" data-chart-mode="${mode}" class="${getChartMode()===mode?'active':''}">${label}</button>`).join('')}</div></div><div id="projectChart">${chartHTML(p.id)}</div></section>
+            <section class="detail-block"><div class="detail-title"><strong>거래내역</strong><button class="mini-icon" data-project-settings>종목 설정</button></div><button class="records-disclosure" data-toggle-records><span>${getRecordsExpanded()?'기록 접기':`기록 ${rows.length}건 보기`}</span><b>${getRecordsExpanded()?'⌃':'⌄'}</b></button>${getRecordsExpanded()?`<div class="list records-list">${rows.map(recordRow).join('')||'<div class="empty">아직 기록이 없습니다.</div>'}</div>`:''}<div class="support-actions"><button class="btn soft small" data-add-split>분할·역분할</button><button class="btn soft small" data-project-check>점검</button></div></section>
           </div>
         </details>
-        <details class="card compact-section">
-          <summary><div><div class="card-title">목표</div><div class="sub-number">${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</div></div><strong>${fmtPct(pct)}</strong><b class="chev">⌄</b></summary>
-          <div class="compact-section-body">
-          ${progress(pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
-          <div class="metric-grid three"><div class="metric"><div class="metric-label">남은 주수</div><div class="metric-value">${fmtShares(Math.max(0,calc.currentTarget-calc.shares))}주</div></div><div class="metric"><div class="metric-label">재투자 보유분</div><div class="metric-value">${fmtShares(calc.reinvestShares)}주</div></div><div class="metric"><div class="metric-label">원금회수</div><div class="metric-value">${fmtPct(rec.pct)}</div></div></div>
-          ${Math.abs(calc.factor-1)>.0000001?`<div class="tiny muted" style="margin-top:9px">원래 목표 ${fmtShares(p.targetUnits)}주 → 분할·역분할 조정 목표 ${fmtShares(calc.currentTarget)}주 · 경제적 목표는 유지됩니다.</div>`:''}
-          ${calc.targetReachedDate&&calc.progress<1?`<div class="tiny muted" style="margin-top:9px">${fmtDate(calc.targetReachedDate)}에 목표를 달성했지만 현재는 매도 반영 후 다시 ${fmtShares(calc.currentTarget)}주를 기준으로 계산합니다.</div>`:''}
-          </div>
-        </details>
-        ${p.recovery?.locked?`<details class="card compact-section"><summary><div><div class="card-title">원금회수</div><div class="sub-number">${fmtMoney(rec.total)} / ${fmtMoney(p.recovery.basis)}</div></div><strong>${fmtPct(rec.pct)}</strong><b class="chev">⌄</b></summary><div class="compact-section-body"><div class="sub-number">${fmtDate(p.recovery.startDate)}부터 집계 · 남은 원금 ${fmtMoney(rec.remaining)}</div>${progress(rec.pct)}<div class="metric-grid"><div class="metric"><div class="metric-label">배당 회수</div><div class="metric-value">${fmtMoney(rec.dividendRecovery)}</div></div><div class="metric"><div class="metric-label">매도 회수</div><div class="metric-value">${fmtMoney(rec.sellRecovery)}</div></div></div><button class="btn soft" style="width:100%;margin-top:12px" data-edit-recovery="${p.id}">기준 수정</button></div></details>`:''}
-        <details class="card compact-section"><summary><div><div class="card-title">배당 흐름</div><div class="sub-number">${esc(p.symbol)} 실제 입력 기록</div></div><b class="chev">⌄</b></summary><div class="compact-section-body"><div class="chart-toolbar">${periodButtons()}</div><div id="projectChart">${chartHTML(p.id)}</div></div></details>
-        <article class="card">
-          <div class="card-head"><div><div class="card-title">거래 · 배당금 입금</div><div class="sub-number">기록은 기본으로 접혀 있습니다</div></div><button class="mini-icon" data-project-settings>설정</button></div>
-          <button class="records-disclosure" data-toggle-records><span>${getRecordsExpanded()?'기록 접기':`기록 ${rows.length}건 보기`}</span><b>${getRecordsExpanded()?'⌃':'⌄'}</b></button>
-          ${getRecordsExpanded()?`<div class="list records-list">${rows.map(recordRow).join('')||'<div class="empty">아직 기록이 없습니다.</div>'}</div>`:''}
-          <div class="quick-grid"><button class="btn soft" data-add-split>분할·역분할</button><button class="btn soft" data-project-settings>프로젝트 설정</button><button class="btn soft" data-project-check>점검</button></div>
-        </article>
       </div>`;
   }
 
