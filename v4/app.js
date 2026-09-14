@@ -1,15 +1,15 @@
 import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.8-r28';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.9-r29';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.9.8-r28';
+import { createViews } from './modules/views.js?v=0.9.9-r29';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.8-r28';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.9-r29';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
@@ -23,6 +23,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let chartMode = 'month';
   let recordsExpanded = false;
   let portfolioDetailsExpanded = false;
+  let cashflowMonthKey = '';
+  let homeBreakdownExpanded = false;
   let portfolioCategory = 'highYield';
   let currentUser = null;
   let cloudUnsubscribe = null;
@@ -74,7 +76,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getPortfolioDetailsExpanded:() => portfolioDetailsExpanded, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
+    getChartMode:() => chartMode, getRecordsExpanded:() => recordsExpanded, getPortfolioDetailsExpanded:() => portfolioDetailsExpanded, getCashflowMonthKey:() => cashflowMonthKey, getHomeBreakdownExpanded:() => homeBreakdownExpanded, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup:() => tossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -338,6 +340,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(button.dataset.page){showPage(button.dataset.page);return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency;saveState();renderAll();showPage(currentPage);return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;renderHome();renderProjects();return;}
+    if(button.dataset.cashflowMonth){cashflowMonthKey=button.dataset.cashflowMonth;renderHome();return;}
+    if('toggleHomeBreakdown'in button.dataset){homeBreakdownExpanded=!homeBreakdownExpanded;renderHome();return;}
     if(button.dataset.portfolioCategory){portfolioCategory=button.dataset.portfolioCategory;const first=activeProjects().find(project=>project.category===portfolioCategory);if(first)selectedProjectId=first.id;recordsExpanded=false;portfolioDetailsExpanded=false;renderProjects();return;}
     if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');return;}
     if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
@@ -407,7 +411,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.8-r28').catch(console.warn);
+      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.9-r29').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

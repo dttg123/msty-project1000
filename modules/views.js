@@ -1,10 +1,10 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.8-r28';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.9-r29';
 
 export function createViews(context) {
   const {
-    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getRecordsExpanded, getPortfolioDetailsExpanded, getPortfolioCategory, setPortfolioCategory, getCurrentUser, isTossBridgeConfigured,
+    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getRecordsExpanded, getPortfolioDetailsExpanded, getCashflowMonthKey, getHomeBreakdownExpanded, getPortfolioCategory, setPortfolioCategory, getCurrentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -42,18 +42,18 @@ export function createViews(context) {
     return `<div class="column-chart compact-chart">${series.map(x=>`<div class="column-item"><div class="column-value" title="${esc(fmtMoney(x.value,0))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${Math.max(7,x.value/max*108)}px"></div></div><div class="column-label">${esc(x.label)}</div></div>`).join('')}</div>`;
   }
 
-  function cashflowChart(months) {
+  function cashflowChart(months,selectedKey) {
     const max=Math.max(1,...months.map(item=>item.actual+item.estimated));
-    return `<div class="cashflow-legend"><span><i class="actual-dot"></i>실제 입금</span><span><i class="estimate-dot"></i>남은 예상</span></div><div class="cashflow-chart" aria-label="최근 12개월 배당 실제와 예상">${months.map(item=>`<div class="cashflow-month" title="${esc(item.key)} · 실제 ${esc(fmtMoney(item.actual))}${item.estimated?` · 예상 ${esc(fmtMoney(item.estimated))}`:''}"><div class="cashflow-bars"><i class="cashflow-estimate" style="height:${item.estimated/max*112}px"></i><i class="cashflow-actual" style="height:${item.actual/max*112}px"></i></div><span>${esc(item.label)}</span></div>`).join('')}</div>`;
+    return `<div class="cashflow-legend"><span><i class="actual-dot"></i>실제</span><span><i class="estimate-dot"></i>예상</span></div><div class="cashflow-chart" aria-label="최근 12개월 배당 실제와 예상">${months.map(item=>`<button class="cashflow-month ${item.key===selectedKey?'active':''}" type="button" data-cashflow-month="${esc(item.key)}" aria-label="${esc(item.label)} 실제 ${esc(fmtMoney(item.actual,0))} 예상 ${esc(fmtMoney(item.estimated,0))}"><div class="cashflow-bars"><i class="cashflow-estimate" style="height:${item.estimated/max*112}px"></i><i class="cashflow-actual" style="height:${item.actual/max*112}px"></i></div><span>${esc(item.label)}</span></button>`).join('')}</div>`;
   }
   function renderHome() {
-    const total=totals(),metrics=buildHomeMetrics(total.rows,state.dividends),goal=metrics.nextGoal,paceChange=metrics.pace.change;
+    const total=totals(),metrics=buildHomeMetrics(total.rows,state.dividends),goal=metrics.nextGoal,paceChange=metrics.pace.change,selectedMonth=metrics.months.find(item=>item.key===getCashflowMonthKey?.())||metrics.months.at(-1),twelveMonthActual=metrics.months.reduce((sum,item)=>sum+item.actual,0);
     document.getElementById('page-home').innerHTML=`${sectionTitle('홈','배당 현금흐름')}
       <div class="stack home-flow">
         <article class="card accent income-hero"><div class="card-head"><div><div class="card-kicker">이번 달 배당</div><div class="sub-number">실제 입금과 남은 예상</div></div><span class="tag-pill">${new Date().getMonth()+1}월</span></div><div class="big-number home-primary-amount">${fmtMoney(metrics.month.total,0)}</div><div class="income-split"><div><span>입금 완료</span><strong>${fmtMoney(metrics.month.actual,0)}</strong></div><div><span>남은 예상</span><strong>${fmtMoney(metrics.month.remaining,0)}</strong></div><div><span>이번 달 예상</span><strong>${fmtMoney(metrics.month.total,0)}</strong></div></div></article>
         <article class="card compact home-row-card"><div><span>올해 받은 배당</span><small>1월부터 오늘까지</small></div><strong>${fmtMoney(metrics.year.actual,0)}</strong><div class="home-row-sub"><span>연말까지 예상</span><b>${fmtMoney(metrics.year.total,0)}</b></div></article>
         <article class="card compact pace-card"><div class="card-head"><div><div class="card-kicker">현재 배당 페이스</div><div class="sub-number">최근 실입금 평균 기준</div></div><span class="pace-badge ${paceChange===null?'':signClass(paceChange)}">${paceChange===null?'비교 부족':`${paceChange>=0?'+':''}${fmtPct(paceChange)}`}</span></div><div class="metric-grid"><div class="metric"><div class="metric-label">한 달 평균</div><div class="metric-value">${fmtMoney(metrics.pace.monthly,0)}</div></div><div class="metric"><div class="metric-label">1년 환산</div><div class="metric-value">${fmtMoney(metrics.pace.annualized,0)}</div></div></div></article>
-        <article class="card cashflow-card"><div class="card-head"><div><div class="card-kicker">배당 현금흐름</div><div class="sub-number">최근 12개월</div></div></div>${cashflowChart(metrics.months)}<button class="card-link" type="button" data-page="projects">종목별 배당 보기 <b>›</b></button></article>
+        <article class="card cashflow-card"><div class="card-head cashflow-head"><div><div class="card-kicker">배당 현금흐름</div><div class="sub-number">최근 12개월 실제</div></div><strong>${fmtMoney(twelveMonthActual,0)}</strong></div>${cashflowChart(metrics.months,selectedMonth.key)}<div class="cashflow-selected"><div><span>${esc(selectedMonth.label)} 실제</span><strong>${fmtMoney(selectedMonth.actual,0)}</strong></div><div><span>남은 예상</span><strong>${fmtMoney(selectedMonth.estimated,0)}</strong></div><div><span>합계</span><strong>${fmtMoney(selectedMonth.actual+selectedMonth.estimated,0)}</strong></div></div><button class="card-link" type="button" data-toggle-home-breakdown><span>이번 달 종목별 배당</span><b>${getHomeBreakdownExpanded?.()?'⌃':'⌄'}</b></button>${getHomeBreakdownExpanded?.()?`<div class="home-breakdown">${metrics.projectMonth.map(row=>`<div><strong>${esc(row.symbol)}</strong><span>실제 ${fmtMoney(row.actual,0)} · 예상 ${fmtMoney(row.remaining,0)}</span><b>${fmtMoney(row.actual+row.remaining,0)}</b></div>`).join('')||'<div class="empty-inline">이번 달 배당 내역이 없습니다.</div>'}</div>`:''}</article>
         <article class="card compact next-card"><div class="card-kicker">다음 배당</div>${metrics.nextDividend?`<div class="next-line"><div><strong>${esc(metrics.nextDividend.symbol)}</strong><span>${fmtDate(metrics.nextDividend.date)} 예상</span></div><b>${fmtMoney(metrics.nextDividend.amountUSD,0)}</b></div><p>최근 지급 기록으로 계산한 예상이며 확정 일정은 아닙니다.</p>`:'<div class="empty-inline">배당 기록을 입력하면 다음 일정을 계산합니다.</div>'}</article>
         <article class="card compact next-card ${goal?'interactive-card':''}" ${goal?`data-goal-detail="${goal.calc.project.id}" tabindex="0" role="button"`:''}><div class="card-kicker">다음 목표</div>${goal?`<div class="next-line"><div><strong>${esc(goal.calc.project.symbol)} · ${goal.milestone.reached?'목표 달성':`${fmtShares(goal.milestone.shares)}주`}</strong><span>현재 ${fmtShares(goal.calc.shares)}주${goal.milestone.reached?' · 현금흐름 단계':` · ${fmtShares(goal.milestone.remaining)}주 남음`}</span></div><b>${goal.milestone.reached?'완료':'›'}</b></div>`:'<div class="empty-inline">종목을 추가하면 가장 가까운 목표를 보여줍니다.</div>'}</article>
       </div>`;
@@ -95,7 +95,7 @@ export function createViews(context) {
     if(!selectedProjectId||!projects.some(project=>project.id===selectedProjectId)){selectedProjectId=projects[0]?.id||'';setSelectedProjectId(selectedProjectId);}
     const calc=computeProject(selectedProjectId), page=document.getElementById('page-projects');
     if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<article class="card empty-project"><p>등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
-    const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc);
+    const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc), milestone=nextMilestone(calc);
     page.innerHTML=`
       <div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
       <div class="portfolio-categories"><button class="${category==='highYield'?'active':''}" data-portfolio-category="highYield"><span>고배당주</span><strong>${allProjects.filter(x=>x.category==='highYield').length}</strong></button><button class="${category==='dividend'?'active':''}" data-portfolio-category="dividend"><span>배당주</span><strong>${allProjects.filter(x=>x.category==='dividend').length}</strong></button></div>
@@ -103,8 +103,8 @@ export function createViews(context) {
       <div class="stack portfolio-stack">
         <article class="card portfolio-summary" style="--project-a:${colors[0]};--project-b:${colors[1]}">
           <div class="portfolio-heading"><div><div class="project-symbol">${esc(p.symbol)}</div><div class="project-name">${esc(p.name)}</div></div><span class="tag-pill">${esc(p.tag)}</span></div>
-          <div class="holding-row"><div><span>보유주수</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>평균단가</span><strong>${fmtMoney(calc.avgCost)}</strong></div></div>
           <div class="value-line"><span>평가금액</span><strong>${calc.priceAvailable?fmtMoney(calc.marketValue):'현재가 미입력'}</strong><small class="${calc.priceAvailable?signClass(calc.unrealized):''}">${calc.priceAvailable?`평가손익 ${fmtSignedMoney(calc.unrealized)}`:'설정에서 현재가를 입력하면 계산됩니다.'}</small></div>
+          <div class="holding-row"><div><span>보유주수</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>평균단가</span><strong>${fmtMoney(calc.avgCost)}</strong></div></div>
         </article>
         <article class="card portfolio-cashflow">
           <div class="portfolio-heading"><div><div class="card-title">배당 현금흐름</div><div class="sub-number">세후 실제 입금 기준</div></div><span class="status-pill">${p.distributionFrequency==='weekly'?'주배당':'월배당'}</span></div>
@@ -113,33 +113,31 @@ export function createViews(context) {
           ${calc.estimateStale?'<div class="tiny warning" style="margin-top:10px">최근 지급 간격이 달라 월환산을 숨겼습니다.</div>':''}
           <div class="entry-actions"><button class="btn primary" data-add-trade>거래</button><button class="btn secondary" data-add-dividend>배당금 입금</button><button class="btn soft" data-add-cash>잔액 보정</button></div>
         </article>
-        <details class="card portfolio-details" ${getPortfolioDetailsExpanded?.()?'open':''}>
-          <summary><div><strong>상세정보 · 기록</strong><span>성과, 목표, 그래프, 거래내역</span></div><b class="chev">⌄</b></summary>
-          <div class="portfolio-details-body">
-            <section class="detail-block"><div class="detail-title"><strong>성과</strong><span class="${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtSignedMoney(calc.totalReturn):'현재가 필요'}</span></div><div class="detail-grid"><div><span>평가손익</span><strong class="${calc.priceAvailable?signClass(calc.unrealized):''}">${pricedMoney(calc,calc.unrealized)}</strong></div><div><span>누적배당</span><strong class="positive">${fmtMoney(calc.dividendsTotal)}</strong></div></div></section>
-            <section class="detail-block"><div class="detail-title"><strong>목표</strong><span>${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</span></div>${progress(pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="detail-note">${fmtShares(Math.max(0,calc.currentTarget-calc.shares))}주 남음 · 재투자 ${fmtShares(calc.reinvestShares)}주</div></section>
-            ${p.recovery?.locked?`<section class="detail-block"><div class="detail-title"><strong>원금회수</strong><span>${fmtPct(rec.pct)}</span></div>${progress(rec.pct)}<div class="detail-note">회수 ${fmtMoney(rec.total)} · 남은 원금 ${fmtMoney(rec.remaining)}</div><button class="btn soft small" data-edit-recovery="${p.id}">회수 기준 수정</button></section>`:''}
-            <section class="detail-block"><div class="detail-title"><strong>배당 흐름</strong><div class="chart-period">${[['week','주'],['month','월'],['year','년']].map(([mode,label])=>`<button type="button" data-chart-mode="${mode}" class="${getChartMode()===mode?'active':''}">${label}</button>`).join('')}</div></div><div id="projectChart">${chartHTML(p.id)}</div></section>
-            <section class="detail-block"><div class="detail-title"><strong>거래내역</strong><button class="mini-icon" data-project-settings>종목 설정</button></div><button class="records-disclosure" data-toggle-records><span>${getRecordsExpanded()?'기록 접기':`기록 ${rows.length}건 보기`}</span><b>${getRecordsExpanded()?'⌃':'⌄'}</b></button>${getRecordsExpanded()?`<div class="list records-list">${rows.map(recordRow).join('')||'<div class="empty">아직 기록이 없습니다.</div>'}</div>`:''}<div class="support-actions"><button class="btn soft small" data-add-split>분할·역분할</button><button class="btn soft small" data-project-check>점검</button></div></section>
-          </div>
+        <article class="card portfolio-section"><div class="detail-title"><strong>성과 구성</strong><span class="${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtSignedMoney(calc.totalReturn):'현재가 필요'}</span></div><div class="performance-rows"><div><span>평가손익</span><strong class="${calc.priceAvailable?signClass(calc.unrealized):''}">${pricedMoney(calc,calc.unrealized)}</strong></div><div><span>실현손익</span><strong class="${signClass(calc.realized)}">${fmtSignedMoney(calc.realized)}</strong></div><div><span>누적 세후배당</span><strong class="positive">${fmtMoney(calc.dividendsTotal)}</strong></div></div></article>
+        <article class="card portfolio-section interactive-card" data-goal-detail="${p.id}" tabindex="0" role="button"><div class="detail-title"><strong>다음 목표</strong><span>${milestone.reached?'달성':`${fmtShares(milestone.remaining)}주 남음`}</span></div><div class="portfolio-goal-line"><b>${esc(p.symbol)} · ${fmtShares(milestone.shares)}주</b><strong>${fmtPct(milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100)}</strong></div>${progress(milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="detail-note">현재 ${fmtShares(calc.shares)}주 · 눌러서 목표 현금흐름 보기</div></article>
+        ${p.recovery?.locked?`<article class="card portfolio-section"><div class="detail-title"><strong>원금회수</strong><span>${fmtPct(rec.pct)}</span></div>${progress(rec.pct)}<div class="detail-note">회수 ${fmtMoney(rec.total)} · 남은 원금 ${fmtMoney(rec.remaining)}</div><button class="btn soft small" data-edit-recovery="${p.id}">회수 기준 수정</button></article>`:''}
+        <article class="card portfolio-section"><div class="detail-title"><strong>배당 흐름</strong><div class="chart-period">${[['week','주'],['month','월'],['year','년']].map(([mode,label])=>`<button type="button" data-chart-mode="${mode}" class="${getChartMode()===mode?'active':''}">${label}</button>`).join('')}</div></div><div id="projectChart">${chartHTML(p.id)}</div></article>
+        <details class="card transaction-history">
+          <summary><div><strong>거래내역</strong><span>${rows.length}건 · 눌러서 보기</span></div><b class="chev">⌄</b></summary>
+          <div class="transaction-body"><div class="list records-list">${rows.map(recordRow).join('')||'<div class="empty">아직 기록이 없습니다.</div>'}</div><div class="support-actions"><button class="btn soft small" data-add-split>분할·역분할</button><button class="btn soft small" data-project-settings>종목 설정</button><button class="btn soft small" data-project-check>점검</button></div></div>
         </details>
       </div>`;
   }
 
-  function estimatedDate(calc) {
-    const plan=Math.max(0,n(calc.project.monthlyPlanShares)), remaining=Math.max(0,calc.currentTarget-calc.shares);
+  function estimatedDate(calc,targetShares=calc.currentTarget) {
+    const plan=Math.max(0,n(calc.project.monthlyPlanShares)), remaining=Math.max(0,targetShares-calc.shares);
     if(remaining<=0)return '달성 완료'; if(plan<=0)return '월 매수계획 필요';
     const date=new Date(); date.setMonth(date.getMonth()+Math.ceil(remaining/plan));
     return `${date.getFullYear()}년 ${date.getMonth()+1}월 예상`;
   }
   function renderGoals() {
-    const rows=totals().rows,selected=getSelectedProjectId();
+    const rows=totals().rows;
     document.getElementById('page-goal').innerHTML=`${sectionTitle('다음 목표','가장 가까운 단계만')}
-      <div class="stack">${rows.map(calc=>{const p=calc.project,colors=projectColors(p),milestone=nextMilestone(calc),rec=recoveryStats(calc),stepStart=milestone.ratio<=.25?0:calc.currentTarget*(milestone.ratio-.25),stepSize=Math.max(.0001,milestone.shares-stepStart),stepPct=(calc.shares-stepStart)/stepSize*100;return `<details class="card goal-step-card" ${selected===p.id?'open':''} style="--project-a:${colors[0]};--project-b:${colors[1]}">
-        <summary><div><span class="goal-symbol">${esc(p.symbol)}</span><strong>${milestone.reached?`${fmtShares(milestone.shares)}주 목표 달성`:`${fmtShares(milestone.shares)}주 목표`}</strong><small>현재 ${fmtShares(calc.shares)}주${milestone.reached?' · 현금흐름 확인':` · ${fmtShares(milestone.remaining)}주 남음`}</small></div><b>${milestone.reached?'완료':fmtPct(stepPct)}</b></summary>
-        ${progress(stepPct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
-        <div class="goal-cashflow"><div><span>현재 월 현금흐름</span><strong>${calc.estimateReliable?fmtMoney(calc.monthlyEstimate,0):'기록 부족'}</strong></div><div><span>현재 연환산</span><strong>${calc.estimateReliable?fmtMoney(calc.monthlyEstimate*12,0):'—'}</strong></div><div><span>이번 달 실제</span><strong>${fmtMoney(calc.currentMonthDividends,0)}</strong></div><div><span>사용 가능 배당</span><strong>${fmtMoney(calc.dividendAvailable,0)}</strong></div></div>
-        <div class="goal-choice"><button data-goal-mode="${p.id}:cashflow" class="${p.afterGoalMode==='cashflow'?'active':''}">달성 후 현금흐름</button><button data-goal-mode="${p.id}:reinvest" class="${p.afterGoalMode==='reinvest'?'active':''}">달성 후 재투자</button></div>
+      <div class="stack">${rows.map(calc=>{const p=calc.project,colors=projectColors(p),milestone=nextMilestone(calc),rec=recoveryStats(calc),targetMonthly=calc.estimateReliable&&calc.shares>0?calc.monthlyEstimate*(milestone.shares/calc.shares):0,goalPct=milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,buyCost=calc.priceAvailable?milestone.remaining*calc.currentPrice:0;return `<details class="card goal-step-card" style="--project-a:${colors[0]};--project-b:${colors[1]}">
+        <summary><div><span class="goal-symbol">${esc(p.symbol)}</span><strong>${fmtShares(milestone.shares)}주 목표</strong><small>현재 ${fmtShares(calc.shares)}주${milestone.reached?' · 목표 달성':` · ${fmtShares(milestone.remaining)}주 남음`}</small></div><b>${milestone.reached?'완료':fmtPct(goalPct)}</b></summary>
+        ${progress(goalPct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
+        <div class="goal-detail-body"><div class="goal-flow-compare"><div><span>현재 월배당</span><strong>${calc.estimateReliable?fmtMoney(calc.monthlyEstimate,0):'기록 부족'}</strong></div><b>→</b><div><span>${fmtShares(milestone.shares)}주 예상</span><strong>${targetMonthly?fmtMoney(targetMonthly,0):'기록 부족'}</strong></div></div><div class="goal-info-rows"><div><span>필요 매수금</span><strong>${milestone.reached?'0':calc.priceAvailable?fmtMoney(buyCost,0):'현재가 필요'}</strong></div><div><span>예상 달성일</span><strong>${estimatedDate(calc,milestone.shares)}</strong></div></div></div>
+        ${milestone.reached?`<div class="goal-choice"><button data-goal-mode="${p.id}:cashflow" class="${p.afterGoalMode==='cashflow'?'active':''}">현금흐름</button><button data-goal-mode="${p.id}:reinvest" class="${p.afterGoalMode==='reinvest'?'active':''}">재투자</button></div>`:''}
         ${p.recovery.locked?`<div class="row-sub goal-recovery">원금회수 ${fmtMoney(rec.total)} / ${fmtMoney(p.recovery.basis)} · ${fmtPct(rec.pct)}</div><button class="btn soft" data-edit-recovery="${p.id}">회수 기준 수정</button>`:calc.targetReachedDate?`<button class="btn primary" data-lock-recovery="${p.id}">원금회수 시작</button>`:''}
       </details>`}).join('')||'<article class="card empty">종목을 추가하면 250 · 500 · 750 · 1,000주 중 다음 목표를 보여줍니다.</article>'}</div>`;
   }
