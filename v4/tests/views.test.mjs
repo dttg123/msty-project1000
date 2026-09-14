@@ -26,6 +26,7 @@ const views=createViews({
   setSelectedProjectId:value=>{selectedProjectId=value;},
   getChartMode:()=> chartMode,
   getRecordsExpanded:()=> false,
+  getPortfolioDetailsExpanded:()=> false,
   getPortfolioCategory:()=>portfolioCategory,
   setPortfolioCategory:value=>{portfolioCategory=value;},
   getCurrentUser:()=> null,

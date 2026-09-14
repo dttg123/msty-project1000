@@ -1,10 +1,10 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.8-r26';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.8-r27';
 
 export function createViews(context) {
   const {
-    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getRecordsExpanded, getPortfolioCategory, setPortfolioCategory, getCurrentUser, isTossBridgeConfigured,
+    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getRecordsExpanded, getPortfolioDetailsExpanded, getPortfolioCategory, setPortfolioCategory, getCurrentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -113,7 +113,7 @@ export function createViews(context) {
           ${calc.estimateStale?'<div class="tiny warning" style="margin-top:10px">최근 지급 간격이 달라 월환산을 숨겼습니다.</div>':''}
           <div class="entry-actions"><button class="btn primary" data-add-trade>거래</button><button class="btn secondary" data-add-dividend>배당금 입금</button><button class="btn soft" data-add-cash>잔액 보정</button></div>
         </article>
-        <details class="card portfolio-details">
+        <details class="card portfolio-details" ${getPortfolioDetailsExpanded?.()?'open':''}>
           <summary><div><strong>상세정보 · 기록</strong><span>성과, 목표, 그래프, 거래내역</span></div><b class="chev">⌄</b></summary>
           <div class="portfolio-details-body">
             <section class="detail-block"><div class="detail-title"><strong>성과</strong><span class="${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtSignedMoney(calc.totalReturn):'현재가 필요'}</span></div><div class="detail-grid"><div><span>평가손익</span><strong class="${calc.priceAvailable?signClass(calc.unrealized):''}">${pricedMoney(calc,calc.unrealized)}</strong></div><div><span>누적배당</span><strong class="positive">${fmtMoney(calc.dividendsTotal)}</strong></div></div></section>
