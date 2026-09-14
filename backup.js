@@ -1,10 +1,12 @@
-export const APP_VERSION = '3.2.1';
-export const DATA_SCHEMA_VERSION = 3.1;
+export const APP_VERSION = '0.9.8';
+export const DATA_SCHEMA_VERSION = 4;
 
 const APP_FILES = [
-  'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
-  'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js',
-  'backup.js', 'sw.js'
+  'index.html', 'styles.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+  'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js',
+  'backup.js', 'sw.js',
+  'modules/constants.js', 'modules/utils.js', 'modules/state.js',
+  'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
 ];
 
 const encoder = new TextEncoder();
@@ -88,7 +90,7 @@ async function fetchAppFiles() {
 export async function buildPortableBackup(state) {
   const exportedAt=new Date().toISOString();
   const info={
-    product:'MSTY PROJECT 1000',
+    product:'DividendOS',
     appVersion:APP_VERSION,
     dataSchemaVersion:DATA_SCHEMA_VERSION,
     exportedAt,
