@@ -67,7 +67,7 @@ assert.match(elements.get('page-projects').innerHTML,/26\.01/);
 assert.ok(elements.get('page-projects').innerHTML.indexOf('value-line')<elements.get('page-projects').innerHTML.indexOf('holding-row'),'valuation must precede holding stats');
 assert.match(elements.get('page-goal').innerHTML,/250주 목표/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/500주 목표/);
-assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card goal-card" open/);
+assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card goal-step-card" open/);
 assert.match(elements.get('page-goal').innerHTML,/현재 월배당/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/예상 달성일/);

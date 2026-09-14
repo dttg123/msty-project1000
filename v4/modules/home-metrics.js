@@ -63,10 +63,11 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
     if(a.milestone.reached!==b.milestone.reached)return a.milestone.reached?1:-1;
     return a.milestone.remaining/Math.max(1,a.calc.currentTarget)-b.milestone.remaining/Math.max(1,b.calc.currentTarget);
   });
+  const ownedGoals=goals.filter(item=>item.calc.shares>0);
   return {
     month:{actual:monthActual,remaining:monthForecast,total:monthActual+monthForecast},
     year:{actual:yearActual,remaining:yearForecast,total:yearActual+yearForecast},
     pace:{monthly:recent||stable,annualized:(recent||stable)*12,change:paceChange},
-    months,projectMonth,nextDividend,nextGoal:goals[0]||null
+    months,projectMonth,nextDividend,nextGoal:(ownedGoals.length?ownedGoals:goals)[0]||null
   };
 }

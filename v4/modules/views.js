@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.9-r29';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.9-r30';
 
 export function createViews(context) {
   const {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { blankState } from '../modules/state.js';
+import { blankProject, blankState } from '../modules/state.js';
 import { createPortfolioEngine } from '../modules/portfolio.js';
 import { buildHomeMetrics, nextMilestone } from '../modules/home-metrics.js';
 
@@ -8,10 +8,12 @@ project.id='p-msty'; project.targetUnits=1000; project.distributionFrequency='we
 state.trades.push({id:'t1',projectId:project.id,date:'2026-01-02',type:'buy',buyType:'direct',shares:200,price:10});
 ['2026-07-24','2026-07-31','2026-08-07','2026-08-14','2026-08-21','2026-08-28','2026-09-04','2026-09-11'].forEach((date,index)=>state.dividends.push({id:`d${index}`,projectId:project.id,date,amountUSD:50,sharesAtPayment:200}));
 const engine=createPortfolioEngine(()=>state,()=>project.id),calc=engine.computeProject(project);
+const emptyProject=blankProject('CONY','CONY Fund'); emptyProject.id='p-cony'; emptyProject.targetUnits=500; state.projects.push(emptyProject);
+const emptyCalc=engine.computeProject(emptyProject);
 const milestone=nextMilestone(calc);
 assert.equal(milestone.shares,250);
 assert.equal(milestone.remaining,50);
-const metrics=buildHomeMetrics([calc],state.dividends,new Date('2026-09-13T12:00:00'));
+const metrics=buildHomeMetrics([calc,emptyCalc],state.dividends,new Date('2026-09-13T12:00:00'));
 assert.equal(metrics.month.actual,100);
 assert.ok(metrics.month.remaining>0);
 assert.equal(metrics.month.total,metrics.month.actual+metrics.month.remaining);
@@ -19,6 +21,7 @@ assert.ok(metrics.year.total>=metrics.year.actual);
 assert.equal(metrics.months.length,12);
 assert.equal(metrics.nextDividend.symbol,'MSTY');
 assert.equal(metrics.nextGoal.milestone.shares,250);
+assert.equal(metrics.nextGoal.calc.project.symbol,'MSTY');
 assert.equal(metrics.projectMonth.length,1);
 assert.equal(metrics.projectMonth[0].symbol,'MSTY');
 assert.equal(metrics.projectMonth[0].actual,100);
