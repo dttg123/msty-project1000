@@ -1,6 +1,6 @@
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.9-r31';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.9.10-r32';
 
 export function createViews(context) {
   const {
@@ -39,7 +39,7 @@ export function createViews(context) {
       }
       return `$${Math.round(n(value)).toLocaleString('en-US')}`;
     };
-    return `<div class="column-chart compact-chart">${series.map(x=>`<div class="column-item"><div class="column-value" title="${esc(fmtMoney(x.value,0))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${Math.max(7,x.value/max*108)}px"></div></div><div class="column-label">${esc(x.label)}</div></div>`).join('')}</div>`;
+    return `<div class="column-chart compact-chart">${series.map(x=>`<div class="column-item"><div class="column-value" title="${esc(fmtMoney(x.value,0))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${Math.max(7,x.value/max*100)}%"></div></div><div class="column-label">${esc(x.label)}</div></div>`).join('')}</div>`;
   }
 
   function cashflowChart(months,selectedKey) {
@@ -95,7 +95,7 @@ export function createViews(context) {
     if(!selectedProjectId||!projects.some(project=>project.id===selectedProjectId)){selectedProjectId=projects[0]?.id||'';setSelectedProjectId(selectedProjectId);}
     const calc=computeProject(selectedProjectId), page=document.getElementById('page-projects');
     if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<article class="card empty-project"><p>등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
-    const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc), milestone=nextMilestone(calc);
+    const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, rows=combinedRecords(calc);
     page.innerHTML=`
       <div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
       <div class="portfolio-categories"><button class="${category==='highYield'?'active':''}" data-portfolio-category="highYield"><span>고배당주</span><strong>${allProjects.filter(x=>x.category==='highYield').length}</strong></button><button class="${category==='dividend'?'active':''}" data-portfolio-category="dividend"><span>배당주</span><strong>${allProjects.filter(x=>x.category==='dividend').length}</strong></button></div>
@@ -114,7 +114,6 @@ export function createViews(context) {
           <div class="entry-actions"><button class="btn primary" data-add-trade>거래</button><button class="btn secondary" data-add-dividend>배당금 입금</button><button class="btn soft" data-add-cash>잔액 보정</button></div>
         </article>
         <article class="card portfolio-section"><div class="detail-title"><strong>성과 구성</strong><span class="${calc.priceAvailable?signClass(calc.totalReturn):''}">${calc.priceAvailable?fmtSignedMoney(calc.totalReturn):'현재가 필요'}</span></div><div class="performance-rows"><div><span>평가손익</span><strong class="${calc.priceAvailable?signClass(calc.unrealized):''}">${pricedMoney(calc,calc.unrealized)}</strong></div><div><span>실현손익</span><strong class="${signClass(calc.realized)}">${fmtSignedMoney(calc.realized)}</strong></div><div><span>누적 세후배당</span><strong class="positive">${fmtMoney(calc.dividendsTotal)}</strong></div></div></article>
-        <article class="card portfolio-section interactive-card" data-goal-detail="${p.id}" tabindex="0" role="button"><div class="detail-title"><strong>다음 목표</strong><span>${milestone.reached?'달성':`${fmtShares(milestone.remaining)}주 남음`}</span></div><div class="portfolio-goal-line"><b>${esc(p.symbol)} · ${fmtShares(milestone.shares)}주</b><strong>${fmtPct(milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100)}</strong></div>${progress(milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="detail-note">현재 ${fmtShares(calc.shares)}주 · 눌러서 목표 현금흐름 보기</div></article>
         ${p.recovery?.locked?`<article class="card portfolio-section"><div class="detail-title"><strong>원금회수</strong><span>${fmtPct(rec.pct)}</span></div>${progress(rec.pct)}<div class="detail-note">회수 ${fmtMoney(rec.total)} · 남은 원금 ${fmtMoney(rec.remaining)}</div><button class="btn soft small" data-edit-recovery="${p.id}">회수 기준 수정</button></article>`:''}
         <article class="card portfolio-section"><div class="detail-title"><strong>배당 흐름</strong><div class="chart-period">${[['week','주'],['month','월'],['year','년']].map(([mode,label])=>`<button type="button" data-chart-mode="${mode}" class="${getChartMode()===mode?'active':''}">${label}</button>`).join('')}</div></div><div id="projectChart">${chartHTML(p.id)}</div></article>
         <details class="card transaction-history">
@@ -152,15 +151,18 @@ export function createViews(context) {
     const migration=state.meta.migrationAudit,migrationAvailable=!!state.meta.legacyMigrationAvailable,archivedProjects=state.projects.filter(project=>project.archived);
     document.getElementById('page-settings').innerHTML=`${sectionTitle('설정','표시 · 데이터 · 연동')}
       <div class="stack">
-        <article class="card"><div class="card-title">전체 표시 설정</div><form id="globalSettingsForm" class="form-grid" style="margin-top:14px">
+        <details class="card settings-section"><summary><div><div class="card-title">화면 · 환율</div><div class="sub-number">${state.settings.appearance==='system'?'기기 설정':state.settings.appearance==='light'?'라이트':'다크'} · ${state.settings.exchangeRateMode==='auto'?'자동 환율':'직접 입력'} · 1달러 ${Math.round(n(state.settings.exchangeRate)).toLocaleString('ko-KR')}원</div></div><b class="chev">⌄</b></summary><div class="settings-section-body"><form id="displaySettingsForm" class="form-grid">
           <div class="form-grid two"><div><label class="input-label">환율 적용</label><select class="input select" name="exchangeRateMode"><option value="manual" ${state.settings.exchangeRateMode!=='auto'?'selected':''}>직접 입력</option><option value="auto" ${state.settings.exchangeRateMode==='auto'?'selected':''}>연동 시 자동</option></select></div><div><label class="input-label">참고 환율 (1달러)</label><input class="input" name="exchangeRate" type="number" min="0" step="1" value="${n(state.settings.exchangeRate)}"></div></div>
+          <div><label class="input-label">화면 테마</label><select class="input select" name="appearance"><option value="system" ${state.settings.appearance==='system'?'selected':''}>기기 설정</option><option value="light" ${state.settings.appearance==='light'?'selected':''}>라이트</option><option value="dark" ${state.settings.appearance==='dark'?'selected':''}>다크</option></select></div>
+          <button class="btn secondary" type="submit">화면 설정 저장</button>
+        </form><p class="tiny muted" style="margin-top:10px">자동 환율은 연동 데이터에 환율이 포함될 때 적용하고, 그 전까지는 입력값을 유지합니다.</p></div></details>
+        <details class="card settings-section"><summary><div><div class="card-title">배당 관리 기준</div><div class="sub-number">월 목표 $${Math.round(n(state.settings.targetMonthlyDividend)).toLocaleString('en-US')} · 관리기준 ${Math.round(n(state.settings.thresholdKRW)).toLocaleString('ko-KR')}원</div></div><b class="chev">⌄</b></summary><div class="settings-section-body"><form id="dividendSettingsForm" class="form-grid">
           <div><label class="input-label">전체 월배당 목표 USD</label><input class="input" name="targetMonthlyDividend" type="number" min="0" step="1" value="${n(state.settings.targetMonthlyDividend)}"></div>
           <div><label class="input-label">연간 세후배당 경고선 (원)</label><input class="input" name="warningKRW" type="number" min="0" step="10000" value="${n(state.settings.warningKRW)}"></div>
           <div><label class="input-label">연간 세후배당 관리기준 (원)</label><input class="input" name="thresholdKRW" type="number" min="0" step="10000" value="${n(state.settings.thresholdKRW)}"></div>
-          <div><label class="input-label">화면 테마</label><select class="input select" name="appearance"><option value="system" ${state.settings.appearance==='system'?'selected':''}>기기 설정</option><option value="light" ${state.settings.appearance==='light'?'selected':''}>라이트</option><option value="dark" ${state.settings.appearance==='dark'?'selected':''}>다크</option></select></div>
-          <button class="btn primary" type="submit">설정 저장</button>
-        </form><p class="tiny muted" style="margin-top:10px">자동 환율은 연동 데이터에 환율이 포함될 때 적용하고, 그 전까지는 입력값을 유지합니다. 월환산은 최근 실입금 평균입니다.</p></article>
-        <article class="card"><div class="card-head"><div><div class="card-title">종목별 설정</div><div class="sub-number">분류 · 목표 · 카드 색상</div></div></div><div class="list settings-project-list">${activeProjects().map(project=>`<div class="list-row"><div><div class="row-title"><span class="project-color-dot" style="background:${projectColors(project)[0]}"></span>${esc(project.symbol)}</div><div class="row-sub">${project.category==='dividend'?'배당주':'고배당주'} · 목표 ${fmtShares(project.targetUnits)}주</div></div><button class="mini-icon" data-settings-project="${project.id}">수정</button></div>`).join('')}</div></article>
+          <button class="btn secondary" type="submit">배당 기준 저장</button>
+        </form><p class="tiny muted" style="margin-top:10px">월환산은 최근 실입금 평균으로 계산합니다.</p></div></details>
+        <details class="card settings-section"><summary><div><div class="card-title">종목별 설정</div><div class="sub-number">분류 · 목표 · 카드 색상</div></div><b class="chev">⌄</b></summary><div class="settings-section-body"><div class="list settings-project-list">${activeProjects().map(project=>`<div class="list-row"><div><div class="row-title"><span class="project-color-dot" style="background:${projectColors(project)[0]}"></span>${esc(project.symbol)}</div><div class="row-sub">${project.category==='dividend'?'배당주':'고배당주'} · 목표 ${fmtShares(project.targetUnits)}주</div></div><button class="mini-icon" data-settings-project="${project.id}">수정</button></div>`).join('')}</div></div></details>
         <details class="card settings-section"><summary><div><div class="card-title">토스증권 읽기 전용</div><div class="sub-number">보유주식 대조 · 체결 후보 승인</div></div><span class="status-pill ${toss.status==='connected'?'positive':''}">${tossStatus}</span><b class="chev">⌄</b></summary><div class="settings-section-body">
           <p class="tiny muted">${esc(tossDescription)}</p>
           ${tossMode!=='bridge'?`<div class="toss-setup">
