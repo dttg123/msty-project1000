@@ -1095,14 +1095,6 @@ html[data-theme="dark"] .project-hero { background:var(--surface); border-color:
 .cashflow-secondary strong { margin-top:5px; font-size:17px; overflow-wrap:anywhere; }
 .entry-actions { display:grid; grid-template-columns:.75fr 1.25fr 1fr; gap:8px; margin-top:13px; }
 .entry-actions .btn { min-width:0; padding-inline:8px; font-size:13px; }
-.portfolio-details { padding:0; }
-.portfolio-details>summary { list-style:none; min-height:72px; padding:15px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; }
-.portfolio-details>summary::-webkit-details-marker { display:none; }
-.portfolio-details>summary strong,.portfolio-details>summary span { display:block; }
-.portfolio-details>summary strong { font-size:15px; }
-.portfolio-details>summary span { margin-top:4px; color:var(--muted); font-size:12px; }
-.portfolio-details[open]>summary .chev { transform:rotate(180deg); }
-.portfolio-details-body { padding:0 18px 18px; border-top:1px solid var(--line); }
 .detail-block { padding:17px 0; }
 .detail-block+.detail-block { border-top:1px solid var(--line); }
 .detail-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; font-size:14px; }

@@ -4,6 +4,6 @@
   "version": "0.9.9",
   "type": "module",
   "scripts": {
-    "test": "node tests/domain.test.mjs && node tests/toss.test.mjs && node tests/home-metrics.test.mjs && node tests/views.test.mjs && node tests/static.test.mjs"
+    "test": "node tests/domain.test.mjs && node tests/toss.test.mjs && node tests/home-metrics.test.mjs && node tests/views.test.mjs && node tests/stress-10y.test.mjs && node tests/static.test.mjs"
   }
 }

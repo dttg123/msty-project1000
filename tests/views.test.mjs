@@ -27,8 +27,6 @@ const views=createViews({
   getChartMode:()=> chartMode,
   getCashflowMonthKey:()=> '',
   getHomeBreakdownExpanded:()=> false,
-  getRecordsExpanded:()=> false,
-  getPortfolioDetailsExpanded:()=> false,
   getPortfolioCategory:()=>portfolioCategory,
   setPortfolioCategory:value=>{portfolioCategory=value;},
   getCurrentUser:()=> null,
