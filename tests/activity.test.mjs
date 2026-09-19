@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {selectRecords,monthWeeks,monthActivity} from '../modules/activity.js';
+const rows=[{id:'a',date:'1991-02-01',kind:'dividend',amountUSD:10,note:'첫 배당'},{id:'b',date:'2026-02-28',kind:'dividend',amountUSD:20},{id:'c',date:'2026-02-01',kind:'trade',shares:5}];
+assert.deepEqual(selectRecords(rows,{month:'1991-02',query:'첫 배당'}).map(r=>r.id),['a']);
+assert.deepEqual(selectRecords(rows,{kind:'dividend',month:'2026-02'}).map(r=>r.id),['b']);
+assert.equal(selectRecords(rows,{query:'없는 기록'}).length,0);
+assert.equal(monthWeeks(rows.filter(r=>r.kind==='dividend'),'2026-02')[3].value,20);
+assert.equal(monthWeeks(rows,'2026-02')[4].value,0);
+assert.equal(monthWeeks([{date:'2026-01-31',amountUSD:7}],'2026-01')[4].value,7);
+const state={projects:[{id:'p',symbol:'OLD',archived:true}],dividends:[{id:'d',projectId:'p',date:'2026-09-01',amountUSD:30},{id:'future',projectId:'p',date:'2026-09-25',amountUSD:99}]};
+const agenda=monthActivity(state,[{projectId:'x',symbol:'NEW',date:'2026-09-22',amountUSD:20}],'2026-09','2026-09-19');
+assert.equal(agenda.length,2);assert.equal(agenda[0].archived,true);assert.equal(agenda[0].symbol,'OLD');assert.equal(agenda[1].estimated,true);
+assert.equal(state.dividends.length,2);
+console.log('Activity QA: historical filters, month week boundaries, archived income, future exclusion PASS');
