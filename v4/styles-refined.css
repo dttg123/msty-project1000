@@ -8,8 +8,8 @@ body{background:var(--bg);background-image:none}
 .currency-picker button,.top-icon-btn{min-width:44px;min-height:44px}
 .home-primary-amount{font-size:clamp(28px,7.7vw,40px);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .income-split{grid-template-columns:1fr 1fr!important}
-.income-split>div:last-child{grid-column:1/-1;display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--line)}
-.income-split>div:last-child strong{font-size:12px}
+.income-split>.forecast-missing{grid-column:1/-1;display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--line)}
+.income-split>.forecast-missing strong{font-size:12px}
 .holding-row>div,.cashflow-secondary>div{border:0;background:transparent;padding:4px 0;border-radius:0}
 .holding-row>div+div,.cashflow-secondary>div+div{border-left:1px solid var(--line);padding-left:14px}
 .cashflow-primary{background:transparent;padding:0}
@@ -47,3 +47,14 @@ body{background:var(--bg);background-image:none}
 .btn,.mini-icon{touch-action:manipulation}
 .mini-icon{min-height:44px;min-width:44px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+.brand{white-space:nowrap;font-size:clamp(19px,5vw,24px)}
+.income-hero .income-split>div{background:transparent;border:0;padding:6px 0;text-align:left}
+.income-hero .income-split>div+div{border-left:1px solid var(--line);padding-left:12px}
+.income-split strong{overflow:visible;font-size:16px}
+.topbar{flex-wrap:wrap}
+.save-pill.cloud-error{font-size:10px;max-width:80px}
+.fit-chart .column-item{min-width:0}
+.fit-chart .column-value,.fit-chart .column-label{font-size:10px!important}
+.wide-chart .column-item{min-width:48px}
+.column-value{position:relative;z-index:1}

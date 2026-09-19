@@ -1,15 +1,15 @@
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r33';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r34';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.10.0-r33';
+import { createViews } from './modules/views.js?v=0.10.0-r34';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r33';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r34';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -72,7 +72,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     } catch(error) { console.error(error); setSaveStatus('클라우드 오류','cloud-error'); toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true}); }
   }
   async function saveState(immediate=false) {
-    state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer); setSaveStatus('저장 중','cloud-busy');
+    state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
     const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{await storageSet(STATE_KEY,state);}catch(error){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
     if(immediate)await run();else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
@@ -170,7 +170,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category:form.get('category')==='dividend'?'dividend':'highYield',colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:'manual',priceUpdatedAt:currentPrice?new Date().toISOString():'',distributionFrequency:FREQUENCIES[form.get('distributionFrequency')]?form.get('distributionFrequency'):'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
       if(edit&&oldSymbol!==symbol)for(const key of ['trades','dividends','splits','cashAdjustments'])state[key].filter(row=>row.projectId===target.id).forEach(row=>{row.symbol=symbol;});
       if(!edit){target.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(target);selectedProjectId=target.id;}
-      await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
+      portfolioCategory=target.category;await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
     };
     const archive=document.getElementById('archiveProject');if(archive)archive.onclick=()=>confirmAction('프로젝트 보관',`${project.symbol}은 전체 합산에서 숨겨집니다. 기록은 삭제하지 않습니다.`,async()=>{project.archived=true;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);renderAll();showPage('projects');toast('프로젝트를 보관했습니다.');},'보관');
   }
@@ -388,12 +388,12 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(button.dataset.deleteRecord){deleteRecord(button.dataset.deleteRecord);return;}
     if('projectCheck'in button.dataset){showIssues(selectedProjectId);return;}
     if('allCheck'in button.dataset){showIssues();return;}
-    if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project=projectById(id);if(!project||project.afterGoalMode===mode)return;project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');toast('목표 달성 후 운용 방식을 저장했습니다.');});return;}
+    if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project=projectById(id);if(!project||project.afterGoalMode===mode)return;project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');const cards=[...document.querySelectorAll('.goal-step-card')];cards.find(card=>card.querySelector('[data-goal-mode]')?.dataset.goalMode.startsWith(id+':'))?.setAttribute('open','');toast('목표 달성 후 운용 방식을 저장했습니다.');});return;}
     if(button.dataset.lockRecovery){lockRecovery(button.dataset.lockRecovery);return;}
     if(button.dataset.editRecovery){lockRecovery(button.dataset.editRecovery,true);return;}
     if(button.dataset.restoreProject){const project=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
     if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
-    if('showLogin'in button.dataset){if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate=document.getElementById('authGate');gate?.classList.remove('hidden');requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
+    if('showLogin'in button.dataset){if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
@@ -442,11 +442,11 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
       else state=demoMode?demoState():blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
-      renderAll();bindStaticEvents();showPage('home');hideSplash();
+      renderAll();bindStaticEvents();showPage('home');hideSplash();setSaveStatus('');
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r33').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r34').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
