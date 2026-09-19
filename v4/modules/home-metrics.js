@@ -1,4 +1,5 @@
 import { isDate, n } from './utils.js';
+import { frequencyOf, paymentDate } from './income.js';
 
 const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 const monthKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
@@ -11,18 +12,20 @@ function average(rows, count) {
 }
 
 function projectForecast(calc, today) {
+  if(calc.shares<=0||!calc.estimateReliable)return [];
   const rows=calc.postedDividends.filter(row=>isDate(row.date)&&n(row.amountUSD)>0).sort((a,b)=>a.date.localeCompare(b.date));
   if(!rows.length)return [];
-  const weekly=calc.project.distributionFrequency==='weekly';
-  const amount=average(rows,weekly?8:3);
+  const spec=frequencyOf(calc.project),weekly=!spec.months;
+  const amount=calc.income?.payout??average(rows,spec.stable);
   if(!amount)return [];
-  const last=new Date(`${rows.at(-1).date}T12:00:00`), end=new Date(today.getFullYear(),11,31,12);
+  const last=new Date(`${rows.at(-1).date}T12:00:00`), end=new Date(today.getFullYear()+1,11,31,12);
   const ageDays=Math.floor((today-last)/86400000);
-  if(ageDays>(weekly?45:75))return [];
-  let next=weekly?addDays(last,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(last,1);
+  if(ageDays>spec.maxAge)return [];
+  const gap=Math.max(5,Math.min(14,Math.round(n(calc.income?.gap)||7)));
+  let index=1,next=paymentDate(rows.at(-1).date,index,spec,gap);
   const result=[];
-  while(next<=today)next=weekly?addDays(next,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(next,1);
-  while(next<=end&&result.length<60){result.push({projectId:calc.project.id,symbol:calc.project.symbol,date:iso(next),amountUSD:amount,estimated:true});next=weekly?addDays(next,Math.max(5,Math.min(14,Math.round(n(calc.medianDividendGapDays)||7)))):addMonths(next,1);}
+  while(next<=today)next=paymentDate(rows.at(-1).date,++index,spec,gap);
+  while(next<=end&&result.length<110){result.push({projectId:calc.project.id,symbol:calc.project.symbol,date:iso(next),amountUSD:amount,estimated:true});next=paymentDate(rows.at(-1).date,++index,spec,gap);}
   return result;
 }
 
@@ -44,8 +47,8 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
   const yearActual=sum(actual.filter(row=>row.date.startsWith(currentYear)));
   const yearForecast=sum(forecast.filter(row=>row.date.startsWith(currentYear)));
   const forecastIds=new Set(forecast.map(row=>row.projectId));
-  const stable=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.rawMonthlyEstimate):0),0);
-  const recent=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.rawShortMonthlyEstimate):0),0);
+  const stable=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.monthlyEstimate):0),0);
+  const recent=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.shortMonthlyEstimate):0),0);
   const paceChange=stable>0?(recent/stable-1)*100:null;
   const months=[];
   for(let offset=-11;offset<=0;offset++){
@@ -68,6 +71,6 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
     month:{actual:monthActual,remaining:monthForecast,total:monthActual+monthForecast},
     year:{actual:yearActual,remaining:yearForecast,total:yearActual+yearForecast},
     pace:{monthly:recent||stable,annualized:(recent||stable)*12,change:paceChange},
-    months,projectMonth,nextDividend,nextGoal:(ownedGoals.length?ownedGoals:goals)[0]||null
+    months,projectMonth,nextDividend,forecast,missingEstimateCount:calcs.filter(c=>c.shares>0&&!c.estimateReliable).length,nextGoal:(ownedGoals.length?ownedGoals:goals)[0]||null
   };
 }

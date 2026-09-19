@@ -1,11 +1,14 @@
-const DB_NAME = 'DividendOSDB_V4';
+const demoMode=typeof location!=='undefined'&&new URLSearchParams(location.search).get('demo')==='1';
+const DB_NAME = demoMode?'DividendOSDB_QA':'DividendOSDB_V4';
 const DB_VERSION = 1;
 const STORE_NAME = 'kv';
 let database;
 let storageMode = 'indexeddb';
 const memoryStore = new Map();
-const FALLBACK_PREFIX = 'dividend-os-v4:';
+const FALLBACK_PREFIX = demoMode?'dividend-os-qa:':'dividend-os-v4:';
 const LEGACY_DB_NAME = 'MSTYProject1000DB_V3';
+
+export const storageStatus = () => ({mode:storageMode,durable:storageMode!=='memory'});
 
 function enableFallback() {
   try {
@@ -54,6 +57,7 @@ export function storageSet(key, value) {
     tx.objectStore(STORE_NAME).put(value, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('저장 작업이 중단되었습니다.'));
   });
 }
 

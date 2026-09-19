@@ -26,4 +26,4 @@ assert.equal(metrics.nextGoal.calc.project.symbol,'MSTY');
 assert.equal(metrics.projectMonth.length,1);
 assert.equal(metrics.projectMonth[0].symbol,'MSTY');
 assert.equal(metrics.projectMonth[0].actual,100);
-console.log('DividendOS v0.9.10 home metrics QA: PASS');
+console.log('DividendOS v0.10.0 home metrics QA: PASS');

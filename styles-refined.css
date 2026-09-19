@@ -1,0 +1,49 @@
+/* Focused mobile presentation; keep the original stylesheet as the component base. */
+body{background:var(--bg);background-image:none}
+.demo-banner{text-align:center;padding:8px;background:#755300;color:#fff;font-size:12px}
+.card{box-shadow:none;background-image:none!important;border-radius:18px}
+.brand-wrap .eyebrow{display:none}
+.topbar-actions{gap:10px}
+.top-icon-btn{margin-left:6px}
+.currency-picker button,.top-icon-btn{min-width:44px;min-height:44px}
+.home-primary-amount{font-size:clamp(28px,7.7vw,40px);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.income-split{grid-template-columns:1fr 1fr!important}
+.income-split>div:last-child{grid-column:1/-1;display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--line)}
+.income-split>div:last-child strong{font-size:12px}
+.holding-row>div,.cashflow-secondary>div{border:0;background:transparent;padding:4px 0;border-radius:0}
+.holding-row>div+div,.cashflow-secondary>div+div{border-left:1px solid var(--line);padding-left:14px}
+.cashflow-primary{background:transparent;padding:0}
+.cashflow-primary strong{color:var(--text);font-size:28px}
+.entry-actions{grid-template-columns:1fr 1.5fr!important}
+.portfolio-summary{border-left-width:3px}
+.portfolio-summary .tag-pill{display:none}
+.portfolio-heading .project-symbol{font-size:26px}
+.project-tabs:has(>button:only-child){display:none}
+.column-chart.compact-chart{height:180px;gap:5px;overflow-x:auto}
+.column-item{min-width:46px;grid-template-rows:22px minmax(0,1fr) 22px;cursor:pointer}
+.column-track{min-height:0}
+.column-value,.column-label{font-size:11px!important;letter-spacing:-.03em}
+.column-item:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:5px}
+.column-fill{max-height:100%;background:var(--accent);opacity:.85}
+.transaction-body .support-actions{grid-template-columns:1fr 1fr}
+.history-more{width:100%;margin-top:12px}
+.settings-section{padding:0!important}
+.settings-section>summary{min-height:80px}
+.settings-section>summary .card-title{font-size:16px}
+.settings-section-body .input{min-height:48px;font-size:16px}
+.modal{overscroll-behavior:contain}
+.modal-close{position:sticky;top:0;float:right;z-index:2;min-width:44px;min-height:44px;border:0;border-radius:50%;background:var(--surface-strong);color:var(--text);font-size:20px}
+.modal .input{font-size:16px}
+.modal-unsaved{position:sticky;bottom:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;z-index:5}
+.modal-unsaved p{margin:0 0 10px;font-size:14px}
+.modal-unsaved button{min-height:44px;margin-right:6px}
+.detail-title>span.negative{color:var(--red)}
+.detail-title>span.positive{color:var(--green)}
+.bottom-nav{padding-bottom:max(8px,env(safe-area-inset-bottom));box-shadow:none}
+.nav-btn{min-height:56px}
+.nav-btn.active{background:var(--accent-soft);box-shadow:none}
+.save-pill.cloud-error{display:block!important}
+.form-grid.two{gap:12px}
+.btn,.mini-icon{touch-action:manipulation}
+.mini-icon{min-height:44px;min-width:44px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

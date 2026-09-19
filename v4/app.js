@@ -1,26 +1,31 @@
-import { initGoogleAuth, logoutGoogle } from './auth.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState } from './storage.js?v=0.9.10-r32';
-import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './cloud.js';
+import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r33';
+import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.9.10-r32';
+import { createViews } from './modules/views.js?v=0.10.0-r33';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.9.10-r32';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r33';
+import { validateLedger } from './modules/validation.js';
+import { demoState } from './modules/demo.js';
+import { FREQUENCIES } from './modules/income.js';
 import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 
 (() => {
   'use strict';
 
   const bootAt = performance.now();
+  const demoMode=new URLSearchParams(location.search).get('demo')==='1';
 
   let state;
   let currentPage = 'home';
   let selectedProjectId = '';
   let chartMode = 'month';
+  let historyLimit=10, modalDirty=false, modalFocus=null, modalScroll=0;
   let cashflowMonthKey = '';
   let homeBreakdownExpanded = false;
   let portfolioCategory = 'highYield';
@@ -57,7 +62,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   function hasMeaningfulData(value=state) { return !!(value&&(value.trades?.length||value.dividends?.length||value.splits?.length||value.cashAdjustments?.length||value.projects?.some(p=>n(p.currentPrice)||n(p.monthlyPlanShares)||n(p.initialDividendBalance)))); }
 
   async function pushCloudState() {
-    if(!currentUser||applyingCloudState)return;
+    if(demoMode||!currentUser||applyingCloudState)return;
     if(!navigator.onLine){setSaveStatus('오프라인','cloud-error');return;}
     try {
       setSaveStatus('동기화 중','cloud-busy');
@@ -68,13 +73,13 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
   async function saveState(immediate=false) {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer); setSaveStatus('저장 중','cloud-busy');
-    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();await storageSet(STATE_KEY,state);setSaveStatus('');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
+    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{await storageSet(STATE_KEY,state);}catch(error){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
     if(immediate)await run();else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getCashflowMonthKey:() => cashflowMonthKey, getHomeBreakdownExpanded:() => homeBreakdownExpanded, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
+    getChartMode:() => chartMode, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getHomeBreakdownExpanded:() => homeBreakdownExpanded, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup:() => tossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -116,8 +121,24 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     document.querySelectorAll('.nav-btn').forEach(el=>el.classList.toggle('active',el.dataset.page===page));
     window.scrollTo({top:0,behavior:'instant'});
   }
-  function openModal(html) { const modal=document.getElementById('modal');modal.innerHTML=`<div class="modal-handle"></div>${html}`;document.getElementById('modalBackdrop').classList.add('show'); }
-  function closeModal() { document.getElementById('modalBackdrop').classList.remove('show');document.getElementById('modal').innerHTML=''; }
+  function openModal(html) {
+    const modal=document.getElementById('modal'),backdrop=document.getElementById('modalBackdrop');
+    if(!backdrop.classList.contains('show')){modalFocus=document.activeElement;modalScroll=window.scrollY;document.body.style.position='fixed';document.body.style.top=`-${modalScroll}px`;document.body.style.width='100%';}
+    modalDirty=false;modal.innerHTML=`<button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button><div class="modal-handle"></div>${html}`;
+    modal.querySelectorAll('input,select,textarea').forEach((input,index)=>{const label=input.closest('div')?.querySelector('label');if(label){input.id='modal-field-'+index;label.htmlFor=input.id;}});
+    backdrop.classList.add('show');modal.scrollTop=0;
+    requestAnimationFrame(()=>modal.querySelector('button')?.focus());
+  }
+  function requestCloseModal() {
+    if(!document.getElementById('modalBackdrop').classList.contains('show'))return;
+    if(modalDirty){if(!document.querySelector('.modal-unsaved'))document.getElementById('modal').insertAdjacentHTML('beforeend','<div class="modal-unsaved" role="alert"><p>작성 중인 내용이 있습니다. 저장하지 않고 닫을까요?</p><button class="btn soft" data-keep-modal>계속 작성</button><button class="btn danger" data-discard-modal>닫기</button></div>');return;}
+    closeModal();
+  }
+  function closeModal() {
+    document.getElementById('modalBackdrop').classList.remove('show');document.getElementById('modal').innerHTML='';
+    modalDirty=false;document.body.style.position='';document.body.style.top='';document.body.style.width='';
+    window.scrollTo(0,modalScroll);modalFocus?.focus?.({preventScroll:true});
+  }
   function confirmAction(title,message,action,confirmText='확인') {
     openModal(`<h3 class="modal-title">${esc(title)}</h3><p class="modal-desc">${esc(message)}</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn danger" id="modalConfirm">${esc(confirmText)}</button></div>`);
     document.getElementById('modalConfirm').onclick=async()=>{await action();closeModal();};
@@ -133,7 +154,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       <div><label class="input-label">목표 주수</label><input class="input" name="targetUnits" type="number" min="0.0001" step="0.0001" required value="${n(project?.targetUnits)||500}"></div>
       <details class="form-advanced"><summary>추가 계산 설정 <span>월 계획 · 현재가 · 배당 주기</span></summary><div class="form-grid">
         <div><label class="input-label">월 매수계획 주수</label><input class="input" name="monthlyPlanShares" type="number" min="0" step="0.0001" value="${n(project?.monthlyPlanShares)}"></div>
-        <div class="form-grid two"><div><label class="input-label">현재가 USD</label><input class="input" name="currentPrice" type="number" min="0" step="0.0001" value="${n(project?.currentPrice)}"></div><div><label class="input-label">배당 주기</label><select class="input select" name="distributionFrequency"><option value="weekly" ${project?.distributionFrequency==='weekly'?'selected':''}>주배당</option><option value="monthly" ${project?.distributionFrequency!=='weekly'?'selected':''}>월배당</option></select></div></div>
+        <div class="form-grid two"><div><label class="input-label">현재가 USD</label><input class="input" name="currentPrice" type="number" min="0" step="0.0001" value="${n(project?.currentPrice)}"></div><div><label class="input-label">배당 주기</label><select class="input select" name="distributionFrequency">${Object.entries(FREQUENCIES).map(([key,spec])=>`<option value="${key}" ${key===(project?.distributionFrequency||'monthly')?'selected':''}>${spec.label}</option>`).join('')}</select></div></div>
         <div><label class="input-label">프로젝트 시작일</label><input class="input" name="projectStart" type="date" value="${project?.projectStart||todayISO()}"></div>
         <div class="form-grid two"><div><label class="input-label">이전 배당 잔액 USD</label><input class="input" name="initialDividendBalance" type="number" min="0" step="0.01" value="${n(project?.initialDividendBalance)}"></div><div><label class="input-label">잔액 기준일</label><input class="input" name="initialDividendBalanceDate" type="date" value="${project?.initialDividendBalanceDate||''}"></div></div>
       </div></details>
@@ -146,7 +167,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(state.projects.some(x=>x.id!==project?.id&&x.symbol===symbol&&!x.archived)){toast('이미 등록된 티커입니다.');return;}
       const target=project||blankProject(symbol,String(form.get('name')).trim()||symbol);
       const oldSymbol=target.symbol,currentPrice=Math.max(0,n(form.get('currentPrice')));
-      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category:form.get('category')==='dividend'?'dividend':'highYield',colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:'manual',priceUpdatedAt:currentPrice?new Date().toISOString():'',distributionFrequency:form.get('distributionFrequency')==='weekly'?'weekly':'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
+      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category:form.get('category')==='dividend'?'dividend':'highYield',colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:'manual',priceUpdatedAt:currentPrice?new Date().toISOString():'',distributionFrequency:FREQUENCIES[form.get('distributionFrequency')]?form.get('distributionFrequency'):'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
       if(edit&&oldSymbol!==symbol)for(const key of ['trades','dividends','splits','cashAdjustments'])state[key].filter(row=>row.projectId===target.id).forEach(row=>{row.symbol=symbol;});
       if(!edit){target.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(target);selectedProjectId=target.id;}
       await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
@@ -170,7 +191,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
 
   function openDividendForm(record=null) {
-    const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project),returnPage=currentPage==='dividend'?'dividend':'projects';
+    const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project),returnPage=currentPage;
     openModal(`<h3 class="modal-title">${project.symbol} ${edit?'배당 수정':'배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date||todayISO()}"></div>
       <div><label class="input-label">세후 배당 USD</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${n(record?.amountUSD)}"></div>
@@ -225,7 +246,16 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
 
   function downloadFile(filename,content,type='application/octet-stream') { const blob=content instanceof Blob?content:new Blob([content],{type});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
   async function downloadBackup() { try{state.meta.lastBackupAt=new Date().toISOString();await saveState(true);const zip=await buildPortableBackup(clone(state));const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z').replace('T','_');downloadFile(`DividendOS_v${APP_VERSION}_${stamp}.zip`,zip,'application/zip');renderSettings();toast('V4 앱과 데이터를 ZIP으로 저장했습니다.');}catch(error){console.error(error);toast('ZIP 백업 생성에 실패했습니다.');} }
-  async function restoreFromFile(file) { try{const parsed=await readStateFromBackupFile(file);const restored=migrate(parsed);if(!restored.projects?.length)throw new Error('invalid');await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);renderAll();showPage('home');toast(n(parsed.version)<4?'V3 백업을 V4로 변환해 복원했습니다.':'백업을 복원했습니다.');}catch(error){console.error(error);toast('지원되는 PROJECT1000/DividendOS ZIP이 아닙니다.');} }
+  async function restoreFromFile(file) {
+    try {
+      const parsed=await readStateFromBackupFile(file),restored=migrate(parsed),issues=validateLedger(restored);
+      if(issues.length)throw new Error(issues.join(' '));
+      const engine=createPortfolioEngine(()=>restored,()=>restored.projects[0].id);
+      if(engine.totals().rows.some(c=>c.oversells.length))throw new Error('보유량을 초과하는 매도 기록이 있습니다.');
+      openModal(`<h3 class="modal-title">백업 복원 확인</h3><p class="modal-desc">종목 ${restored.projects.length}개 · 거래 ${restored.trades.length}건 · 배당 ${restored.dividends.length}건<br>현재 V4 기록을 교체합니다. 현재 기록은 기기에 안전 복사하며 기존 MSTY 원본은 건드리지 않습니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmRestore">확인 후 복원</button></div>`);
+      document.getElementById('confirmRestore').onclick=async()=>{await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');};
+    }catch(error){toast(error?.message||'지원되는 PROJECT1000/DividendOS ZIP이 아닙니다.');}
+  }
   function csvCell(value){const text=String(value??'');return /[",\n]/.test(text)?`"${text.replaceAll('"','""')}"`:text;}
   function exportCSV(){const rows=[['프로젝트','티커','구분','ID','날짜','유형','세부유형','주수','단가USD','금액USD','메모']];for(const p of state.projects){projectRows('trades',p.id).forEach(x=>rows.push([p.id,p.symbol,'거래',x.id,x.date,x.type,x.buyType,x.shares,x.price,n(x.shares)*n(x.price),x.note]));projectRows('dividends',p.id).forEach(x=>rows.push([p.id,p.symbol,'배당',x.id,x.date,'dividend','','','',x.amountUSD,x.note]));projectRows('splits',p.id).forEach(x=>rows.push([p.id,p.symbol,'분할',x.id,x.date,x.type,'',x.from,x.to,'','']));projectRows('cashAdjustments',p.id).forEach(x=>rows.push([p.id,p.symbol,'잔액보정',x.id,x.date,'cash','','','',x.amountUSD,x.label]));}downloadFile(`DividendOS_${todayISO().replaceAll('-','')}.csv`,'\ufeff'+rows.map(row=>row.map(csvCell).join(',')).join('\n'),'text/csv;charset=utf-8');toast('CSV를 저장했습니다.');}
 
@@ -243,7 +273,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       const choice=await chooseInitialSync(cloudState);
       if(choice==='cloud'&&cloudState){applyingCloudState=true;state=cloudState;await storageSet(STATE_KEY,state);applyingCloudState=false;if(usingLegacyCloud)await pushCloudState();}else await pushCloudState();
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
-      cloudUnsubscribe?.();cloudUnsubscribe=subscribeCloudDocument(user.uid,data=>{if(!data?.state||applyingCloudState)return;const remote=migrate(data.state),remoteTime=new Date(remote.meta?.updatedAt||0).getTime(),localTime=new Date(state.meta?.updatedAt||0).getTime();if(remoteTime>localTime+1000){applyingCloudState=true;state=remote;storageSet(STATE_KEY,state).then(()=>{renderAll();showPage(currentPage);applyingCloudState=false;setSaveStatus('','cloud-ok');});}},error=>{console.error(error);setSaveStatus('동기화 오류','cloud-error');});
+      cloudUnsubscribe?.();cloudUnsubscribe=await subscribeCloudDocument(user.uid,data=>{if(!data?.state||applyingCloudState)return;const remote=migrate(data.state),remoteTime=new Date(remote.meta?.updatedAt||0).getTime(),localTime=new Date(state.meta?.updatedAt||0).getTime();if(remoteTime>localTime+1000){applyingCloudState=true;state=remote;storageSet(STATE_KEY,state).then(()=>{renderAll();showPage(currentPage);applyingCloudState=false;setSaveStatus('','cloud-ok');});}},error=>{console.error(error);setSaveStatus('동기화 오류','cloud-error');});
       setSaveStatus('','cloud-ok');
     }catch(error){console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
@@ -337,6 +367,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     const button=event.target.closest('button,[data-open-project],[data-goal-detail]');if(!button)return;
     if(button.dataset.page){showPage(button.dataset.page);return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency;saveState();renderAll();showPage(currentPage);return;}
+    if(button.dataset.chartValue){openModal(`<h3 class="modal-title">${esc(button.dataset.chartLabel)} 배당</h3><div class="big-number">${esc(button.dataset.chartValue)}</div><p class="modal-desc">실제 세후 입금 합계</p><button class="btn primary" data-close-modal>닫기</button>`);return;}
+    if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector('.transaction-history').open=true;return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;renderHome();renderProjects();return;}
     if(button.dataset.cashflowMonth){cashflowMonthKey=button.dataset.cashflowMonth;renderHome();return;}
     if('toggleHomeBreakdown'in button.dataset){homeBreakdownExpanded=!homeBreakdownExpanded;renderHome();return;}
@@ -344,7 +376,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');return;}
     if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
     if(button.dataset.openProject){selectedProjectId=button.dataset.openProject;renderProjects();showPage('projects');return;}
-    if(button.dataset.selectProject){selectedProjectId=button.dataset.selectProject;renderProjects();return;}
+    if(button.dataset.selectProject){historyLimit=10;selectedProjectId=button.dataset.selectProject;renderProjects();return;}
     if('addProject'in button.dataset){openProjectForm();return;}
     if('projectSettings'in button.dataset){openProjectForm(projectById());return;}
     if('addTrade'in button.dataset){openTradeForm();return;}
@@ -361,7 +393,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(button.dataset.editRecovery){lockRecovery(button.dataset.editRecovery,true);return;}
     if(button.dataset.restoreProject){const project=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
     if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
-    if('showLogin'in button.dataset){localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate=document.getElementById('authGate');gate?.classList.remove('hidden');requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
+    if('showLogin'in button.dataset){if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate=document.getElementById('authGate');gate?.classList.remove('hidden');requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('csv'in button.dataset){exportCSV();return;}
@@ -375,7 +407,9 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('migrateV3'in button.dataset){previewLegacyMigration();return;}
     if('logout'in button.dataset){localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');logoutGoogle();return;}
     if('reset'in button.dataset){confirmAction('V4 전체 초기화','V4 거래·배당·프로젝트를 초기화합니다. V3.2.1 원본은 유지됩니다.',async()=>{await storageSet(SAFETY_KEY,clone(state));await storageDelete(STATE_KEY);state=blankState();selectedProjectId=state.projects[0].id;await saveState(true);renderAll();showPage('home');toast('V4 데이터를 초기화했습니다.');},'초기화');return;}
-    if('closeModal'in button.dataset){closeModal();return;}
+    if('discardModal'in button.dataset){closeModal();return;}
+    if('keepModal'in button.dataset){document.querySelector('.modal-unsaved')?.remove();return;}
+    if('closeModal'in button.dataset){requestCloseModal();return;}
   }
 
   function bindStaticEvents() {
@@ -388,8 +422,10 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;},800);
     },true);
     document.addEventListener('click',handleClick);
-    document.getElementById('modalBackdrop').addEventListener('click',event=>{if(event.target.id==='modalBackdrop')closeModal();});
-    document.addEventListener('keydown',event=>{const card=event.target.closest?.('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')closeModal();});
+    document.getElementById('modal').addEventListener('input',()=>{modalDirty=true;});
+    document.getElementById('modal').addEventListener('change',()=>{modalDirty=true;});
+    document.getElementById('modalBackdrop').addEventListener('click',event=>{if(event.target.id==='modalBackdrop')requestCloseModal();});
+    document.addEventListener('keydown',event=>{const card=event.target.closest?.('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('restoreInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.addEventListener('submit',event=>{const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=new FormData(event.target);let next={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);});});
     document.addEventListener('submit',event=>{if(event.target.id!=='tossDirectForm')return;event.preventDefault();try{const form=new FormData(event.target);saveTossLocalConfig({clientId:form.get('clientId'),clientSecret:form.get('clientSecret')});tossSetup={...tossSetup,message:'이 기기에만 저장했습니다. 현재 IP 등록 후 연결 시험을 눌러 주세요.'};state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';renderSettings();showPage('settings');toast('토스 연결정보를 기기에 저장했습니다.');}catch(error){toast(error?.message||'토스 연결정보를 저장하지 못했습니다.');}});
@@ -401,13 +437,16 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     try{
       await openStorage();
       const existing=await storageGet(STATE_KEY);
-      legacyMigrationSource=await readLegacyState();
+      legacyMigrationSource=demoMode?null:await readLegacyState();
       if(existing){state=migrate(existing);if(legacyMigrationSource&&!state.meta.migrationAudit){const audit=auditLegacyAgainstState(legacyMigrationSource,state);if(audit?.passed)state.meta.migrationAudit=audit;else state.meta.legacyMigrationAvailable=true;}}
       else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
-      else state=blankState();
+      else state=demoMode?demoState():blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
-      renderAll();bindStaticEvents();showPage('home');await initAuth();hideSplash();
-      if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.9.10-r32').catch(console.warn);
+      renderAll();bindStaticEvents();showPage('home');hideSplash();
+      if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
+      if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
+      if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r33').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

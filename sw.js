@@ -1,9 +1,9 @@
-const CACHE = 'dividend-os-v0.9.10-r32';
+const CACHE = 'dividend-os-v0.10.0-r33';
 const ASSETS = [
-  './', './index.html', './styles.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
+  './', './index.html', './styles.css', './styles-refined.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js', './runtime-config.js', './toss-client.js',
   './modules/constants.js', './modules/utils.js', './modules/state.js',
-  './modules/portfolio.js', './modules/format.js', './modules/views.js', './modules/home-metrics.js', './modules/migration.js', './modules/toss.js'
+  './modules/income.js', './modules/cloud-api.js', './modules/validation.js', './modules/demo.js', './modules/portfolio.js', './modules/format.js', './modules/views.js', './modules/home-metrics.js', './modules/migration.js', './modules/toss.js'
 ];
 
 self.addEventListener('install', event => {
@@ -11,7 +11,7 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('dividend-os-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', event => {
@@ -24,10 +24,11 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(freshRequest)
       .then(response => {
+        if(!response.ok)throw new Error('Network response unavailable');
         const copy = response.clone();
         caches.open(CACHE).then(cache => cache.put(event.request, copy));
         return response;
       })
-      .catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
+      .catch(async () => (await caches.match(event.request)) || (await caches.match(url.pathname)) || (event.request.mode==='navigate' ? await caches.match('./index.html') : Response.error()))
   );
 });

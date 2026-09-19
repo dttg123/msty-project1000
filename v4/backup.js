@@ -1,12 +1,12 @@
-export const APP_VERSION = '0.9.10';
+export const APP_VERSION = '0.10.0';
 export const DATA_SCHEMA_VERSION = 4;
 
 const APP_FILES = [
-  'index.html', 'styles.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+  'index.html', 'styles.css', 'styles-refined.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js',
   'backup.js', 'sw.js',
   'modules/constants.js', 'modules/utils.js', 'modules/state.js',
-  'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
+  'modules/income.js', 'modules/cloud-api.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
 ];
 
 const encoder = new TextEncoder();
@@ -119,7 +119,14 @@ export async function readStateFromBackupFile(file) {
     if(method!==0) throw new Error('압축된 ZIP은 지원하지 않습니다. 이 앱에서 만든 ZIP을 사용하세요.');
     const name=decoder.decode(bytes.slice(offset+30,offset+30+nameLen));
     const start=offset+30+nameLen+extraLen;
-    if(name==='data/state.json') return JSON.parse(decoder.decode(bytes.slice(start,start+size)));
+    if(start+size>bytes.length)throw new Error('백업 파일 일부가 손상되었습니다.');
+    if(name==='data/state.json') {
+      const data=bytes.slice(start,start+size);
+      if(crc32(data)!==view.getUint32(14,true))throw new Error('백업 데이터 검증에 실패했습니다.');
+      const parsed=JSON.parse(decoder.decode(data));
+      if(!parsed||!Array.isArray(parsed.trades)||!Array.isArray(parsed.dividends))throw new Error('원장 데이터가 없습니다.');
+      return parsed;
+    }
     offset=start+size;
   }
   throw new Error('ZIP 안에 data/state.json이 없습니다.');
