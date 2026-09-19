@@ -42,7 +42,7 @@ export function createViews(context) {
       }
       return `$${Math.round(n(value)).toLocaleString('en-US')}`;
     };
-    return `<div class="column-chart compact-chart ${getChartMode()==='year'?'wide-chart':'fit-chart'}">${series.map(x=>`<button class="column-item" type="button" data-chart-value="${esc(fmtMoney(x.value,2))}" data-chart-label="${esc(x.label)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value,2))}"><div class="column-value" title="${esc(fmtMoney(x.value,0))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${Math.max(7,x.value/max*100)}%"></div></div><div class="column-label">${esc(getChartMode()==='week'?x.label.slice(3):x.label)}</div></button>`).join('')}</div>`;
+    return `<div class="column-chart compact-chart ${getChartMode()==='year'?'wide-chart':'fit-chart'}">${series.map(x=>`<button class="column-item" type="button" data-chart-value="${esc(fmtMoney(x.value,2))}" data-chart-label="${esc(x.label)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value,2))}"><div class="column-value" title="${esc(fmtMoney(x.value,0))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${x.value>0?Math.max(7,x.value/max*100):0}%"></div></div><div class="column-label">${esc(getChartMode()==='week'?x.label.slice(3):x.label)}</div></button>`).join('')}</div>`;
   }
 
   function cashflowChart(months,selectedKey) {
