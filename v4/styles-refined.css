@@ -24,7 +24,7 @@ body{background:var(--bg);background-image:none}
 .column-track{min-height:0}
 .column-value,.column-label{font-size:11px!important;letter-spacing:-.03em}
 .column-item:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:5px}
-.column-fill{max-height:100%;background:var(--accent);opacity:.85}
+.column-fill{min-height:0;max-height:100%;background:var(--accent);opacity:.85}
 .transaction-body .support-actions{grid-template-columns:1fr 1fr}
 .history-more{width:100%;margin-top:12px}
 .settings-section{padding:0!important}
