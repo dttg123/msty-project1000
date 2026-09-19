@@ -13,6 +13,7 @@ for(const prefix of ['','v4/']){
  for(const file of ['app.js','backup.js','storage.js','auth.js','cloud.js',...readdirSync(root+'/'+prefix+'modules').filter(x=>x.endsWith('.js')).map(x=>'modules/'+x)]){
   const path=resolve(root,prefix,file),source=readFileSync(path,'utf8');
   for(const m of source.matchAll(/(?:from\s*|import\s*\()\s*['"](\.[^'"]+)['"]/g))check(existsSync(resolve(dirname(path),m[1].split('?')[0])),`missing dependency ${prefix+file}: ${m[1]}`);
+  if(file.startsWith('modules/'))for(const manifest of ['backup.js','sw.js'])check(readFileSync(root+'/'+prefix+manifest,'utf8').includes(file),`${manifest} must bundle ${file}`);
  }
  check(readFileSync(root+'/'+prefix+'cloud.js','utf8').includes("CLOUD_DOC_ID = 'dividend-os-v4'"),'V3 cloud must never be a V4 write target');
 }
