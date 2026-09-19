@@ -61,3 +61,7 @@ body{background:var(--bg);background-image:none}
 .column-value{position:relative;z-index:1}
 
 .backup-download{display:flex;justify-content:center;text-decoration:none;min-height:48px;align-items:center}
+.income-evidence{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.income-evidence summary{font-size:13px;cursor:pointer;min-height:32px;color:var(--muted)}
+.goal-detail-body>.btn{width:100%;margin-top:12px}
+.income-evidence strong{font-variant-numeric:tabular-nums}

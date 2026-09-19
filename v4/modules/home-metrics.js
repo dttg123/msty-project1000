@@ -21,7 +21,7 @@ function projectForecast(calc, today) {
   const last=new Date(`${rows.at(-1).date}T12:00:00`), end=new Date(today.getFullYear()+1,11,31,12);
   const ageDays=Math.floor((today-last)/86400000);
   if(ageDays>spec.maxAge)return [];
-  const gap=Math.max(5,Math.min(14,Math.round(n(calc.income?.gap)||7)));
+  const gap=7; // Weekly schedule stays weekly despite holidays or delayed deposits.
   let index=1,next=paymentDate(rows.at(-1).date,index,spec,gap);
   const result=[];
   while(next<=today)next=paymentDate(rows.at(-1).date,++index,spec,gap);
@@ -72,7 +72,7 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
   return {
     month:{actual:monthActual,remaining:monthForecast,total:monthActual+monthForecast},
     year:{actual:yearActual,remaining:yearForecast,total:yearActual+yearForecast},
-    pace:{monthly:recent||stable,annualized:(recent||stable)*12,change:paceChange,available:forecastIds.size>0},
+    pace:{monthly:stable,annualized:stable*12,change:paceChange,available:forecastIds.size>0},
     months,projectMonth,nextDividend,forecast,missingEstimateCount:calcs.filter(c=>c.shares>0&&!c.estimateReliable).length,nextGoal:(ownedGoals.length?ownedGoals:goals)[0]||null
   };
 }
