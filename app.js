@@ -1,15 +1,15 @@
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r34';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r35';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.10.0-r34';
+import { createViews } from './modules/views.js?v=0.10.0-r35';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r34';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r35';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -107,13 +107,15 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     openModal(`<h3 class="modal-title">V3.2.1 → V4 이전 점검</h3><p class="modal-desc">V3 원본은 읽기만 합니다. 아래 값이 모두 일치할 때 V4 전용 저장소에 복사합니다.</p><div class="list">${migrationCheckRows(audit)}</div><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmLegacyMigration" ${audit.passed?'':'disabled'}>일치 확인 후 복사</button></div>`);
     const confirm=document.getElementById('confirmLegacyMigration');if(confirm)confirm.onclick=async()=>{await storageSet(SAFETY_KEY,clone(state));state=preview.candidate;selectedProjectId=state.projects[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('settings');toast('V3.2.1 데이터를 V4에 복사했습니다.');};
   }
-  function renderAll() {
+  function renderAll(displayOnly=false) {
+    const opened=displayOnly?[...document.querySelectorAll('.goal-step-card[open]')].map(el=>el.dataset.goalProject):[],historyOpen=displayOnly&&document.querySelector('.transaction-history')?.open,scrollY=window.scrollY;
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');
     document.getElementById('krwBtn')?.classList.toggle('active',displayCurrency()==='KRW');
     document.getElementById('usdBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='USD'));
     document.getElementById('krwBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='KRW'));
-    renderHome();renderProjects();renderGoals();renderSettings();
+    renderHome();renderProjects();renderGoals();if(!displayOnly)renderSettings();
+    if(displayOnly){document.querySelectorAll('.goal-step-card').forEach(el=>{el.open=opened.includes(el.dataset.goalProject);});const history=document.querySelector('.transaction-history');if(history)history.open=!!historyOpen;window.scrollTo(0,scrollY);}
   }
   function showPage(page) {
     if(!PAGES.includes(page))page='home'; currentPage=page;
@@ -127,6 +129,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     modalDirty=false;modal.innerHTML=`<button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button><div class="modal-handle"></div>${html}`;
     modal.querySelectorAll('input,select,textarea').forEach((input,index)=>{const label=input.closest('div')?.querySelector('label');if(label){input.id='modal-field-'+index;label.htmlFor=input.id;}});
     backdrop.classList.add('show');modal.scrollTop=0;
+    document.querySelectorAll('main,.bottom-nav').forEach(el=>{el.inert=true;});
+    modal.setAttribute('aria-label',modal.querySelector('h3')?.textContent||'입력 창');
     requestAnimationFrame(()=>modal.querySelector('button')?.focus());
   }
   function requestCloseModal() {
@@ -137,6 +141,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   function closeModal() {
     document.getElementById('modalBackdrop').classList.remove('show');document.getElementById('modal').innerHTML='';
     modalDirty=false;document.body.style.position='';document.body.style.top='';document.body.style.width='';
+    document.querySelectorAll('main,.bottom-nav').forEach(el=>{el.inert=false;});
     window.scrollTo(0,modalScroll);modalFocus?.focus?.({preventScroll:true});
   }
   function confirmAction(title,message,action,confirmText='확인') {
@@ -245,7 +250,20 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
 
   function downloadFile(filename,content,type='application/octet-stream') { const blob=content instanceof Blob?content:new Blob([content],{type});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
-  async function downloadBackup() { try{state.meta.lastBackupAt=new Date().toISOString();await saveState(true);const zip=await buildPortableBackup(clone(state));const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z').replace('T','_');downloadFile(`DividendOS_v${APP_VERSION}_${stamp}.zip`,zip,'application/zip');renderSettings();toast('V4 앱과 데이터를 ZIP으로 저장했습니다.');}catch(error){console.error(error);toast('ZIP 백업 생성에 실패했습니다.');} }
+  let backupRunning=false,backupObjectUrl='';
+  async function downloadBackup() {
+    if(backupRunning)return;backupRunning=true;
+    openModal('<h3 class="modal-title">백업 준비</h3><p class="modal-desc" role="status">앱과 기록을 ZIP으로 묶고 있습니다.</p>');
+    try{
+      const zip=await buildPortableBackup(clone(state));
+      if(backupObjectUrl)URL.revokeObjectURL(backupObjectUrl);
+      backupObjectUrl=URL.createObjectURL(zip);
+      const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\\.\\d{3}Z$/,'Z').replace('T','_'),filename=`DividendOS_v${APP_VERSION}_${stamp}.zip`;
+      openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>아래 버튼을 눌러 ZIP 파일을 저장해 주세요.</p><a class="btn primary backup-download" href="${backupObjectUrl}" download="${filename}">ZIP 다운로드</a><p class="detail-note">완료 여부는 휴대폰의 다운로드 목록에서 확인할 수 있습니다.</p>`);
+      state.meta.lastBackupAt=new Date().toISOString();await saveState(true);
+    }catch(error){console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
+    finally{backupRunning=false;}
+  }
   async function restoreFromFile(file) {
     try {
       const parsed=await readStateFromBackupFile(file),restored=migrate(parsed),issues=validateLedger(restored);
@@ -366,14 +384,14 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   function handleClick(event) {
     const button=event.target.closest('button,[data-open-project],[data-goal-detail]');if(!button)return;
     if(button.dataset.page){showPage(button.dataset.page);return;}
-    if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency;saveState();renderAll();showPage(currentPage);return;}
+    if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency;saveState();renderAll(true);return;}
     if(button.dataset.chartValue){openModal(`<h3 class="modal-title">${esc(button.dataset.chartLabel)} 배당</h3><div class="big-number">${esc(button.dataset.chartValue)}</div><p class="modal-desc">실제 세후 입금 합계</p><button class="btn primary" data-close-modal>닫기</button>`);return;}
     if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector('.transaction-history').open=true;return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;renderHome();renderProjects();return;}
     if(button.dataset.cashflowMonth){cashflowMonthKey=button.dataset.cashflowMonth;renderHome();return;}
     if('toggleHomeBreakdown'in button.dataset){homeBreakdownExpanded=!homeBreakdownExpanded;renderHome();return;}
     if(button.dataset.portfolioCategory){portfolioCategory=button.dataset.portfolioCategory;const first=activeProjects().find(project=>project.category===portfolioCategory);if(first)selectedProjectId=first.id;renderProjects();return;}
-    if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');return;}
+    if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');const card=[...document.querySelectorAll('.goal-step-card')].find(el=>el.dataset.goalProject===selectedProjectId);if(card){card.open=true;card.scrollIntoView({block:'nearest'});}return;}
     if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
     if(button.dataset.openProject){selectedProjectId=button.dataset.openProject;renderProjects();showPage('projects');return;}
     if(button.dataset.selectProject){historyLimit=10;selectedProjectId=button.dataset.selectProject;renderProjects();return;}
@@ -446,7 +464,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r34').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r35').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

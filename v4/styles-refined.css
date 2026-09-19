@@ -55,6 +55,9 @@ body{background:var(--bg);background-image:none}
 .topbar{flex-wrap:wrap}
 .save-pill.cloud-error{font-size:10px;max-width:80px}
 .fit-chart .column-item{min-width:0}
-.fit-chart .column-value,.fit-chart .column-label{font-size:10px!important}
+.fit-chart .column-value{font-size:12px!important}
+.fit-chart .column-label{font-size:11px!important}
 .wide-chart .column-item{min-width:48px}
 .column-value{position:relative;z-index:1}
+
+.backup-download{display:flex;justify-content:center;text-decoration:none;min-height:48px;align-items:center}

@@ -1,7 +1,7 @@
 import { APP_VERSION } from '../backup.js';
 import { frequencyOf } from './income.js';
 import { clamp, esc, isDate, n } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r34';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r35';
 
 export function createViews(context) {
   const {
@@ -127,13 +127,13 @@ export function createViews(context) {
   function estimatedDate(calc,targetShares=calc.currentTarget) {
     const plan=Math.max(0,n(calc.project.monthlyPlanShares)), remaining=Math.max(0,targetShares-calc.shares);
     if(remaining<=0)return '달성 완료'; if(plan<=0)return '월 매수계획 필요';
-    const date=new Date(); date.setMonth(date.getMonth()+Math.ceil(remaining/plan));
+    const now=new Date(),date=new Date(now.getFullYear(),now.getMonth()+Math.ceil(remaining/plan),1);
     return `${date.getFullYear()}년 ${date.getMonth()+1}월 예상`;
   }
   function renderGoals() {
     const rows=totals().rows;
     document.getElementById('page-goal').innerHTML=`${sectionTitle('다음 목표','가장 가까운 단계만')}
-      <div class="stack">${rows.map(calc=>{const p=calc.project,colors=projectColors(p),milestone=nextMilestone(calc),rec=recoveryStats(calc),targetMonthly=calc.estimateReliable&&calc.shares>0?calc.monthlyEstimate*(milestone.shares/calc.shares):0,goalPct=milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,buyCost=calc.priceAvailable?milestone.remaining*calc.currentPrice:0;return `<details class="card goal-step-card" style="--project-a:${colors[0]};--project-b:${colors[1]}">
+      <div class="stack">${rows.map(calc=>{const p=calc.project,colors=projectColors(p),milestone=nextMilestone(calc),rec=recoveryStats(calc),targetMonthly=calc.estimateReliable&&calc.shares>0?calc.monthlyEstimate*(milestone.shares/calc.shares):0,goalPct=milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,buyCost=calc.priceAvailable?milestone.remaining*calc.currentPrice:0;return `<details class="card goal-step-card" data-goal-project="${esc(p.id)}" style="--project-a:${colors[0]};--project-b:${colors[1]}">
         <summary><div><span class="goal-symbol">${esc(p.symbol)}</span><strong>${fmtShares(milestone.shares)}주 목표</strong><small>현재 ${fmtShares(calc.shares)}주${milestone.reached?' · 목표 달성':` · ${fmtShares(milestone.remaining)}주 남음`}</small></div><b>${milestone.reached?'완료':fmtPct(goalPct)}</b></summary>
         ${progress(goalPct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}
         ${milestone.reached?`<div class="goal-detail-body"><div class="cashflow-primary"><span>완주 후 월 현금흐름 예상</span><strong>${calc.estimateReliable?fmtMoney(calc.monthlyEstimate,0):'기록 부족'}</strong></div><p class="detail-note">현재 보유량과 최근 지급 기록 기준입니다. 실제 배당은 달라질 수 있습니다.</p></div>`:`<div class="goal-detail-body"><div class="goal-flow-compare"><div><span>현재 월배당 예상</span><strong>${calc.estimateReliable?fmtMoney(calc.monthlyEstimate,0):'기록 부족'}</strong></div><b>→</b><div><span>${fmtShares(milestone.shares)}주 예상</span><strong>${targetMonthly?fmtMoney(targetMonthly,0):'기록 부족'}</strong></div></div><div class="goal-info-rows"><div><span>필요 매수금</span><strong>${milestone.reached?'0':calc.priceAvailable?fmtMoney(buyCost,0):'현재가 필요'}</strong></div><div><span>예상 달성일</span><strong>${estimatedDate(calc,milestone.shares)}</strong></div></div></div>`}
