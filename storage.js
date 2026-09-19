@@ -84,6 +84,7 @@ export async function readLegacyState(key = 'state') {
   return new Promise(resolve => {
     // Omit the version so a harmless V3 schema upgrade remains readable.
     const request = indexedDB.open(LEGACY_DB_NAME);
+    request.onupgradeneeded = () => { request.transaction.abort(); resolve(null); };
     request.onerror = () => resolve(null);
     request.onsuccess = () => {
       const legacy = request.result;

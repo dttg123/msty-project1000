@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {buildTossSync,normalizeTossOrder,mergeTossCandidates} from '../modules/toss.js';
+const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
+assert.equal(normalizeTossOrder(row).shares,2);
+for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
+const result=buildTossSync({orders:[row,row,{...row,id:'order-2',currency:'KRW'}],holdings:[{symbol:'MSTY',shares:3,currency:'USD'}]},{appPositions:[{symbol:'MSTY',shares:2}]});
+assert.equal(result.candidates.length,1);
+assert.equal(result.unsupportedCurrencyCount,1);
+assert.equal(result.comparisons[0].difference,1);
+assert.equal(mergeTossCandidates(result.candidates,result.candidates).length,1);
+assert.equal(buildTossSync({orders:[row]},{existingTrades:[{symbol:'MSTY',date:'2026-01-01',type:'buy',shares:2,price:10}]}).candidates.length,0);
+console.log('Toss offline adapter: PASS (no account requests)');

@@ -11,7 +11,7 @@ export const frequencyOf = project => FREQUENCIES[project.distributionFrequency]
 
 // Historical cash remains untouched. Only per-share comparisons are split-adjusted.
 export function incomeEstimate(project, dividends, splits, shares, now=new Date()) {
-  const spec=frequencyOf(project), today=now.toISOString().slice(0,10);
+  const spec=frequencyOf(project), today=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
   const rows=dividends.filter(row=>isDate(row.date)&&row.date<=today&&n(row.amountUSD)>0).sort((a,b)=>b.date.localeCompare(a.date));
   const grouped=new Map();
   for(const row of rows){

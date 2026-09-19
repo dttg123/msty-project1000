@@ -39,7 +39,8 @@ export function nextMilestone(calc) {
 export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
   const today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12),todayString=iso(today),currentMonth=monthKey(today),currentYear=String(today.getFullYear());
   const activeIds=new Set(calcs.map(calc=>calc.project.id));
-  const actual=(dividendRows||[]).filter(row=>activeIds.has(row.projectId)&&isDate(row.date)&&row.date<=todayString&&n(row.amountUSD)>0);
+  // Archiving a project hides its future forecast, never money already received.
+  const actual=(dividendRows||[]).filter(row=>isDate(row.date)&&row.date<=todayString&&n(row.amountUSD)>0);
   const forecast=calcs.flatMap(calc=>projectForecast(calc,today));
   const sum=rows=>rows.reduce((total,row)=>total+n(row.amountUSD),0);
   const monthActual=sum(actual.filter(row=>row.date.startsWith(currentMonth)));
@@ -49,7 +50,8 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
   const forecastIds=new Set(forecast.map(row=>row.projectId));
   const stable=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.monthlyEstimate):0),0);
   const recent=calcs.reduce((total,calc)=>total+(forecastIds.has(calc.project.id)?n(calc.shortMonthlyEstimate):0),0);
-  const paceChange=stable>0?(recent/stable-1)*100:null;
+  const comparable=calcs.filter(calc=>forecastIds.has(calc.project.id));
+  const paceChange=stable>0&&comparable.length>0&&comparable.every(calc=>calc.income?.trend!==null&&calc.income?.trend!==undefined)?(recent/stable-1)*100:null;
   const months=[];
   for(let offset=-11;offset<=0;offset++){
     const date=new Date(today.getFullYear(),today.getMonth()+offset,1,12),key=monthKey(date);
@@ -70,7 +72,7 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
   return {
     month:{actual:monthActual,remaining:monthForecast,total:monthActual+monthForecast},
     year:{actual:yearActual,remaining:yearForecast,total:yearActual+yearForecast},
-    pace:{monthly:recent||stable,annualized:(recent||stable)*12,change:paceChange},
+    pace:{monthly:recent||stable,annualized:(recent||stable)*12,change:paceChange,available:forecastIds.size>0},
     months,projectMonth,nextDividend,forecast,missingEstimateCount:calcs.filter(c=>c.shares>0&&!c.estimateReliable).length,nextGoal:(ownedGoals.length?ownedGoals:goals)[0]||null
   };
 }

@@ -95,7 +95,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const perShareTrendPct=stablePerShare>0?(shortPerShare/stablePerShare-1)*100:0;
     const annualizedDistributionPerShare=income.perShare*income.spec.year;
     const annualizedCurrentYield=currentPrice>0?annualizedDistributionPerShare/currentPrice*100:0;
-    const currentMonth=new Date().toISOString().slice(0,7);
+    const currentMonth=todayISO().slice(0,7);
     const currentMonthDividends=postedDividends.filter(row=>String(row.date).startsWith(currentMonth)).reduce((sum,row)=>sum+n(row.amountUSD),0);
     const cutoff=new Date();cutoff.setUTCFullYear(cutoff.getUTCFullYear()-1);const cutoffISO=cutoff.toISOString().slice(0,10);
     const trailing12Dividends=postedDividends.filter(row=>String(row.date)>=cutoffISO).reduce((sum,row)=>sum+n(row.amountUSD),0);
@@ -145,10 +145,11 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
 
   function totals() {
     const rows=activeProjects().map(computeProject).filter(Boolean);
+    const received=getState().dividends.filter(row=>isDate(row.date)&&row.date<=todayISO()&&n(row.amountUSD)>0);
     return {
       rows, marketValue:rows.reduce((sum,row)=>sum+row.marketValue,0), costBasis:rows.reduce((sum,row)=>sum+row.costBasis,0),
       unrealized:rows.reduce((sum,row)=>sum+row.unrealized,0), totalReturn:rows.every(row=>row.priceAvailable)?rows.reduce((sum,row)=>sum+n(row.totalReturn),0):null,
-      dividendsTotal:rows.reduce((sum,row)=>sum+row.dividendsTotal,0), yearDividends:rows.reduce((sum,row)=>sum+row.yearDividends,0),
+      dividendsTotal:received.reduce((sum,row)=>sum+n(row.amountUSD),0), yearDividends:received.filter(row=>row.date.startsWith(todayISO().slice(0,4))).reduce((sum,row)=>sum+n(row.amountUSD),0),
       currentMonthDividends:rows.reduce((sum,row)=>sum+row.currentMonthDividends,0),trailing12Dividends:rows.reduce((sum,row)=>sum+row.trailing12Dividends,0),
       monthlyEstimate:rows.reduce((sum,row)=>sum+row.monthlyEstimate,0), dividendAvailable:rows.reduce((sum,row)=>sum+row.dividendAvailable,0),
       missingPriceCount:rows.filter(row=>!row.priceAvailable).length,staleEstimateCount:rows.filter(row=>row.estimateStale&&row.dividends.length).length

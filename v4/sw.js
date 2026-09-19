@@ -1,4 +1,5 @@
-const CACHE = 'dividend-os-v0.10.0-r35';
+const CACHE_PREFIX = 'dividend-os-' + new URL(self.registration.scope).pathname + '-';
+const CACHE = CACHE_PREFIX + 'dividend-os-v0.10.0-r36';
 const ASSETS = [
   './', './index.html', './styles.css', './styles-refined.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js', './runtime-config.js', './toss-client.js',
@@ -11,7 +12,7 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('dividend-os-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', event => {

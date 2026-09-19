@@ -1,15 +1,15 @@
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r35';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r36';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.10.0-r35';
+import { createViews } from './modules/views.js?v=0.10.0-r36';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r35';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r36';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -30,6 +30,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let homeBreakdownExpanded = false;
   let portfolioCategory = 'highYield';
   let currentUser = null;
+  let cloudReady = false, pendingCloudState = null, cloudChoiceResolve = null;
   let cloudUnsubscribe = null;
   let applyingCloudState = false;
   let saveTimer = null;
@@ -62,7 +63,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   function hasMeaningfulData(value=state) { return !!(value&&(value.trades?.length||value.dividends?.length||value.splits?.length||value.cashAdjustments?.length||value.projects?.some(p=>n(p.currentPrice)||n(p.monthlyPlanShares)||n(p.initialDividendBalance)))); }
 
   async function pushCloudState() {
-    if(demoMode||!currentUser||applyingCloudState)return;
+    if(demoMode||!currentUser||!cloudReady||applyingCloudState)return;
     if(!navigator.onLine){setSaveStatus('오프라인','cloud-error');return;}
     try {
       setSaveStatus('동기화 중','cloud-busy');
@@ -139,6 +140,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     closeModal();
   }
   function closeModal() {
+    if(cloudChoiceResolve){const resolve=cloudChoiceResolve;cloudChoiceResolve=null;resolve('cancel');}
     document.getElementById('modalBackdrop').classList.remove('show');document.getElementById('modal').innerHTML='';
     modalDirty=false;document.body.style.position='';document.body.style.top='';document.body.style.width='';
     document.querySelectorAll('main,.bottom-nav').forEach(el=>{el.inert=false;});
@@ -201,9 +203,10 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date||todayISO()}"></div>
       <div><label class="input-label">세후 배당 USD</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${n(record?.amountUSD)}"></div>
       <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record?n(record.sharesAtPayment):round(calc.shares,4)}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record?n(record.referencePrice):n(project.currentPrice)}"></div></div>
+      <details><summary>ROC 자료 기록 (선택)</summary><p class="tiny muted">운용사 자료가 있을 때만 입력하세요. 추정 ROC는 확정 세금 분류가 아니며, 배당금에 더하거나 빼지 않습니다.</p><div class="form-grid two"><div><label class="input-label">ROC 비율 %</label><input class="input" name="rocPercent" type="number" min="0" max="100" step="0.01" value="${record?.rocPercent??''}"></div><div><label class="input-label">자료 구분</label><select class="input" name="rocStatus"><option value="estimated" ${record?.rocStatus!=='final'?'selected':''}>운용사 추정</option><option value="final" ${record?.rocStatus==='final'?'selected':''}>확정 자료</option></select></div></div></details>
       <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);closeModal();renderAll();showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
+    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,rocPercent:form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus:form.get('rocStatus')==='final'?'final':'estimated',sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);closeModal();renderAll();showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
   }
 
   function openCashForm(record=null) {
@@ -266,7 +269,9 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
   async function restoreFromFile(file) {
     try {
-      const parsed=await readStateFromBackupFile(file),restored=migrate(parsed),issues=validateLedger(restored);
+      const parsed=await readStateFromBackupFile(file);
+      if(parsed.version===4){const rawIssues=validateLedger(parsed);if(rawIssues.length)throw new Error(rawIssues.join(' '));}
+      const restored=migrate(parsed),issues=validateLedger(restored);
       if(issues.length)throw new Error(issues.join(' '));
       const engine=createPortfolioEngine(()=>restored,()=>restored.projects[0].id);
       if(engine.totals().rows.some(c=>c.oversells.length))throw new Error('보유량을 초과하는 매도 기록이 있습니다.');
@@ -274,26 +279,50 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       document.getElementById('confirmRestore').onclick=async()=>{await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');};
     }catch(error){toast(error?.message||'지원되는 PROJECT1000/DividendOS ZIP이 아닙니다.');}
   }
+  async function restoreSafetyCopy() {
+    const previous=await storageGet(SAFETY_KEY);
+    if(!previous){toast('되돌릴 안전 사본이 없습니다.');return;}
+    const restored=migrate(previous),issues=validateLedger(restored);
+    if(issues.length){toast('안전 사본을 확인할 수 없습니다. ZIP 백업을 사용해 주세요.');return;}
+    confirmAction('직전 안전 사본 복원',`종목 ${restored.projects.length}개 · 거래 ${restored.trades.length}건 · 배당 ${restored.dividends.length}건으로 되돌립니다. 현재 기록도 안전 사본으로 보관합니다.`,async()=>{
+      await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);renderAll();showPage('home');toast('직전 안전 사본으로 복원했습니다.');
+    },'되돌리기');
+  }
   function csvCell(value){const text=String(value??'');return /[",\n]/.test(text)?`"${text.replaceAll('"','""')}"`:text;}
   function exportCSV(){const rows=[['프로젝트','티커','구분','ID','날짜','유형','세부유형','주수','단가USD','금액USD','메모']];for(const p of state.projects){projectRows('trades',p.id).forEach(x=>rows.push([p.id,p.symbol,'거래',x.id,x.date,x.type,x.buyType,x.shares,x.price,n(x.shares)*n(x.price),x.note]));projectRows('dividends',p.id).forEach(x=>rows.push([p.id,p.symbol,'배당',x.id,x.date,'dividend','','','',x.amountUSD,x.note]));projectRows('splits',p.id).forEach(x=>rows.push([p.id,p.symbol,'분할',x.id,x.date,x.type,'',x.from,x.to,'','']));projectRows('cashAdjustments',p.id).forEach(x=>rows.push([p.id,p.symbol,'잔액보정',x.id,x.date,'cash','','','',x.amountUSD,x.label]));}downloadFile(`DividendOS_${todayISO().replaceAll('-','')}.csv`,'\ufeff'+rows.map(row=>row.map(csvCell).join(',')).join('\n'),'text/csv;charset=utf-8');toast('CSV를 저장했습니다.');}
 
   async function chooseInitialSync(cloudState) {
     const localHas=hasMeaningfulData(state),cloudHas=hasMeaningfulData(cloudState);
-    if(cloudHas){const localTime=new Date(state.meta?.updatedAt||0).getTime(),cloudTime=new Date(cloudState.meta?.updatedAt||0).getTime();if(localHas&&localTime>cloudTime+3000)return await new Promise(resolve=>{openModal('<h3 class="modal-title">동기화할 데이터 선택</h3><p class="modal-desc">이 기기의 V4 기록이 클라우드보다 새롭습니다.</p><div class="form-grid"><button class="btn primary" id="useLocal">기기 기록 저장</button><button class="btn secondary" id="useCloud">클라우드 불러오기</button></div>');document.getElementById('useLocal').onclick=()=>{closeModal();resolve('local')};document.getElementById('useCloud').onclick=()=>{closeModal();resolve('cloud')};});return 'cloud';}
+    const signature=value=>JSON.stringify(['projects','trades','dividends','splits','cashAdjustments','settings'].map(key=>value?.[key]));
+    if(cloudHas){
+      if(localHas&&signature(state)!==signature(cloudState))return await new Promise(resolve=>{
+        openModal(`<h3 class="modal-title">동기화할 데이터 선택</h3><p class="modal-desc">기기와 클라우드 기록이 다릅니다. 날짜만으로 자동 덮어쓰지 않습니다.<br>기기: 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>클라우드: 거래 ${cloudState.trades.length}건 · 배당 ${cloudState.dividends.length}건<br>닫으면 기기 기록을 유지하고 동기화를 보류합니다.</p><div class="form-grid"><button class="btn primary" id="useLocal">기기 기록 저장</button><button class="btn secondary" id="useCloud">클라우드 불러오기</button></div>`);
+        cloudChoiceResolve=resolve;
+        for(const [id,choice] of [['useLocal','local'],['useCloud','cloud']])document.getElementById(id).onclick=()=>{cloudChoiceResolve=null;closeModal();resolve(choice);};
+      });
+      return 'cloud';
+    }
     return localHas?'local':'blank';
   }
   async function connectCloudForUser(user) {
-    currentUser=user;setSaveStatus('동기화 확인','cloud-busy');
+    currentUser=user;cloudReady=false;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('동기화 확인','cloud-busy');
     try{
       let cloudData=await getCloudDocument(user.uid),cloudState=cloudData?.state?migrate(cloudData.state):null,usingLegacyCloud=false;
       if(!cloudState){const legacy=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;cloudState=prepareLegacyMigration(legacy.state).candidate;usingLegacyCloud=true;}}
       else if(!cloudState.meta?.migrationAudit){const legacy=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;const audit=auditLegacyAgainstState(legacy.state,cloudState);if(audit?.passed)cloudState.meta.migrationAudit=audit;else cloudState.meta.legacyMigrationAvailable=true;}}
       const choice=await chooseInitialSync(cloudState);
-      if(choice==='cloud'&&cloudState){applyingCloudState=true;state=cloudState;await storageSet(STATE_KEY,state);applyingCloudState=false;if(usingLegacyCloud)await pushCloudState();}else await pushCloudState();
+      if(choice==='cancel'){pendingCloudState=cloudState;setSaveStatus('동기화 보류','cloud-error');return;}
+      if(cloudState){const issues=validateLedger(cloudState);if(issues.length)throw new Error(issues.join(' '));}
+      pendingCloudState=null;
+      if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudReady=true;if(usingLegacyCloud)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
-      cloudUnsubscribe?.();cloudUnsubscribe=await subscribeCloudDocument(user.uid,data=>{if(!data?.state||applyingCloudState)return;const remote=migrate(data.state),remoteTime=new Date(remote.meta?.updatedAt||0).getTime(),localTime=new Date(state.meta?.updatedAt||0).getTime();if(remoteTime>localTime+1000){applyingCloudState=true;state=remote;storageSet(STATE_KEY,state).then(()=>{renderAll();showPage(currentPage);applyingCloudState=false;setSaveStatus('','cloud-ok');});}},error=>{console.error(error);setSaveStatus('동기화 오류','cloud-error');});
+      cloudUnsubscribe=await subscribeCloudDocument(user.uid,data=>{
+        if(!data?.state||applyingCloudState)return;
+        const remote=migrate(data.state),remoteTime=new Date(remote.meta?.updatedAt||0).getTime(),localTime=new Date(state.meta?.updatedAt||0).getTime();
+        if(remoteTime>localTime+1000){pendingCloudState=remote;cloudReady=false;clearTimeout(cloudTimer);setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');}
+      },error=>{console.error(error);cloudReady=false;setSaveStatus('동기화 오류','cloud-error');});
       setSaveStatus('','cloud-ok');
-    }catch(error){console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
+    }catch(error){cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
   async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:message=>toast(message,{haptic:true})});}
 
@@ -414,6 +443,8 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if('showLogin'in button.dataset){if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
+    if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
+    if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
     if('csv'in button.dataset){exportCSV();return;}
     if('checkTossIp'in button.dataset){showCurrentTossIp();return;}
     if('copyTossIp'in button.dataset){copyTossIp();return;}
@@ -464,7 +495,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r35').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r36').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
