@@ -1,5 +1,17 @@
 # MSTY replacement candidate — 0.10.0 / r34
 
+## r35 follow-up
+
+- Home goal links now open the selected goal's details directly.
+- Currency changes preserve expanded goal/history sections and scroll position; settings drafts are not rerendered by the currency control.
+- Goal date estimates use the first day of the target month to avoid end-of-month overflow.
+- Chart amount labels increased to 12px and dates to 11px.
+- Modal background controls are inert while the sheet is open.
+- ZIP preparation now produces an explicit download link and record counts, rather than claiming that the device saved the file. Preparation is guarded against duplicate requests.
+- Live isolated UI verified: home 500-share goal opens; switching USD to KRW keeps detail open and changes required purchase cost from $3,750 to 5,137,500 KRW.
+- All seven automated suites and JavaScript syntax checks passed. Pages deployment run 35452155456 succeeded.
+- ZIP preparation completed in both iframe and standalone app. Download-event capture timed out once in each mode, so end-to-end file receipt remains unverified; no further identical retries were made.
+
 Reviewed 2026-09-19. This is an evidence log, not a claim that every device or live account has passed.
 
 ## Scope and isolation
