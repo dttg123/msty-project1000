@@ -152,7 +152,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   }
 
   function openProjectForm(project=null) {
-    const edit=!!project;
+    const edit=!!project,returnPage=currentPage;
     openModal(`<h3 class="modal-title">${edit?'프로젝트 설정':'프로젝트 추가'}</h3><p class="modal-desc">종목마다 PROJECT1000급으로 거래·배당·목표를 따로 관리합니다.</p><form id="projectForm" class="form-grid">
       <div><label class="input-label">티커</label><input class="input" name="symbol" maxlength="12" required value="${esc(project?.symbol||'')}"></div>
       <div><label class="input-label">종목명</label><input class="input" name="name" required value="${esc(project?.name||'')}"></div>
@@ -168,6 +168,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">${edit?'수정 저장':'추가'}</button></div>
       ${edit&&activeProjects().length>1?'<button class="btn soft" type="button" id="archiveProject">프로젝트 보관</button>':''}
     </form>`);
+    if(returnPage==='goal')document.querySelector('#projectForm .form-advanced').open=true;
     document.getElementById('projectForm').onsubmit=async event=>{
       event.preventDefault();const form=new FormData(event.currentTarget),symbol=String(form.get('symbol')).trim().toUpperCase();
       if(!/^[A-Z0-9.-]{1,16}$/.test(symbol)){toast('티커는 영문·숫자·점·하이픈만 입력해 주세요.');return;}
@@ -177,7 +178,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category:form.get('category')==='dividend'?'dividend':'highYield',colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:'manual',priceUpdatedAt:currentPrice?new Date().toISOString():'',distributionFrequency:FREQUENCIES[form.get('distributionFrequency')]?form.get('distributionFrequency'):'monthly',projectStart:String(form.get('projectStart'))||todayISO(),initialDividendBalance:Math.max(0,n(form.get('initialDividendBalance'))),initialDividendBalanceDate:String(form.get('initialDividendBalanceDate'))||''});
       if(edit&&oldSymbol!==symbol)for(const key of ['trades','dividends','splits','cashAdjustments'])state[key].filter(row=>row.projectId===target.id).forEach(row=>{row.symbol=symbol;});
       if(!edit){target.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(target);selectedProjectId=target.id;}
-      portfolioCategory=target.category;await saveState(true);closeModal();renderAll();showPage('projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
+      portfolioCategory=target.category;await saveState(true);closeModal();renderAll(true);showPage(edit?returnPage:'projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
     };
     const archive=document.getElementById('archiveProject');if(archive)archive.onclick=()=>confirmAction('프로젝트 보관',`${project.symbol}은 전체 합산에서 숨겨집니다. 기록은 삭제하지 않습니다.`,async()=>{project.archived=true;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);renderAll();showPage('projects');toast('프로젝트를 보관했습니다.');},'보관');
   }
