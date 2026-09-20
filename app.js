@@ -1,17 +1,17 @@
 import { monthActivity } from './modules/activity.js';
 import { buildHomeMetrics } from './modules/home-metrics.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r39';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r40';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.10.0-r39';
+import { createViews } from './modules/views.js?v=0.10.0-r40';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r39';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r40';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -27,7 +27,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let currentPage = 'home';
   let selectedProjectId = '';
   let chartMode = 'month';
-  let historyFilter={},chartMonth='';
+  let historyFilter={},chartMonth='',chartYear='';
   let historyLimit=10, modalDirty=false, modalFocus=null, modalScroll=0;
   let cashflowMonthKey = '';
   let homeBreakdownExpanded = false;
@@ -83,7 +83,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getHomeBreakdownExpanded:() => homeBreakdownExpanded, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
+    getChartMode:() => chartMode, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getHomeBreakdownExpanded:() => homeBreakdownExpanded, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup:() => tossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -212,19 +212,19 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     openModal(`<h3 class="modal-title">월별 배당</h3><div class="month-navigation"><button class="btn soft" data-income-month="${shift(-1)}" aria-label="이전 달">‹</button><strong>${month.replace('-','년 ')}월</strong><button class="btn soft" data-income-month="${shift(1)}" aria-label="다음 달">›</button></div><div class="cashflow-secondary"><div><span>입금 완료</span><strong>${fmtMoney(actual,2)}</strong></div><div><span>남은 예상</span><strong>${fmtMoney(expected,2)}</strong></div></div><p class="tiny muted">예상은 최근 기록으로 계산한 일정입니다. 입금 확인 후 실제 받은 금액을 기록하세요.</p><div class="income-agenda">${rows.map(r=>`<div class="agenda-row"><div><span class="tiny muted">${fmtDate(r.date)} · ${r.estimated?'예상':'입금 완료'}</span><strong>${esc(r.symbol)}${r.archived?' · 보관':''}</strong></div><div><strong>${fmtMoney(r.amountUSD,2)}</strong>${r.archived?'':`<button class="mini-icon" ${r.estimated?`data-add-dividend-for="${esc(r.projectId)}"`:`data-edit-record="dividend:${esc(r.id)}"`}>${r.estimated?'입금 기록':'기록 수정'}</button>`}</div></div>`).join('')||'<p class="empty">이 달에 기록되거나 산정된 배당이 없습니다.</p>'}</div><button class="btn soft" style="width:100%;margin-top:16px" data-close-modal>닫기</button>`);
   }
 
-  function openDividendForm(record=null) {
+  function openDividendForm(record=null,draft=null) {
     const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project),returnPage=currentPage;
     openModal(`<h3 class="modal-title">${project.symbol} ${edit?'배당 수정':'배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
-      <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date||todayISO()}"></div>
+      <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date||draft?.date||todayISO()}"></div>
       <div><label class="input-label">세후 배당 USD</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${n(record?.amountUSD)}"></div>
       <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record?n(record.sharesAtPayment):round(calc.shares,4)}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record?n(record.referencePrice):n(project.currentPrice)}"></div></div>
       <details><summary>ROC 자료 기록 (선택)</summary><p class="tiny muted">운용사 자료가 있을 때만 입력하세요. 추정 ROC는 확정 세금 분류가 아니며, 배당금에 더하거나 빼지 않습니다.</p><div class="form-grid two"><div><label class="input-label">ROC 비율 %</label><input class="input" name="rocPercent" type="number" min="0" max="100" step="0.01" value="${record?.rocPercent??''}"></div><div><label class="input-label">자료 구분</label><select class="input" name="rocStatus"><option value="estimated" ${record?.rocStatus!=='final'?'selected':''}>운용사 추정</option><option value="final" ${record?.rocStatus==='final'?'selected':''}>확정 자료</option></select></div></div></details>
       <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div>
-      <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
+      <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button>${!edit?'<button class="btn soft" type="submit" name="next" value="1">저장 후 계속 입력</button>':''}<button class="btn primary" type="submit">저장</button></div></form>`);
     const dividendForm=document.getElementById('dividendForm'),preview=document.createElement('div');preview.className='dividend-preview';preview.setAttribute('aria-live','polite');dividendForm.querySelector('.modal-actions').before(preview);
     const updatePreview=()=>{const form=new FormData(dividendForm),amount=n(form.get('amountUSD')),shares=n(form.get('sharesAtPayment')),spec=FREQUENCIES[project.distributionFrequency]||FREQUENCIES.monthly;if(amount<=0){preview.textContent='금액을 입력하면 이 지급액의 월·연 환산을 보여줍니다.';return;}const payout=shares>0?amount/shares*calc.shares:amount;preview.innerHTML=`<strong>이번 입력 기준 환산</strong><br>월 ${fmtMoney(payout*spec.year/12,2)} · 연 ${fmtMoney(payout*spec.year,2)}<br><span class="tiny muted">${shares>0?'현재 보유주수 기준':'지급 주수 미입력 · 입금액 기준'} · ${spec.label}. 이번 금액이 유지된다는 가정이며, 홈의 최근 평균과 다를 수 있습니다.</span>`;};
     dividendForm.addEventListener('input',updatePreview);updatePreview();
-    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,rocPercent:form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus:form.get('rocStatus')==='final'?'final':'estimated',sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);closeModal();renderAll(true);showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
+    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,rocPercent:form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus:form.get('rocStatus')==='final'?'final':'estimated',sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);if(!edit&&event.submitter?.name==='next'){renderAll(true);openDividendForm(null,{date});toast('저장했습니다. 다음 금액을 입력하세요.');return;}closeModal();renderAll(true);showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
   }
 
   function openCashForm(record=null) {
@@ -492,7 +492,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     },true);
     document.addEventListener('click',handleClick);
     document.addEventListener('submit',event=>{if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=new FormData(event.target);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();document.querySelector('.transaction-history').open=true;});
-    document.addEventListener('change',event=>{if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();});
+    document.addEventListener('change',event=>{if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();});
     document.getElementById('modal').addEventListener('input',()=>{modalDirty=true;});
     document.getElementById('modal').addEventListener('change',()=>{modalDirty=true;});
     document.getElementById('modalBackdrop').addEventListener('click',event=>{if(event.target.id==='modalBackdrop')requestCloseModal();});
@@ -517,7 +517,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r39').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r40').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

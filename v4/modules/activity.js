@@ -1,5 +1,12 @@
 import { isDate, n } from './utils.js';
 
+export function historicalIncome(rows, mode, year, today) {
+  const posted=rows.filter(r=>isDate(r.date)&&r.date<=today&&n(r.amountUSD)>0);
+  if(mode==='month'&&year)return Array.from({length:12},(_,i)=>{const key=`${year}-${String(i+1).padStart(2,'0')}`;return {key,label:`${i+1}월`,value:posted.filter(r=>r.date.startsWith(key)).reduce((s,r)=>s+n(r.amountUSD),0)};});
+  const grouped=new Map();for(const r of posted){const key=r.date.slice(0,4);grouped.set(key,(grouped.get(key)||0)+n(r.amountUSD));}
+  return [...grouped].sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>({key,label:key,value}));
+}
+
 export function selectRecords(rows, filter={}) {
   const query=String(filter.query||'').trim().toLocaleLowerCase();
   return rows.filter(row=>(!filter.month||row.date?.startsWith(filter.month))&&
