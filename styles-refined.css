@@ -101,3 +101,5 @@ body{background:var(--bg);background-image:none}
 .pace-card .metric{background:transparent!important;border:0;padding:4px 0;border-radius:0}
 .pace-card .metric+.metric{border-left:1px solid var(--line);padding-left:14px}
 .pace-card .metric-value{font-size:20px;font-variant-numeric:tabular-nums}
+.goal-step-card>summary>b::after{content:'상세 ⌄';display:block;margin-top:7px;font-size:11px;color:var(--muted);font-weight:500}
+.goal-step-card[open]>summary>b::after{content:'접기 ⌃'}

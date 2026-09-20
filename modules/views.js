@@ -2,7 +2,7 @@ import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
 import { APP_VERSION } from '../backup.js';
 import { frequencyOf } from './income.js';
 import { clamp, esc, isDate, n, todayISO } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r43';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r44';
 
 export function createViews(context) {
   const {
