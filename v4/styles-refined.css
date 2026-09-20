@@ -98,6 +98,6 @@ body{background:var(--bg);background-image:none}
 .modal{max-height:calc(100dvh - 24px);scroll-padding-bottom:140px}
 .income-hero .home-primary-amount{color:var(--text);font-size:32px;white-space:normal;line-height:1.25}
 .pace-card .metric-grid{gap:14px;margin-top:12px}
-.pace-card .metric{background:transparent;border:0;padding:4px 0;border-radius:0}
+.pace-card .metric{background:transparent!important;border:0;padding:4px 0;border-radius:0}
 .pace-card .metric+.metric{border-left:1px solid var(--line);padding-left:14px}
 .pace-card .metric-value{font-size:20px;font-variant-numeric:tabular-nums}
