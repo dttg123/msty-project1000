@@ -2,7 +2,7 @@ import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
 import { APP_VERSION } from '../backup.js';
 import { frequencyOf } from './income.js';
 import { clamp, esc, isDate, n, todayISO } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r45';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r46';
 
 export function createViews(context) {
   const {
@@ -66,7 +66,7 @@ export function createViews(context) {
         <article class="card cashflow-card history-overview">
           <div class="overview-heading"><h3>배당 현금흐름</h3><span>최근 12개월</span></div>
           <p class="chart-instruction">월을 누르면 입금 내역을 볼 수 있어요.</p>
-          ${cashflowChart(metrics.months,selectedMonth?.key||'')}
+          ${cashflowChart(metrics.months,selectedMonth?.key||currentMonth)}
           ${selectedMonth?`<div class="selected-month-line"><strong>${selectedMonth.key.replace('-','년 ')}월</strong><span>받음 ${fmtMoney(selectedMonth.actual,0)}${selectedMonth.estimated?' · 예상 '+fmtMoney(selectedMonth.estimated,0):''}</span></div>`:''}
           <button class="card-link" data-income-month="${selectedMonth?.key||currentMonth}"><span>${selectedMonth?selectedMonth.label:'이번 달'} 날짜별 배당 내역</span><b>›</b></button>
         </article>
