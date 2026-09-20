@@ -77,3 +77,27 @@ body{background:var(--bg);background-image:none}
 .agenda-row strong{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .dividend-preview{padding:12px;border-radius:14px;background:var(--soft);font-size:13px;line-height:1.7}
 .history-filter .btn,.agenda-row .mini-icon{min-height:40px}
+
+/* Keep frequent actions next to the information they change. */
+.portfolio-summary,.portfolio-cashflow{padding:16px}
+.portfolio-heading>div{min-width:0}
+.portfolio-heading .project-symbol{font-size:23px;overflow-wrap:anywhere}
+.portfolio-heading .project-name{line-height:1.4;overflow-wrap:anywhere}
+.project-settings-shortcut{min-height:44px;flex-shrink:0}
+.value-line{margin-top:10px;padding-top:8px}
+.value-caption{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.price-shortcut{border:0;background:transparent;color:var(--accent);font:inherit;font-size:12px;min-height:44px;padding:6px 0 6px 8px}
+.holding-row{margin-top:12px}
+.portfolio-cashflow .portfolio-heading{margin-bottom:10px}
+.portfolio-summary strong,.portfolio-cashflow strong{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.entry-actions .btn{min-height:48px}
+.chart-period button{min-height:44px;min-width:40px}
+.modal .modal-actions{grid-template-columns:1fr 1fr;position:sticky;bottom:0;padding:12px 0 0;background:var(--surface);z-index:3}
+.modal-actions>button[name="next"]{grid-column:1/-1;grid-row:2}
+.modal-actions>.btn{min-height:48px}
+.modal{max-height:calc(100dvh - 24px);scroll-padding-bottom:140px}
+.income-hero .home-primary-amount{color:var(--text);font-size:32px;white-space:normal;line-height:1.25}
+.pace-card .metric-grid{gap:14px;margin-top:12px}
+.pace-card .metric{background:transparent;border:0;padding:4px 0;border-radius:0}
+.pace-card .metric+.metric{border-left:1px solid var(--line);padding-left:14px}
+.pace-card .metric-value{font-size:20px;font-variant-numeric:tabular-nums}

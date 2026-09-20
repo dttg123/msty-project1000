@@ -1,17 +1,17 @@
 import { monthActivity } from './modules/activity.js';
 import { buildHomeMetrics } from './modules/home-metrics.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r41';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r42';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.10.0-r41';
+import { createViews } from './modules/views.js?v=0.10.0-r42';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r41';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r42';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -32,6 +32,9 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let cashflowMonthKey = '';
   let homeBreakdownExpanded = false;
   let portfolioCategory = 'highYield';
+  const viewKey=`dividend-os-view-v1:${demoMode?'demo':'local'}`;
+  function rememberView(){try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioCategory,chartMode,chartMonth,chartYear}));}catch(_){}}
+  function restoreView(){try{const saved=JSON.parse(localStorage.getItem(viewKey)||'null');if(!saved)return;const project=activeProjects().find(p=>p.id===saved.selectedProjectId);if(project){selectedProjectId=project.id;portfolioCategory=project.category;}if(['home','projects','goal'].includes(saved.page))currentPage=saved.page;if(['week','month','year','monthWeeks'].includes(saved.chartMode))chartMode=saved.chartMode;if(/^\d{4}-\d{2}$/.test(saved.chartMonth||''))chartMonth=saved.chartMonth;if(/^\d{4}$/.test(saved.chartYear||''))chartYear=saved.chartYear;}catch(_){}}
   let currentUser = null;
   let cloudReady = false, pendingCloudState = null, cloudChoiceResolve = null;
   let cloudUnsubscribe = null;
@@ -126,6 +129,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.id===`page-${page}`));
     document.querySelectorAll('.nav-btn').forEach(el=>el.classList.toggle('active',el.dataset.page===page));
     window.scrollTo({top:0,behavior:'instant'});
+    rememberView();
   }
   function openModal(html) {
     const modal=document.getElementById('modal'),backdrop=document.getElementById('modalBackdrop');
@@ -201,6 +205,12 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     tradeForm.onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),type=form.get('type'),shares=n(form.get('shares')),price=n(form.get('price')),buyType=type==='sell'?'':String(form.get('buyType')),reinvestAmountUSD=buyType==='mixed'?n(form.get('reinvestAmountUSD')):0;if(!isDate(date)||shares<=0||price<0){toast('날짜·주수·단가를 확인해 주세요.');return;}if(reinvestAmountUSD>shares*price+.0001){toast('배당 사용액이 총 매수액보다 큽니다.');return;}const row=record||{id:uid('t'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()},before=record?clone(record):null;Object.assign(row,{date,type,buyType,shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()});if(!edit)state.trades.push(row);const invalid=computeProject(project).oversells.length;if(invalid){if(edit)Object.assign(row,before);else state.trades=state.trades.filter(item=>item!==row);toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');return;}await saveState(true);closeModal();renderAll(true);showPage('projects');toast(edit?'거래를 수정했습니다.':'거래를 저장했습니다.');};
   }
 
+
+  function openPriceForm(){
+    const project=projectById();if(!project)return;
+    openModal(`<h3 class="modal-title">${esc(project.symbol)} 현재가 수정</h3><p class="modal-desc">평가금액과 목표 매수금 계산에 사용할 현재가입니다.</p><form id="priceForm" class="form-grid"><div><label class="input-label">현재가 USD</label><input class="input" name="price" type="number" min="0.0001" step="0.0001" inputmode="decimal" required value="${n(project.currentPrice)||''}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
+    document.getElementById('priceForm').onsubmit=async event=>{event.preventDefault();const price=n(new FormData(event.currentTarget).get('price'));if(price<=0)return;project.currentPrice=price;await saveState(true);closeModal();renderAll(true);toast('현재가를 저장했습니다.');};
+  }
 
   function openIncomeMonth(month=todayISO().slice(0,7)) {
     if(!/^\d{4}-\d{2}$/.test(month))return;
@@ -446,6 +456,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(button.dataset.selectProject){historyFilter={};historyLimit=10;selectedProjectId=button.dataset.selectProject;renderProjects();return;}
     if('addProject'in button.dataset){openProjectForm();return;}
     if('projectSettings'in button.dataset){openProjectForm(projectById());return;}
+    if('editPrice'in button.dataset){openPriceForm();return;}
     if('addTrade'in button.dataset){openTradeForm();return;}
     if('addDividend'in button.dataset){openDividendForm();return;}
     if(button.dataset.addDividendFor){selectedProjectId=button.dataset.addDividendFor;openDividendForm();return;}
@@ -490,9 +501,10 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       form.dataset.submitting='true';
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;},800);
     },true);
-    document.addEventListener('click',handleClick);
+    document.addEventListener('click',event=>{handleClick(event);rememberView();});
+    window.addEventListener('pagehide',rememberView);
     document.addEventListener('submit',event=>{if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=new FormData(event.target);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();document.querySelector('.transaction-history').open=true;});
-    document.addEventListener('change',event=>{if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();});
+    document.addEventListener('change',event=>{if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();rememberView();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();rememberView();});
     document.getElementById('modal').addEventListener('input',()=>{modalDirty=true;});
     document.getElementById('modal').addEventListener('change',()=>{modalDirty=true;});
     document.getElementById('modalBackdrop').addEventListener('click',event=>{if(event.target.id==='modalBackdrop')requestCloseModal();});
@@ -513,11 +525,11 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
       else state=demoMode?demoState():blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
-      renderAll();bindStaticEvents();showPage('home');hideSplash();setSaveStatus('');
+      restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r41').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r42').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
