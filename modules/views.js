@@ -2,7 +2,7 @@ import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
 import { APP_VERSION } from '../backup.js';
 import { frequencyOf } from './income.js';
 import { clamp, esc, isDate, n, todayISO } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r40';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r41';
 
 export function createViews(context) {
   const {
@@ -41,9 +41,9 @@ export function createViews(context) {
         if(Math.abs(krw)>=10000)return `${(krw/10000).toFixed(Math.abs(krw)>=100000?1:1)}만`;
         return `${Math.round(krw).toLocaleString('ko-KR')}원`;
       }
-      return `$${Math.round(n(value)).toLocaleString('en-US')}`;
+      return `$${n(value).toLocaleString('en-US',{minimumFractionDigits:value&&Math.abs(value)<1000?2:0,maximumFractionDigits:Math.abs(value)<1000?2:0})}`;
     };
-    return `<div class="column-chart compact-chart ${getChartMode()==='year'||getChartMode()==='month'&&getChartYear?.()?'wide-chart':'fit-chart'}">${series.map(x=>`<button class="column-item" type="button" data-chart-value="${esc(fmtMoney(x.value,2))}" data-chart-label="${esc(x.label)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value,2))}"><div class="column-value" title="${esc(fmtMoney(x.value,0))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${x.value>0?Math.max(7,x.value/max*100):0}%"></div></div><div class="column-label">${esc(getChartMode()==='week'?x.label.slice(3):x.label)}</div></button>`).join('')}</div>`;
+    return `<div class="column-chart compact-chart ${getChartMode()==='year'||getChartMode()==='month'&&getChartYear?.()?'wide-chart':'fit-chart'}">${series.map(x=>`<button class="column-item" type="button" data-chart-value="${esc(fmtMoney(x.value,2))}" data-chart-label="${esc(getChartMode()==='month'&&getChartYear?.()?x.key:x.label)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value,2))}"><div class="column-value" title="${esc(fmtMoney(x.value,2))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${x.value>0?Math.max(7,x.value/max*100):0}%"></div></div><div class="column-label">${esc(getChartMode()==='week'?x.label.slice(3):x.label)}</div></button>`).join('')}</div>`;
   }
 
   function cashflowChart(months,selectedKey) {
