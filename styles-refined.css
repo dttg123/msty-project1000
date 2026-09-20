@@ -103,3 +103,51 @@ body{background:var(--bg);background-image:none}
 .pace-card .metric-value{font-size:20px;font-variant-numeric:tabular-nums}
 .goal-step-card>summary>b::after{content:'상세 ⌄';display:block;margin-top:7px;font-size:11px;color:var(--muted);font-weight:500}
 .goal-step-card[open]>summary>b::after{content:'접기 ⌃'}
+
+/* One decision per section: this month, history, outlook, next goal. */
+.home-redesign{gap:16px}
+.home-redesign>.card{padding:18px}
+.overview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.overview-heading h3,.outlook-row h3{margin:0;font-size:15px;font-weight:750;line-height:1.4}
+.overview-heading>span{font-size:12px;color:var(--muted)}
+.month-overview{border-top:3px solid var(--accent)}
+.hero-label{font-size:13px;color:var(--muted);margin-top:18px}
+.hero-amount{font-size:34px;font-weight:800;letter-spacing:-.045em;line-height:1.3;margin:5px 0 20px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.month-parts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.month-parts span{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.month-parts strong{font-size:18px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.upcoming-inline{display:flex;justify-content:space-between;align-items:center;width:100%;gap:12px;text-align:left;background:transparent;color:var(--text);border:0;border-top:1px solid var(--line);padding:14px 0;margin-top:18px;font:inherit}
+.upcoming-inline small,.upcoming-inline em{display:block;font-size:12px;color:var(--muted);font-style:normal;font-weight:400}
+.upcoming-inline strong{display:block;font-size:14px;margin-top:6px}
+.upcoming-inline em{display:inline;margin-left:5px}
+.upcoming-inline b{font-size:15px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.upcoming-inline i{font-style:normal;color:var(--muted);margin-left:6px}
+.home-redesign .card-link{color:var(--text);font-size:13px;min-height:44px;margin-top:0}
+.home-redesign .card-link b{color:var(--muted)}
+.chart-instruction{font-size:12px;color:var(--muted);margin:8px 0 0}
+.history-overview .cashflow-legend{margin:12px 0 0}
+.selected-month-line{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;font-size:12px;margin:12px 0}
+.selected-month-line span{color:var(--muted)}
+.outlook-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.outlook-row>div,.outlook-row>span{min-width:0}
+.outlook-row small{display:block;font-size:11px;color:var(--muted);margin-top:5px}
+.outlook-row>strong{font-size:20px;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;max-width:55%}
+.outlook-sub{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted);margin-top:12px}
+.outlook-sub b{font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.pace-overview{border-top:1px solid var(--line);padding-top:16px;margin-top:16px}
+.pace-overview .outlook-row{margin-top:16px}
+.pace-overview .outlook-row>span{font-size:13px;color:var(--muted)}
+.pace-overview .detail-note{font-size:11px;margin:12px 0 0}
+.portfolio-summary .entry-actions{margin-top:16px}
+.compact-income .cashflow-secondary{margin-top:16px}
+.compact-income .cashflow-secondary>div{padding:0;border:0}
+.compact-income .cashflow-secondary strong{font-size:20px;margin-top:6px}
+.portfolio-pace{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;margin-top:14px;border-top:1px solid var(--line)}
+.portfolio-pace>span{font-size:13px;color:var(--muted)}
+.portfolio-pace small{display:block;font-size:11px;margin-top:4px}
+.portfolio-pace strong{font-size:18px;font-variant-numeric:tabular-nums;text-align:right}
+.compact-income .income-evidence{margin-top:12px;padding-top:8px}
+.chart-filter-line{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+.chart-filter-line label{color:var(--muted);font-size:12px}
+.chart-filter-line .input{width:auto;max-width:65%;min-height:40px;padding:8px 12px;font-size:13px}
+.portfolio-section .column-chart.compact-chart{height:150px}
