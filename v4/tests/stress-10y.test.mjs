@@ -76,14 +76,14 @@ globalThis.document={getElementById:id=>elements.get(id)||null};
 const formatters=createFormatters(()=>restored);
 const views=createViews({
   getState:()=>restored,getSelectedProjectId:()=>selectedProjectId,setSelectedProjectId:value=>{selectedProjectId=value;},
-  getChartMode:()=> 'month',getCashflowMonthKey:()=> '',getHomeBreakdownExpanded:()=> true,getPortfolioCategory:()=> 'highYield',setPortfolioCategory:()=>{},
+  getChartMode:()=> 'month',getChartSelection:()=> '',getHomeCashflowMode:()=> 'month',getCashflowMonthKey:()=> '',getPortfolioCategory:()=> 'highYield',setPortfolioCategory:()=>{},
   getCurrentUser:()=> null,isTossBridgeConfigured:()=> false,...engine,...formatters
 });
 views.renderHome(); views.renderProjects(); views.renderGoals(); views.renderSettings();
-assert.match(elements.get('page-home').innerHTML,/종목별·날짜별 내역/);
+assert.match(elements.get('page-home').innerHTML,/날짜별 입금 상세/);
 assert.match(elements.get('page-projects').innerHTML,/class="card transaction-history"/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/class="card transaction-history" open/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card goal-step-card"[^>]* open/);
 assert.match(elements.get('page-goal').innerHTML,/원금회수/);
 assert.ok(elements.get('page-projects').innerHTML.length<250000,'portfolio HTML grew unexpectedly large');
-console.log(`DividendOS v0.11.1 10-year stress QA: PASS (${restored.trades.length} trades, ${restored.dividends.length} dividends)`);
+console.log(`DividendOS v0.11.2 10-year stress QA: PASS (${restored.trades.length} trades, ${restored.dividends.length} dividends)`);

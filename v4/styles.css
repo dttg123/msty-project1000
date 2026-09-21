@@ -900,9 +900,23 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .home-row-sub b { color:var(--text); font-size:14px; }
 .pace-badge { padding:6px 9px; border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:900; white-space:nowrap; }
 .cashflow-card { overflow:hidden; }
+.month-overview .overview-heading,.cashflow-card .overview-heading { align-items:center; }
+.hero-label { margin-top:18px; color:var(--muted); font-size:12px; font-weight:750; }
+.hero-amount { margin-top:5px; font-size:34px; line-height:1.1; font-weight:950; letter-spacing:-.04em; }
+.month-parts,.cashflow-year-summary,.cashflow-pace-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; margin-top:18px; border-radius:15px; background:var(--line); overflow:hidden; }
+.month-parts>div,.cashflow-year-summary>div,.cashflow-pace-summary>div { min-width:0; padding:12px; background:var(--surface-strong); }
+.month-parts span,.month-parts strong,.cashflow-year-summary span,.cashflow-year-summary strong,.cashflow-pace-summary span,.cashflow-pace-summary strong,.cashflow-pace-summary small { display:block; }
+.month-parts span,.cashflow-year-summary span,.cashflow-pace-summary small { color:var(--muted); font-size:10px; }
+.month-parts strong,.cashflow-year-summary strong,.cashflow-pace-summary strong { margin-top:5px; font-size:14px; }
+.cashflow-mode { display:flex; padding:3px; border-radius:11px; background:var(--surface-strong); }
+.cashflow-mode button { min-height:32px; padding:0 10px; border:0; border-radius:8px; background:transparent; color:var(--muted); font-size:11px; font-weight:850; }
+.cashflow-mode button.active { background:var(--accent-soft); color:var(--accent); }
+.chart-instruction { margin:10px 0 0; color:var(--muted); font-size:10px; }
 .cashflow-chart { height:154px; display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); align-items:end; gap:4px; margin-top:18px; overflow:hidden; }
+.cashflow-chart.year-bars { grid-template-columns:repeat(6,minmax(40px,1fr)); gap:8px; overflow-x:auto; }
 .cashflow-month { min-width:0; text-align:center; }
 .cashflow-month { border:0; padding:0; background:transparent; color:inherit; cursor:pointer; }
+.cashflow-amount { height:18px; display:block; overflow:hidden; color:var(--accent); font-size:9px; white-space:nowrap; }
 .cashflow-bars { height:116px; display:flex; align-items:flex-end; justify-content:center; position:relative; border-bottom:1px solid var(--line); }
 .cashflow-bars i { width:min(70%,18px); min-height:0; border-radius:6px 6px 2px 2px; }
 .cashflow-actual { background:linear-gradient(180deg,var(--accent-2),var(--accent)); z-index:2; }
@@ -911,6 +925,27 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .cashflow-month:nth-child(even) span { visibility:hidden; }
 .cashflow-month.active .cashflow-bars { border-bottom-color:var(--accent); }
 .cashflow-month.active span { color:var(--accent); font-weight:900; visibility:visible; }
+.cashflow-selection { margin-top:15px; padding:14px; border:1px solid var(--line); border-radius:16px; background:var(--surface-strong); }
+.cashflow-selection>div:first-child { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:3px 12px; }
+.cashflow-selection>div:first-child span,.cashflow-selection>div:first-child small { color:var(--muted); font-size:10px; }
+.cashflow-selection>div:first-child strong { grid-column:2; grid-row:1/3; font-size:21px; }
+.composition-bar { display:flex; height:10px; margin-top:14px; overflow:hidden; border-radius:999px; background:var(--line); }
+.composition-bar>i { min-width:2px; background:var(--segment); }
+.composition-legend { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; margin-top:12px; }
+.composition-legend span { min-width:0; display:flex; align-items:center; gap:6px; color:var(--muted); font-size:10px; }
+.composition-legend span>i { width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:var(--dot); }
+.composition-legend b { margin-left:auto; color:var(--text); font-size:10px; white-space:nowrap; }
+.single-symbol-note { margin:12px 0 0; color:var(--muted); font-size:11px; }
+.chart-selection-inline { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:14px; padding:12px 13px; border-radius:14px; background:var(--surface-strong); }
+.chart-selection-inline span,.chart-selection-inline strong,.chart-selection-inline small { display:block; }
+.chart-selection-inline span,.chart-selection-inline small { color:var(--muted); font-size:10px; }
+.chart-selection-inline strong { margin-top:3px; font-size:18px; }
+.month-actual-summary { margin:18px 0; padding:16px; border-radius:16px; background:var(--accent-soft); }
+.month-actual-summary span,.month-actual-summary strong,.month-actual-summary small { display:block; }
+.month-actual-summary span,.month-actual-summary small { color:var(--muted); font-size:11px; }
+.month-actual-summary strong { margin:5px 0; font-size:29px; }
+.month-composition { margin:0 0 20px; }
+.month-composition h4 { margin:0; font-size:14px; }
 .card-link { width:100%; display:flex; justify-content:space-between; margin-top:13px; padding:12px 0 0; border:0; border-top:1px solid var(--line); background:transparent; color:var(--accent); font-size:12px; font-weight:850; }
 .cashflow-head { align-items:center; }
 .cashflow-head>strong { color:var(--accent); font-size:20px; white-space:nowrap; }
