@@ -1,6 +1,6 @@
 import { blankRecovery } from './state.js';
 import { clamp, isDate, n, todayISO } from './utils.js';
-import { incomeEstimate } from './income.js?v=0.10.0-r47';
+import { incomeEstimate } from './income.js?v=0.10.0-r48';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
