@@ -61,6 +61,30 @@ export function normalizeTossOrder(order) {
   };
 }
 
+export function normalizeTossDividend(row) {
+  const externalId=orderIdOf(row),symbol=symbolOf(row?.symbol),date=dateOf(row?.date??row?.paidAt??row?.paymentDate);
+  const amountUSD=Math.max(0,n(row?.amountUSD??row?.netAmount??row?.amount));
+  const currency=String(row?.currency||'').toUpperCase();
+  if(!externalId||!symbol||!date||date>todayISO()||amountUSD<=0||amountUSD>1e9)return null;
+  return {externalId,symbol,name:String(row?.name||symbol).trim()||symbol,date,amountUSD,currency};
+}
+
+export function mergeTossSourceLedger(current={},snapshot={},observedAt=new Date().toISOString()) {
+  const merge=(existing,incoming,normalizer)=>{
+    const map=new Map((Array.isArray(existing)?existing:[]).filter(row=>row?.externalId).map(row=>[String(row.externalId),row]));
+    for(const raw of Array.isArray(incoming)?incoming:[]){
+      const row=normalizer(raw);if(!row)continue;
+      const previous=map.get(row.externalId);
+      map.set(row.externalId,{...(previous||{}),...row,firstSeenAt:previous?.firstSeenAt||observedAt,lastSeenAt:observedAt});
+    }
+    return [...map.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.externalId).localeCompare(String(b.externalId)));
+  };
+  return {
+    orders:merge(current.orders,snapshot.orders,normalizeTossOrder),
+    dividends:merge(current.dividends,snapshot.dividends,normalizeTossDividend)
+  };
+}
+
 export function buildTossSync(snapshot, {existingTrades=[], appPositions=[]}={}) {
   const existingIds=new Set(existingTrades.filter(row=>row?.source?.provider==='toss').map(row=>String(row.source.externalId||'')));
   const manualSignatureCounts=new Map();

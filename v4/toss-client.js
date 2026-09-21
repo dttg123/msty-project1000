@@ -132,7 +132,7 @@ async function fetchDirectSnapshot({from=TOSS_SYNC_FROM,symbols=[]}={}) {
     directClosedOrders(account.accountSeq,safeFrom,today),
     clean.length?directGet(`/api/v1/prices?${new URLSearchParams({symbols:clean.join(',')})}`):Promise.resolve([])
   ]);
-  return {accountLabel:maskAccount(account.accountNo),fetchedAt:new Date().toISOString(),from:safeFrom,holdings:Array.isArray(holdingResult?.items)?holdingResult.items:[],prices:Array.isArray(priceResult)?priceResult:[],orders:orderResult.orders,historyTruncated:orderResult.truncated};
+  return {accountLabel:maskAccount(account.accountNo),fetchedAt:new Date().toISOString(),from:safeFrom,holdings:Array.isArray(holdingResult?.items)?holdingResult.items:[],prices:Array.isArray(priceResult)?priceResult:[],orders:orderResult.orders,dividends:[],historyTruncated:orderResult.truncated};
 }
 
 async function fetchBridgeSnapshot({from=TOSS_SYNC_FROM,symbols=[]}={}) {

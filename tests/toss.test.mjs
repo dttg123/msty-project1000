@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {buildTossSync,normalizeTossOrder,mergeTossCandidates} from '../modules/toss.js';
+import {buildTossSync,normalizeTossOrder,mergeTossCandidates,mergeTossSourceLedger,normalizeTossDividend} from '../modules/toss.js';
 const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
 assert.equal(normalizeTossOrder(row).shares,2);
 for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
@@ -9,4 +9,11 @@ assert.equal(result.unsupportedCurrencyCount,1);
 assert.equal(result.comparisons[0].difference,1);
 assert.equal(mergeTossCandidates(result.candidates,result.candidates).length,1);
 assert.equal(buildTossSync({orders:[row]},{existingTrades:[{symbol:'MSTY',date:'2026-01-01',type:'buy',shares:2,price:10}]}).candidates.length,0);
+const ledger1=mergeTossSourceLedger({}, {orders:[row],dividends:[{id:'div-1',symbol:'MSTY',date:'2026-01-08',netAmount:12.34,currency:'USD'}]},'2026-01-09T00:00:00Z');
+assert.equal(ledger1.orders.length,1);
+assert.equal(ledger1.dividends.length,1);
+assert.equal(normalizeTossDividend({id:'div-1',symbol:'MSTY',date:'2026-01-08',netAmount:12.34,currency:'USD'}).amountUSD,12.34);
+const ledger2=mergeTossSourceLedger(ledger1,{orders:[],dividends:[]},'2026-01-10T00:00:00Z');
+assert.equal(ledger2.orders.length,1,'a later empty/disconnected response must not erase source history');
+assert.equal(ledger2.dividends.length,1,'stored dividends must survive later gaps');
 console.log('Toss offline adapter: PASS (no account requests)');

@@ -1,6 +1,6 @@
 import { blankRecovery } from './state.js';
 import { clamp, isDate, n, todayISO } from './utils.js';
-import { incomeEstimate } from './income.js?v=0.10.0-r48';
+import { incomeEstimate } from './income.js?v=0.11.0-r49';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
@@ -27,6 +27,19 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
       if(byType)return byType;
       return String(a.createdAt||a.id).localeCompare(String(b.createdAt||b.id));
     });
+  }
+
+  function sharesAtDate(projectId,date) {
+    if(!isDate(date))return 0;
+    let shares=0;
+    for(const event of sortedEvents(projectId).filter(row=>isDate(row.date)&&String(row.date)<=date)){
+      if(event.eventType==='split'){
+        const ratio=n(event.to)/n(event.from);
+        if(ratio>0&&Number.isFinite(ratio))shares*=ratio;
+      }else if(event.type==='buy')shares+=Math.max(0,n(event.shares));
+      else if(event.type==='sell')shares-=Math.max(0,n(event.shares));
+    }
+    return Math.max(0,Math.abs(shares)<1e-9?0:shares);
   }
 
   function computeProject(projectOrId) {
@@ -156,5 +169,5 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     };
   }
 
-  return { activeProjects, projectById, projectRows, sortedEvents, computeProject, recoveryStats, totals };
+  return { activeProjects, projectById, projectRows, sortedEvents, sharesAtDate, computeProject, recoveryStats, totals };
 }

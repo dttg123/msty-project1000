@@ -25,7 +25,7 @@ export function blankState() {
     version:4,
     settings:{ exchangeRate:1370, exchangeRateMode:'manual', displayCurrency:'USD', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
     projects:[project], trades:[], dividends:[], splits:[], cashAdjustments:[],
-    integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastError:'', accountLabel:'', candidates:[], holdings:[], comparisons:[], ignoredCount:0, matchedExistingCount:0, unsupportedCurrencyCount:0, historyTruncated:false } },
+    integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastSuccessfulAt:'', lastAttemptAt:'', lastError:'', accountLabel:'', candidates:[], holdings:[], comparisons:[], ignoredCount:0, matchedExistingCount:0, unsupportedCurrencyCount:0, historyTruncated:false, syncSequence:0, sourceLedger:{orders:[],dividends:[]} } },
     meta:{ createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), lastBackupAt:'', lastLocalSaveAt:'', lastCloudSaveAt:'', migratedFrom:'', migrationCheckedAt:'', celebratedMilestones:[] }
   };
 }
@@ -86,7 +86,7 @@ export function normalizeV4(raw) {
     recovery:{...blankRecovery(), ...(project.recovery || {})}, category:['dividend','highYield'].includes(project.category)?project.category:inferProjectCategory(project.symbol), colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
   })) : base.projects;
   for (const key of ['trades','dividends','splits','cashAdjustments']) result[key] = Array.isArray(raw[key]) ? raw[key] : [];
-  result.integrations = {toss:{...base.integrations.toss, ...(raw.integrations?.toss || {})}};
+  result.integrations = {toss:{...base.integrations.toss, ...(raw.integrations?.toss || {}),sourceLedger:{...base.integrations.toss.sourceLedger,...(raw.integrations?.toss?.sourceLedger||{})}}};
   result.meta = {...base.meta, ...(raw.meta || {})};
   return result;
 }

@@ -1,12 +1,12 @@
 import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
 import { APP_VERSION } from '../backup.js';
-import { frequencyOf } from './income.js?v=0.10.0-r48';
+import { frequencyOf } from './income.js?v=0.11.0-r49';
 import { clamp, esc, isDate, n, todayISO } from './utils.js';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.10.0-r48';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.11.0-r49';
 
 export function createViews(context) {
   const {
-    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getHomeBreakdownExpanded, getPortfolioCategory, setPortfolioCategory, getCurrentUser, isTossBridgeConfigured,
+    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getPortfolioCategory, setPortfolioCategory, getCurrentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -60,24 +60,19 @@ export function createViews(context) {
           <div class="hero-amount">${fmtMoney(metrics.month.total,2)}</div>
           <div class="month-parts"><div><span>받은 배당</span><strong>${fmtMoney(metrics.month.actual,2)}</strong></div><div><span>앞으로 받을 예상</span><strong>${fmtMoney(metrics.month.remaining,2)}</strong></div></div>
           ${next?`<button class="upcoming-inline" data-income-month="${next.date.slice(0,7)}"><span><small>다음 배당 · 예상</small><strong>${esc(next.symbol)} <em>${fmtDate(next.date)}</em></strong></span><b>${fmtMoney(next.amountUSD,2)} <i>›</i></b></button>`:'<p class="detail-note">다음 배당은 지급 기록이 쌓이면 계산됩니다.</p>'}
-          <button class="card-link" data-toggle-home-breakdown><span>이번 달 종목별 배당</span><b>${getHomeBreakdownExpanded?.()?'⌃':'⌄'}</b></button>
-          ${getHomeBreakdownExpanded?.()?`<div class="home-breakdown">${metrics.projectMonth.map(row=>`<div><strong>${esc(row.symbol)}</strong><span>받음 ${fmtMoney(row.actual,2)} · 남은 예상 ${fmtMoney(row.remaining,2)}</span><button class="mini-icon" data-add-dividend-for="${esc(row.projectId)}" aria-label="${esc(row.symbol)} 배당 입력">입금 기록</button></div>`).join('')||'<div class="empty-inline">이번 달 배당 내역이 없습니다.</div>'}</div>`:''}
         </article>
         <article class="card cashflow-card history-overview">
           <div class="overview-heading"><h3>배당 현금흐름</h3><span>최근 12개월</span></div>
           <p class="chart-instruction">월을 누르면 입금 내역을 볼 수 있어요.</p>
           ${cashflowChart(metrics.months,selectedMonth?.key||currentMonth)}
           ${selectedMonth?`<div class="selected-month-line"><strong>${selectedMonth.key.replace('-','년 ')}월</strong><span>받음 ${fmtMoney(selectedMonth.actual,2)}${selectedMonth.estimated?' · 예상 '+fmtMoney(selectedMonth.estimated,2):''}</span></div>`:''}
-          <button class="card-link" data-income-month="${selectedMonth?.key||currentMonth}"><span>${selectedMonth?selectedMonth.label:'이번 달'} 날짜별 배당 내역</span><b>›</b></button>
-        </article>
-        <article class="card outlook-overview">
-          <div class="outlook-row"><div><h3>올해 받은 배당</h3><small>1월부터 오늘까지 실제 입금</small></div><strong>${fmtMoney(metrics.year.actual,2)}</strong></div>
-          <div class="outlook-sub"><span>연말 예상 합계${metrics.missingEstimateCount?' · 일부 미산정':''}</span><b>${fmtMoney(metrics.year.total,2)}</b></div>
-          <div class="pace-overview"><div class="overview-heading"><h3>현재 배당 페이스</h3><span class="${paceChange===null?'':signClass(paceChange)}">${paceChange===null?'추세 비교 부족':fmtPct(paceChange)}</span></div>
-            <div class="outlook-row"><span>현재 보유량 월 환산</span><strong>${metrics.pace.available?fmtMoney(metrics.pace.monthly,2):'기록 부족'}</strong></div>
-            <div class="outlook-sub"><span>같은 수준 유지 시 연 환산</span><b>${metrics.pace.available?fmtMoney(metrics.pace.annualized,2):'—'}</b></div>
-            <p class="detail-note">최근 지급 평균 기준이며, 이번 달 입금 예상과는 달라요.</p>
+          <button class="card-link" data-income-month="${selectedMonth?.key||currentMonth}"><span>${selectedMonth?selectedMonth.label:'이번 달'} 종목별·날짜별 내역</span><b>›</b></button>
+          <div class="cashflow-year-summary">
+            <div><span>올해 받은 배당</span><strong>${fmtMoney(metrics.year.actual,2)}</strong></div>
+            <div><span>연말 예상${metrics.missingEstimateCount?' · 일부 미산정':''}</span><strong>${fmtMoney(metrics.year.total,2)}</strong></div>
           </div>
+          <div class="cashflow-pace-summary"><div><span>현재 월 페이스</span><strong>${metrics.pace.available?fmtMoney(metrics.pace.monthly,2):'기록 부족'}</strong></div><div><span class="${paceChange===null?'':signClass(paceChange)}">${paceChange===null?'추세 비교 부족':fmtPct(paceChange)}</span><small>연 환산 ${metrics.pace.available?fmtMoney(metrics.pace.annualized,2):'—'}</small></div></div>
+          <p class="detail-note">최근 지급 평균과 현재 보유량 기준입니다.</p>
         </article>
         <article class="card compact next-card ${goal?'interactive-card':''}" ${goal?`data-goal-detail="${goal.calc.project.id}" tabindex="0" role="button"`:''}><div class="card-kicker">다음 목표</div>${goal?`<div class="next-line"><div><strong>${esc(goal.calc.project.symbol)} · ${goal.milestone.reached?'목표 달성':`${fmtShares(goal.milestone.shares)}주`}</strong><span>현재 ${fmtShares(goal.calc.shares)}주${goal.milestone.reached?' · 현금흐름 단계':` · ${fmtShares(goal.milestone.remaining)}주 남음`}</span></div><b>›</b></div>`:'<div class="empty-inline">종목을 추가하면 가장 가까운 목표를 보여줍니다.</div>'}</article>
       </div>`;
@@ -109,7 +104,7 @@ export function createViews(context) {
     if(row.kind==='split'){title=row.type==='reverse'?'역분할':'주식분할';sub=`${fmtDate(row.date)} · ${row.from}:${row.to}`;value='비율 반영';}
     if(row.kind==='cash'){title=esc(row.label||'배당 잔액 보정');sub=fmtDate(row.date);value=fmtSignedMoney(row.amountUSD);cls=n(row.amountUSD)>=0?'positive':'negative';}
     if(future)sub+=`${sub?' · ':''}미래 기록 · 현재 계산 제외`;
-    return `<div class="list-row"><div><div class="row-title">${title}</div><div class="row-sub">${sub}</div></div><div><div class="row-value ${cls}">${value}</div><div class="row-actions"><button class="mini-icon" data-edit-record="${row.kind}:${row.id}">수정</button><button class="mini-icon delete" data-delete-record="${row.kind}:${row.id}">삭제</button></div></div></div>`;
+    return `<button type="button" class="list-row record-row-button" data-view-record="${row.kind}:${row.id}" aria-label="${esc(title)} 기록 상세"><div><div class="row-title">${title}</div><div class="row-sub">${sub}</div></div><div class="record-value"><div class="row-value ${cls}">${value}</div><span class="record-chevron">상세 ›</span></div></button>`;
   }
 
   function renderProjects() {
@@ -170,7 +165,7 @@ export function createViews(context) {
     const tossReady=isTossBridgeConfigured(),tossUser=!!getCurrentUser(),tossBusy=toss.status==='syncing',canSync=tossReady&&(tossMode==='direct'||tossUser);
     const tossStatus=tossBusy?'조회 중':toss.status==='connected'?'연결됨':toss.status==='error'?'확인 필요':tossReady?'연결 시험':'설정 필요';
     const tossComparisons=(toss.comparisons||[]).slice(0,6);
-    const tossDescription=toss.status==='error'?(toss.lastError||'토스 연결 상태를 다시 확인해 주세요.'):tossMode==='direct'?'현재 휴대폰 IP로 토스에 직접 연결합니다. 계좌·보유주식·체결만 읽고 주문은 하지 않습니다.':tossMode==='bridge'&&!tossUser?'Google 로그인 후 토스 계좌 조회를 시작할 수 있습니다.':tossMode==='bridge'?'읽기 전용 중계 서버로 연결합니다. 자동 저장이나 주문 기능은 없습니다.':'Client ID와 Secret을 이 기기에 저장한 뒤 현재 IP를 등록하세요.';
+    const tossDescription=toss.status==='error'?(toss.lastError||'토스 연결 상태를 다시 확인해 주세요.'):tossMode==='direct'?'현재 휴대폰 IP로 토스에 직접 연결합니다. 조회한 원본 기록은 기기에 보존하고 주문은 하지 않습니다.':tossMode==='bridge'&&!tossUser?'Google 로그인 후 토스 계좌 조회를 시작할 수 있습니다.':tossMode==='bridge'?'읽기 전용 중계 서버로 연결합니다. 조회 기록은 기기에 보존하고 앱 원장 반영은 직접 승인합니다.':'Client ID와 Secret을 이 기기에 저장한 뒤 현재 IP를 등록하세요.';
     const migration=state.meta.migrationAudit,migrationAvailable=!!state.meta.legacyMigrationAvailable,archivedProjects=state.projects.filter(project=>project.archived);
     document.getElementById('page-settings').innerHTML=`${sectionTitle('내 Dividend OS','설정')}
       <div class="stack">
@@ -207,6 +202,7 @@ export function createViews(context) {
           ${tossComparisons.length?`<div class="list" style="margin-top:12px">${tossComparisons.map(row=>`<div class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${fmtShares(row.shares)}주</div><div class="row-sub">앱 ${fmtShares(row.appShares)}주${row.supported?'':' · 원화 종목은 대조만'}</div></div><div class="row-value ${Math.abs(n(row.difference))<.0001?'positive':''}">${Math.abs(n(row.difference))<.0001?'일치':`${n(row.difference)>0?'+':''}${fmtShares(row.difference)}주`}</div></div>`).join('')}</div>`:''}
           ${toss.unsupportedCurrencyCount?`<p class="tiny muted">원화 체결 ${toss.unsupportedCurrencyCount}건은 USD 원장에 섞지 않고 제외했습니다.</p>`:''}
           ${toss.matchedExistingCount?`<p class="tiny muted">기존 수동 거래와 일치한 토스 체결 ${toss.matchedExistingCount}건은 중복 저장하지 않았습니다.</p>`:''}
+          ${(toss.sourceLedger?.orders?.length||toss.sourceLedger?.dividends?.length)?`<p class="tiny positive">기기 보존 원본 · 거래 ${toss.sourceLedger.orders.length}건 · 배당 ${toss.sourceLedger.dividends.length}건${toss.lastSuccessfulAt?' · 마지막 성공 '+fmtDate(toss.lastSuccessfulAt.slice(0,10)):''}</p>`:''}
           ${toss.historyTruncated?'<p class="tiny negative">체결 기록이 10,000건을 넘어 일부만 조회됐습니다. 기간을 나눠 다시 조회해야 합니다.</p>':''}
           <div class="action-row" style="margin-top:12px"><button class="btn secondary" data-sync-toss ${canSync&&!tossBusy?'':'disabled'}>${tossBusy?'조회 중…':toss.status==='connected'?'다시 조회':'전체 조회'}</button><button class="btn soft" data-review-toss ${toss.candidates?.length?'':'disabled'}>${toss.candidates?.length?`후보 ${toss.candidates.length}건 검토`:'후보 없음'}</button></div>
         </div></details>

@@ -9,3 +9,4 @@ export const PROJECT_COLORS = [
   ['#db5570', '#f58aa0'],
   ['#b17816', '#e6ac47']
 ];
+export const PROJECT_COLOR_NAMES = ['보라','주황','파랑','초록','장미','골드'];

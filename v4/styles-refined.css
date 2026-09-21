@@ -104,7 +104,7 @@ body{background:var(--bg);background-image:none}
 .goal-step-card>summary>b::after{content:'상세 ⌄';display:block;margin-top:7px;font-size:11px;color:var(--muted);font-weight:500}
 .goal-step-card[open]>summary>b::after{content:'접기 ⌃'}
 
-/* One decision per section: this month, history, outlook, next goal. */
+/* One decision per section: this month, cashflow, next goal. */
 .home-redesign{gap:16px}
 .home-redesign>.card{padding:18px}
 .overview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -128,6 +128,14 @@ body{background:var(--bg);background-image:none}
 .history-overview .cashflow-legend{margin:12px 0 0}
 .selected-month-line{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;font-size:12px;margin:12px 0}
 .selected-month-line span{color:var(--muted)}
+.cashflow-year-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px;border-top:1px solid var(--line);padding-top:16px;margin-top:4px}
+.cashflow-year-summary>div+div{border-left:1px solid var(--line);padding-left:14px}
+.cashflow-year-summary span,.cashflow-pace-summary span{display:block;color:var(--muted);font-size:11px;line-height:1.35}
+.cashflow-year-summary strong{display:block;margin-top:6px;font-size:17px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.cashflow-pace-summary{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
+.cashflow-pace-summary>div:last-child{text-align:right}
+.cashflow-pace-summary strong{display:block;margin-top:5px;font-size:19px;font-variant-numeric:tabular-nums}
+.cashflow-pace-summary small{display:block;margin-top:5px;color:var(--muted);font-size:11px}
 .outlook-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .outlook-row>div,.outlook-row>span{min-width:0}
 .outlook-row small{display:block;font-size:11px;color:var(--muted);margin-top:5px}
@@ -158,3 +166,26 @@ body{background:var(--bg);background-image:none}
 .trend-comparison span{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}
 .trend-comparison strong{font-size:16px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .income-evidence .detail-note{font-size:11px;margin-bottom:0}
+
+.record-row-button{width:100%;font:inherit;color:inherit;text-align:left;background:transparent;border:0;border-radius:0;cursor:pointer}
+.record-row-button:active{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.record-value{text-align:right;min-width:94px}
+.record-chevron{display:block;margin-top:7px;color:var(--muted);font-size:11px}
+.record-detail-grid{display:grid;gap:0;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.record-detail-grid>div{display:flex;justify-content:space-between;gap:14px;padding:14px;background:var(--surface)}
+.record-detail-grid>div+div{border-top:1px solid var(--line)}
+.record-detail-grid span{color:var(--muted);font-size:13px}
+.record-detail-grid strong{text-align:right;font-size:14px;font-variant-numeric:tabular-nums}
+.record-note{padding:13px 14px;border-radius:12px;background:var(--surface);color:var(--muted);font-size:13px}
+.record-delete-link{width:100%;min-height:44px;margin-top:8px;border:0;background:transparent;color:var(--red);font:inherit;font-size:13px}
+
+.color-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0;padding:0;border:0}
+.color-picker legend{margin-bottom:9px;color:var(--muted);font-size:12px}
+.color-picker label{position:relative;display:flex;align-items:center;gap:7px;min-width:0;padding:10px 9px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.color-picker label:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 18%,transparent)}
+.color-picker input{position:absolute;opacity:0;pointer-events:none}
+.color-picker b{font-size:12px;white-space:nowrap}
+.color-swatch{width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:linear-gradient(135deg,var(--swatch-a),var(--swatch-b));box-shadow:inset 0 0 0 1px rgba(255,255,255,.24)}
+.symbol-month-summary{display:grid;gap:8px;margin:14px 0;padding:12px 14px;border-radius:14px;background:var(--surface)}
+.symbol-month-summary>div{display:flex;justify-content:space-between;gap:12px;font-size:12px}
+.symbol-month-summary span{color:var(--muted);text-align:right}

@@ -1,5 +1,5 @@
 import { isDate, n } from './utils.js';
-import { frequencyOf, paymentDate } from './income.js?v=0.10.0-r48';
+import { frequencyOf, paymentDate } from './income.js?v=0.11.0-r49';
 
 const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 const monthKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
