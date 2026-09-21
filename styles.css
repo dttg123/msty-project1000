@@ -916,7 +916,6 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .cashflow-chart.year-bars { grid-template-columns:repeat(6,minmax(40px,1fr)); gap:8px; overflow-x:auto; }
 .cashflow-month { min-width:0; text-align:center; }
 .cashflow-month { border:0; padding:0; background:transparent; color:inherit; cursor:pointer; }
-.cashflow-amount { height:18px; display:block; overflow:hidden; color:var(--accent); font-size:9px; white-space:nowrap; }
 .cashflow-bars { height:116px; display:flex; align-items:flex-end; justify-content:center; position:relative; border-bottom:1px solid var(--line); }
 .cashflow-bars i { width:min(70%,18px); min-height:0; border-radius:6px 6px 2px 2px; }
 .cashflow-actual { background:linear-gradient(180deg,var(--accent-2),var(--accent)); z-index:2; }
