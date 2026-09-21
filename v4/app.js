@@ -558,9 +558,10 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js'
       await openStorage();
       const existing=await storageGet(STATE_KEY);
       legacyMigrationSource=demoMode?null:await readLegacyState();
-      if(existing){state=migrate(existing);if(legacyMigrationSource&&!state.meta.migrationAudit){const audit=auditLegacyAgainstState(legacyMigrationSource,state);if(audit?.passed)state.meta.migrationAudit=audit;else state.meta.legacyMigrationAvailable=true;}}
+      if(demoMode)state=demoState();
+      else if(existing){state=migrate(existing);if(legacyMigrationSource&&!state.meta.migrationAudit){const audit=auditLegacyAgainstState(legacyMigrationSource,state);if(audit?.passed)state.meta.migrationAudit=audit;else state.meta.legacyMigrationAvailable=true;}}
       else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
-      else state=demoMode?demoState():blankState();
+      else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
