@@ -27,7 +27,7 @@ export function incomeEstimate(project, dividends, splits, shares, now=new Date(
   const gaps=stable.slice(1).map((r,i)=>(new Date(stable[i].date)-new Date(r.date))/86400000).sort((a,b)=>a-b);
   const gap=gaps.length?gaps[Math.floor(gaps.length/2)]:Infinity;
   const known=stable.length>0&&stable.every(r=>r.known);
-  const reliable=shares>0&&stable.length>=(spec.months?1:2)&&age<=spec.maxAge&&(stable.length<2||gap<=spec.maxGap);
+  const reliable=known&&shares>0&&stable.length>=(spec.months?1:2)&&age<=spec.maxAge&&(stable.length<2||gap<=spec.maxGap);
   const perShare=avg(stable.filter(r=>r.known),'perShare'),shortPerShare=avg(short.filter(r=>r.known),'perShare');
   const payout=known?perShare*shares:avg(stable,'amount'),shortPayout=known?shortPerShare*shares:avg(short,'amount');
   return {spec,payments,reliable,known,age,gap,perShare,shortPerShare,payout:reliable?payout:0,

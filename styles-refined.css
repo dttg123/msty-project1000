@@ -151,3 +151,10 @@ body{background:var(--bg);background-image:none}
 .chart-filter-line label{color:var(--muted);font-size:12px}
 .chart-filter-line .input{width:auto;max-width:65%;min-height:40px;padding:8px 12px;font-size:13px}
 .portfolio-section .column-chart.compact-chart{height:150px}
+
+/* Visible, compact comparison: history alone is collapsed in portfolio. */
+.income-evidence h3{font-size:13px;margin:0}
+.trend-comparison{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.trend-comparison span{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}
+.trend-comparison strong{font-size:16px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.income-evidence .detail-note{font-size:11px;margin-bottom:0}

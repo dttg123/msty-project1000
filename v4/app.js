@@ -1,17 +1,17 @@
 import { monthActivity } from './modules/activity.js';
-import { buildHomeMetrics } from './modules/home-metrics.js';
+import { buildHomeMetrics } from './modules/home-metrics.js?v=0.10.0-r47';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r46';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.10.0-r47';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
-import { createPortfolioEngine } from './modules/portfolio.js';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.10.0-r47';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.10.0-r46';
+import { createViews } from './modules/views.js?v=0.10.0-r47';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r46';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.10.0-r47';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -28,7 +28,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
   let selectedProjectId = '';
   let chartMode = 'month';
   let historyFilter={},chartMonth='',chartYear='';
-  let historyLimit=10, modalDirty=false, modalFocus=null, modalScroll=0;
+  let historyLimit=10, modalDirty=false, modalSaving=false, modalFocus=null, modalScroll=0;
   let cashflowMonthKey = '';
   let homeBreakdownExpanded = false;
   let portfolioCategory = 'highYield';
@@ -142,6 +142,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     requestAnimationFrame(()=>modal.querySelector('button')?.focus());
   }
   function requestCloseModal() {
+    if(modalSaving)return;
     if(!document.getElementById('modalBackdrop').classList.contains('show'))return;
     if(modalDirty){if(!document.querySelector('.modal-unsaved'))document.getElementById('modal').insertAdjacentHTML('beforeend','<div class="modal-unsaved" role="alert"><p>작성 중인 내용이 있습니다. 저장하지 않고 닫을까요?</p><button class="btn soft" data-keep-modal>계속 작성</button><button class="btn danger" data-discard-modal>닫기</button></div>');return;}
     closeModal();
@@ -234,7 +235,25 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     const dividendForm=document.getElementById('dividendForm'),preview=document.createElement('div');preview.className='dividend-preview';preview.setAttribute('aria-live','polite');dividendForm.querySelector('.modal-actions').before(preview);
     const updatePreview=()=>{const form=new FormData(dividendForm),amount=n(form.get('amountUSD')),shares=n(form.get('sharesAtPayment')),spec=FREQUENCIES[project.distributionFrequency]||FREQUENCIES.monthly;if(amount<=0){preview.textContent='금액을 입력하면 이 지급액의 월·연 환산을 보여줍니다.';return;}const payout=shares>0?amount/shares*calc.shares:amount;preview.innerHTML=`<strong>이번 입력 기준 환산</strong><br>월 ${fmtMoney(payout*spec.year/12,2)} · 연 ${fmtMoney(payout*spec.year,2)}<br><span class="tiny muted">${shares>0?'현재 보유주수 기준':'지급 주수 미입력 · 입금액 기준'} · ${spec.label}. 이번 금액이 유지된다는 가정이며, 홈의 최근 평균과 다를 수 있습니다.</span>`;};
     dividendForm.addEventListener('input',updatePreview);updatePreview();
-    document.getElementById('dividendForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,rocPercent:form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus:form.get('rocStatus')==='final'?'final':'estimated',sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});if(!edit)state.dividends.push(row);await saveState(true);if(!edit&&event.submitter?.name==='next'){renderAll(true);openDividendForm(null,{date});toast('저장했습니다. 다음 금액을 입력하세요.');return;}closeModal();renderAll(true);showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');};
+    dividendForm.onsubmit=async event=>{
+      event.preventDefault();if(modalSaving)return;
+      const form=new FormData(dividendForm),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));
+      if(!isDate(date)||amountUSD<=0){toast('지급일과 배당금을 확인해 주세요.');return;}
+      const keepEntering=!edit&&event.submitter?.name==='next',before=record?clone(record):null;
+      const row=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};
+      Object.assign(row,{date,amountUSD,rocPercent:form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus:form.get('rocStatus')==='final'?'final':'estimated',sharesAtPayment:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});
+      if(!edit)state.dividends.push(row);
+      const controls=[...document.getElementById('modal').querySelectorAll('input,select,button')],disabled=controls.map(el=>el.disabled);
+      modalSaving=true;dividendForm.setAttribute('aria-busy','true');controls.forEach(el=>el.disabled=true);preview.textContent='저장 중…';
+      try{await saveState(true);}catch(error){
+        if(edit)Object.assign(row,before);else state.dividends=state.dividends.filter(item=>item!==row);
+        controls.forEach((el,i)=>el.disabled=disabled[i]);dividendForm.removeAttribute('aria-busy');modalSaving=false;updatePreview();return;
+      }
+      modalSaving=false;
+      if(keepEntering){renderAll(true);openDividendForm(null,{date});toast('저장했습니다. 다음 금액을 입력하세요.');return;}
+      closeModal();renderAll(true);showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');
+    };
+    if(draft)requestAnimationFrame(()=>{dividendForm.elements.amountUSD.focus();dividendForm.elements.amountUSD.select();});
   }
 
   function openCashForm(record=null) {
@@ -529,7 +548,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r46').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.10.0-r47').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

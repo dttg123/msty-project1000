@@ -13,6 +13,10 @@ const rows=Array.from({length:8},(_,i)=>({date:new Date(+now-i*7*86400000).toISO
 assert.equal(incomeEstimate(weekly,rows,[],400,now).payout,80,'additional shares must increase forecast');
 assert.equal(incomeEstimate(weekly,rows,[],0,now).payout,0,'sold position must not forecast dividends');
 assert.ok(Math.abs(incomeEstimate(weekly,rows,[],400,now).trend)<1e-9);
+const missingShares=rows.map(row=>({...row,sharesAtPayment:0}));
+assert.equal(incomeEstimate(weekly,missingShares,[],400,now).reliable,false,'unknown payment shares cannot support ownership forecast');
+assert.equal(incomeEstimate(weekly,missingShares,[],400,now).monthly,0);
+assert.equal(incomeEstimate(weekly,missingShares,[],400,now).historicalMonthly,40*52/12);
 const beforeSplit=[{date:'2026-09-04',amountUSD:40,sharesAtPayment:200},{date:'2026-09-11',amountUSD:40,sharesAtPayment:200}];
 const adjusted=incomeEstimate(weekly,beforeSplit,[{date:'2026-09-12',from:2,to:1}],100,now);
 assert.equal(adjusted.perShare,.4);assert.equal(adjusted.payout,40,'reverse split preserves income');
@@ -39,3 +43,4 @@ const broken=new Uint8Array(await zip.arrayBuffer());broken[50]^=1;
 await assert.rejects(readStateFromBackupFile({name:'bad.zip',arrayBuffer:async()=>broken.buffer}));
 assert.ok(validateLedger({...state,trades:[{id:'bad',projectId:'missing',date:'bad'}]}).length);
 console.log('Replacement QA: ownership, splits, frequencies, month-end, milestones, nonmutation, ZIP integrity PASS');
+
