@@ -1,17 +1,17 @@
 import { monthActivity } from './modules/activity.js';
-import { buildHomeMetrics } from './modules/home-metrics.js?v=0.11.0-r49';
+import { buildHomeMetrics } from './modules/home-metrics.js?v=0.11.1-r50';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.11.0-r49';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.11.1-r50';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
-import { createPortfolioEngine } from './modules/portfolio.js?v=0.11.0-r49';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.11.1-r50';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.11.0-r49';
+import { createViews } from './modules/views.js?v=0.11.1-r50';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.11.0-r49';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.11.1-r50';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -217,9 +217,12 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
     if(!Number.isFinite(date.getTime()))return;
     const shift=delta=>{const d=new Date(date);d.setMonth(d.getMonth()+delta);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;};
     const metrics=buildHomeMetrics(totals().rows,state.dividends),rows=monthActivity(state,metrics.forecast,month,todayISO());
-    const actual=rows.filter(r=>!r.estimated).reduce((sum,r)=>sum+n(r.amountUSD),0),expected=rows.filter(r=>r.estimated).reduce((sum,r)=>sum+n(r.amountUSD),0);
+    const actual=rows.filter(r=>!r.estimated).reduce((sum,r)=>sum+n(r.amountUSD),0),expected=rows.filter(r=>r.estimated).reduce((sum,r)=>sum+n(r.amountUSD),0),monthTotal=actual+expected,receivedPct=monthTotal>0?actual/monthTotal*100:0;
     const bySymbol=[...rows.reduce((map,row)=>{const key=row.symbol||'기타',item=map.get(key)||{symbol:key,actual:0,expected:0};item[row.estimated?'expected':'actual']+=n(row.amountUSD);map.set(key,item);return map;},new Map()).values()];
-    openModal(`<h3 class="modal-title">월별 배당</h3><div class="month-navigation"><button class="btn soft" data-income-month="${shift(-1)}" aria-label="이전 달">‹</button><strong>${month.replace('-','년 ')}월</strong><button class="btn soft" data-income-month="${shift(1)}" aria-label="다음 달">›</button></div><div class="cashflow-secondary"><div><span>입금 완료</span><strong>${fmtMoney(actual,2)}</strong></div><div><span>남은 예상</span><strong>${fmtMoney(expected,2)}</strong></div></div><div class="symbol-month-summary">${bySymbol.map(item=>`<div><strong>${esc(item.symbol)}</strong><span>받음 ${fmtMoney(item.actual,2)} · 예상 ${fmtMoney(item.expected,2)}</span></div>`).join('')||'<p class="empty">이 달의 배당이 없습니다.</p>'}</div><p class="tiny muted">예상은 최근 기록으로 계산한 일정입니다. 입금 확인 후 실제 받은 금액을 기록하세요.</p><div class="income-agenda">${rows.map(r=>`<div class="agenda-row"><div><span class="tiny muted">${fmtDate(r.date)} · ${r.estimated?'예상':'입금 완료'}</span><strong>${esc(r.symbol)}${r.archived?' · 보관':''}</strong></div><div><strong>${fmtMoney(r.amountUSD,2)}</strong>${r.archived?'':`<button class="mini-icon" ${r.estimated?`data-add-dividend-for="${esc(r.projectId)}"`:`data-edit-record="dividend:${esc(r.id)}"`}>${r.estimated?'입금 기록':'기록 수정'}</button>`}</div></div>`).join('')||'<p class="empty">이 달에 기록되거나 산정된 배당이 없습니다.</p>'}</div><button class="btn soft" style="width:100%;margin-top:16px" data-close-modal>닫기</button>`);
+    openModal(`<h3 class="modal-title">월별 배당</h3><div class="month-navigation"><button class="btn soft" data-income-month="${shift(-1)}" aria-label="이전 달">‹</button><strong>${month.replace('-','년 ')}월</strong><button class="btn soft" data-income-month="${shift(1)}" aria-label="다음 달">›</button></div>
+      <section class="month-visual-summary"><div class="month-progress-head"><div><span>월 예상 합계</span><strong>${fmtMoney(monthTotal,2)}</strong></div><b>${monthTotal?`${Math.round(receivedPct)}% 수령`:'기록 없음'}</b></div><div class="month-stacked-progress" aria-label="실제 ${Math.round(receivedPct)}퍼센트"><i class="actual" style="width:${clamp(receivedPct,0,100)}%"></i><i class="expected" style="width:${clamp(100-receivedPct,0,100)}%"></i></div><div class="month-progress-legend"><span><i class="actual-dot"></i>받음 ${fmtMoney(actual,2)}</span><span><i class="estimate-dot"></i>남은 예상 ${fmtMoney(expected,2)}</span></div></section>
+      <section class="month-symbol-chart"><h4>종목별 기여도</h4>${bySymbol.map(item=>{const itemActual=monthTotal?item.actual/monthTotal*100:0,itemExpected=monthTotal?item.expected/monthTotal*100:0;return `<div class="symbol-bar-row"><div><strong>${esc(item.symbol)}</strong><b>${fmtMoney(item.actual+item.expected,2)}</b></div><div class="symbol-bar-track"><i class="actual" style="width:${itemActual}%"></i><i class="expected" style="width:${itemExpected}%"></i></div><small>받음 ${fmtMoney(item.actual,2)}${item.expected?` · 예상 ${fmtMoney(item.expected,2)}`:''}</small></div>`;}).join('')||'<p class="empty">이 달의 배당이 없습니다.</p>'}</section>
+      <div class="agenda-heading"><h4>지급 일정</h4><span>완료 기록은 눌러서 상세 보기</span></div><div class="income-agenda">${rows.map(r=>r.estimated?`<div class="agenda-row"><div><span class="agenda-status expected">예상</span><strong>${esc(r.symbol)} <small>${fmtDate(r.date)}</small></strong></div><div><strong>${fmtMoney(r.amountUSD,2)}</strong>${r.archived?'':`<button class="agenda-action" data-add-dividend-for="${esc(r.projectId)}">입금 확인</button>`}</div></div>`:`<button type="button" class="agenda-row agenda-row-button" data-view-record="dividend:${esc(r.id)}"><div><span class="agenda-status actual">완료</span><strong>${esc(r.symbol)} <small>${fmtDate(r.date)}</small></strong></div><div><strong>${fmtMoney(r.amountUSD,2)}</strong><i>›</i></div></button>`).join('')||'<p class="empty">이 달에 기록되거나 산정된 배당이 없습니다.</p>'}</div><button class="btn soft" style="width:100%;margin-top:16px" data-close-modal>닫기</button>`);
   }
 
   function openDividendForm(record=null,draft=null) {
@@ -562,7 +565,7 @@ import { clamp, clone, esc, isDate, n, round, todayISO, uid } from './modules/ut
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.11.0-r49').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.11.1-r50').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

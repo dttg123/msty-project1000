@@ -26,7 +26,7 @@ assert.equal(metrics.nextGoal.calc.project.symbol,'MSTY');
 assert.equal(metrics.projectMonth.length,1);
 assert.equal(metrics.projectMonth[0].symbol,'MSTY');
 assert.equal(metrics.projectMonth[0].actual,100);
-console.log('DividendOS v0.10.0 home metrics QA: PASS');
+console.log('DividendOS v0.11.1 home metrics QA: PASS');
 const shifted=buildHomeMetrics([{...calc,income:{...calc.income,gap:6},shortMonthlyEstimate:999}],state.dividends,new Date('2026-09-13T12:00:00'));
 assert.equal(shifted.nextDividend.date,'2026-09-18','holiday-shifted weekly payment must not become a six-day cycle');
 assert.equal(shifted.pace.monthly,calc.monthlyEstimate,'home and portfolio must share the same primary estimate');
