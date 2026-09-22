@@ -929,7 +929,7 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .cashflow-selection>div:first-child span,.cashflow-selection>div:first-child small { color:var(--muted); font-size:10px; }
 .cashflow-selection>div:first-child strong { grid-column:2; grid-row:1/3; font-size:21px; }
 .composition-bar { display:flex; height:10px; margin-top:14px; overflow:hidden; border-radius:999px; background:var(--line); }
-.composition-bar>i { min-width:2px; background:var(--segment); }
+.composition-bar>i,.composition-bar>button { min-width:2px; background:var(--segment); }
 .composition-legend { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; margin-top:12px; }
 .composition-legend span { min-width:0; display:flex; align-items:center; gap:6px; color:var(--muted); font-size:10px; }
 .composition-legend span>i { width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:var(--dot); }

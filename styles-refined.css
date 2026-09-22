@@ -204,6 +204,28 @@ body{background:var(--bg);background-image:none}
 .color-picker input{position:absolute;opacity:0;pointer-events:none}
 .color-picker b{font-size:12px;white-space:nowrap}
 .color-swatch{width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:linear-gradient(135deg,var(--swatch-a),var(--swatch-b));box-shadow:inset 0 0 0 1px rgba(255,255,255,.24)}
+.composition-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px}
+.composition-heading h4{margin:0}
+.composition-heading span,.composition-heading button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:11px}
+.composition-heading button{min-height:40px;padding:0;color:var(--accent);font-weight:800}
+.composition-bar.interactive>button{height:100%;padding:0;border:0;cursor:pointer;transition:opacity .16s,filter .16s,box-shadow .16s}
+.composition-bar.interactive>button+button{box-shadow:inset 1px 0 rgba(255,255,255,.5)}
+.composition-bar.interactive>button.active{position:relative;z-index:1;box-shadow:inset 0 0 0 2px #fff,0 0 0 2px var(--segment)}
+.composition-bar.interactive>button.dimmed,.composition-legend.interactive>button.dimmed{opacity:.28}
+.composition-legend.interactive>button{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0;padding:7px 8px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--muted);font:inherit;font-size:10px;text-align:left}
+.composition-legend.interactive>button>span{display:flex;align-items:center;gap:6px;min-width:0}
+.composition-legend.interactive>button i{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:var(--dot)}
+.composition-legend.interactive>button b{margin-left:auto;color:var(--text);white-space:nowrap}
+.composition-legend.interactive>button.active{border-color:var(--line);background:var(--surface-strong);color:var(--text)}
+
+/* Light mode needs visible layers; white-on-off-white made cards and selections ambiguous. */
+html[data-theme="light"]{--bg:#eef1f6;--surface:#fff;--surface-strong:#f4f6fa;--line:#dce1ea;--muted:#687080;--accent-soft:#e9e7ff;--shadow:0 1px 2px rgba(24,31,48,.04)}
+html[data-theme="light"] .card{border-color:#dce1ea;box-shadow:var(--shadow)}
+html[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.97);border-top-color:#dce1ea;box-shadow:0 -4px 18px rgba(24,31,48,.05)}
+html[data-theme="light"] .top-icon-btn,html[data-theme="light"] .currency-picker{border-color:#dce1ea;box-shadow:0 1px 3px rgba(24,31,48,.05)}
+html[data-theme="light"] .cashflow-month:not(.active) .cashflow-actual,html[data-theme="light"] .column-item:not(.active) .column-fill{opacity:.58}
+html[data-theme="light"] .cashflow-month.active .cashflow-actual,html[data-theme="light"] .column-item.active .column-fill{opacity:1;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-selection-inline{border-color:#d6dbe6;background:#f7f8fb}
 .symbol-month-summary{display:grid;gap:8px;margin:14px 0;padding:12px 14px;border-radius:14px;background:var(--surface)}
 .symbol-month-summary>div{display:flex;justify-content:space-between;gap:12px;font-size:12px}
 .symbol-month-summary span{color:var(--muted);text-align:right}

@@ -1,16 +1,16 @@
 import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.11.3-r52';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.11.3-r53';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
-import { createPortfolioEngine } from './modules/portfolio.js?v=0.11.3-r52';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.11.3-r53';
 import { createFormatters } from './modules/format.js';
-import { createViews } from './modules/views.js?v=0.11.3-r52';
+import { createViews } from './modules/views.js?v=0.11.3-r53';
 import { buildMigrationAudit } from './modules/migration.js';
 import { buildTossSync, mergeTossCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade } from './modules/toss.js';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.11.3-r52';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.11.3-r53';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -213,17 +213,18 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js'
     document.getElementById('priceForm').onsubmit=async event=>{event.preventDefault();const price=n(new FormData(event.currentTarget).get('price'));if(price<=0)return;project.currentPrice=price;await saveState(true);closeModal();renderAll(true);toast('현재가를 저장했습니다.');};
   }
 
-  function openIncomeMonth(month=todayISO().slice(0,7),projectId='') {
+  function openIncomeMonth(month=todayISO().slice(0,7),projectId='',symbolFilter='') {
     if(!/^\d{4}-\d{2}$/.test(month))return;
     const date=new Date(month+'-01T12:00:00');
     if(!Number.isFinite(date.getTime()))return;
     const shift=delta=>{const d=new Date(date);d.setMonth(d.getMonth()+delta);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;};
-    const rows=monthActivity(state,[],month,todayISO()).filter(row=>!row.estimated&&(!projectId||row.projectId===projectId)),actual=rows.reduce((sum,row)=>sum+n(row.amountUSD),0),project=projectId?projectById(projectId):null;
-    const bySymbol=[...rows.reduce((map,row)=>{const key=row.symbol||'기타',item=map.get(key)||{symbol:key,value:0,projectId:row.projectId};item.value+=n(row.amountUSD);map.set(key,item);return map;},new Map()).values()].sort((a,b)=>b.value-a.value),top=bySymbol.slice(0,4),other=bySymbol.slice(4).reduce((sum,row)=>sum+row.value,0),composition=other?[...top,{symbol:'기타',value:other}]:top,total=Math.max(1,actual);
+    const allRows=monthActivity(state,[],month,todayISO()).filter(row=>!row.estimated&&(!projectId||row.projectId===projectId)),allActual=allRows.reduce((sum,row)=>sum+n(row.amountUSD),0),project=projectId?projectById(projectId):null;
+    const bySymbol=[...allRows.reduce((map,row)=>{const key=row.symbol||'기타',item=map.get(key)||{symbol:key,value:0,projectId:row.projectId};item.value+=n(row.amountUSD);map.set(key,item);return map;},new Map()).values()].sort((a,b)=>b.value-a.value),top=bySymbol.slice(0,4),otherSymbols=new Set(bySymbol.slice(4).map(item=>item.symbol)),other=bySymbol.slice(4).reduce((sum,row)=>sum+row.value,0),composition=other?[...top,{symbol:'기타',value:other,filter:'__other__'}]:top,total=Math.max(1,allActual);
+    const validFilter=symbolFilter&&(symbolFilter==='__other__'?otherSymbols.size:bySymbol.some(item=>item.symbol===symbolFilter))?symbolFilter:'',rows=validFilter?(validFilter==='__other__'?allRows.filter(row=>otherSymbols.has(row.symbol||'기타')):allRows.filter(row=>(row.symbol||'기타')===validFilter)):allRows,actual=rows.reduce((sum,row)=>sum+n(row.amountUSD),0),filterLabel=validFilter==='__other__'?'기타':validFilter;
     openModal(`<h3 class="modal-title">${project?`${esc(project.symbol)} 최근 입금`:'월별 배당'}</h3><div class="month-navigation"><button class="btn soft" data-income-month="${shift(-1)}" ${projectId?`data-income-project="${esc(projectId)}"`:''} aria-label="이전 달">‹</button><strong>${month.replace('-','년 ')}월</strong><button class="btn soft" data-income-month="${shift(1)}" ${projectId?`data-income-project="${esc(projectId)}"`:''} aria-label="다음 달">›</button></div>
-      <section class="month-actual-summary"><span>실제 세후 입금</span><strong>${fmtMoney(actual,2)}</strong><small>${rows.length}회 입금</small></section>
-      ${composition.length>1?`<section class="month-composition"><h4>종목별 구성</h4><div class="composition-bar">${composition.map((item,index)=>{const project=projectById(item.projectId),color=project?projectColors(project)[0]:`hsl(${225+index*24} 18% ${55-index*3}%)`;return `<i style="width:${item.value/total*100}%;--segment:${color}"></i>`;}).join('')}</div><div class="composition-legend">${composition.map((item,index)=>{const project=projectById(item.projectId),color=project?projectColors(project)[0]:`hsl(${225+index*24} 18% ${55-index*3}%)`;return `<span><i style="--dot:${color}"></i>${esc(item.symbol)} <b>${fmtMoney(item.value,0)}</b></span>`;}).join('')}</div></section>`:composition.length?`<p class="single-symbol-note">${esc(composition[0].symbol)} 실제 입금만 있습니다.</p>`:''}
-      <div class="agenda-heading"><h4>입금 기록</h4><span>기록을 눌러 상세 보기</span></div><div class="income-agenda">${rows.map(r=>`<button type="button" class="agenda-row agenda-row-button" data-view-record="dividend:${esc(r.id)}"><div><span class="agenda-status actual">완료</span><strong>${esc(r.symbol)} <small>${fmtDate(r.date)}</small></strong></div><div><strong>${fmtMoney(r.amountUSD,2)}</strong><i>›</i></div></button>`).join('')||'<p class="empty">이 달의 실제 입금 기록이 없습니다.</p>'}</div><button class="btn soft" style="width:100%;margin-top:16px" data-close-modal>닫기</button>`);
+      <section class="month-actual-summary"><span>${filterLabel?`${esc(filterLabel)} 실제 세후 입금`:'실제 세후 입금'}</span><strong>${fmtMoney(actual,2)}</strong><small>${rows.length}회 입금</small></section>
+      ${composition.length>1?`<section class="month-composition"><div class="composition-heading"><h4>종목별 구성</h4>${filterLabel?`<button type="button" data-income-month="${esc(month)}" ${projectId?`data-income-project="${esc(projectId)}"`:''}>전체 보기</button>`:'<span>색을 누르면 기록 필터</span>'}</div><div class="composition-bar interactive">${composition.map((item,index)=>{const itemProject=projectById(item.projectId),color=itemProject?projectColors(itemProject)[0]:`hsl(${225+index*24} 18% ${55-index*3}%)`,filter=item.filter||item.symbol;return `<button type="button" class="${filter===validFilter?'active':validFilter?'dimmed':''}" style="width:${item.value/total*100}%;--segment:${color}" data-income-month="${esc(month)}" ${projectId?`data-income-project="${esc(projectId)}"`:''} data-income-symbol="${esc(filter)}" aria-label="${esc(item.symbol)} 입금기록만 보기"></button>`;}).join('')}</div><div class="composition-legend interactive">${composition.map((item,index)=>{const itemProject=projectById(item.projectId),color=itemProject?projectColors(itemProject)[0]:`hsl(${225+index*24} 18% ${55-index*3}%)`,filter=item.filter||item.symbol;return `<button type="button" class="${filter===validFilter?'active':validFilter?'dimmed':''}" data-income-month="${esc(month)}" ${projectId?`data-income-project="${esc(projectId)}"`:''} data-income-symbol="${esc(filter)}"><span><i style="--dot:${color}"></i>${esc(item.symbol)}</span><b>${fmtMoney(item.value,0)}</b></button>`;}).join('')}</div></section>`:composition.length?`<p class="single-symbol-note">${esc(composition[0].symbol)} 실제 입금만 있습니다.</p>`:''}
+      <div class="agenda-heading"><h4>${filterLabel?`${esc(filterLabel)} 입금 기록`:'입금 기록'}</h4><span>${rows.length}건 · 눌러서 상세 보기</span></div><div class="income-agenda">${rows.map(r=>`<button type="button" class="agenda-row agenda-row-button" data-view-record="dividend:${esc(r.id)}"><div><span class="agenda-status actual">완료</span><strong>${esc(r.symbol)} <small>${fmtDate(r.date)}</small></strong></div><div><strong>${fmtMoney(r.amountUSD,2)}</strong><i>›</i></div></button>`).join('')||'<p class="empty">이 달의 실제 입금 기록이 없습니다.</p>'}</div><button class="btn soft" style="width:100%;margin-top:16px" data-close-modal>닫기</button>`);
   }
 
   function openDividendForm(record=null,draft=null) {
@@ -479,7 +480,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js'
     if(button.dataset.page){showPage(button.dataset.page);return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency;saveState();renderAll(true);return;}
     if(button.dataset.chartKey){chartSelection=button.dataset.chartKey;renderProjects();return;}
-    if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'');return;}
+    if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'',button.dataset.incomeSymbol||'');return;}
     if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector('.transaction-history').open=true;return;}
     if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector('.transaction-history').open=true;return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;chartSelection='';renderProjects();return;}
@@ -569,7 +570,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js'
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.11.3-r52').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.11.3-r53').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
