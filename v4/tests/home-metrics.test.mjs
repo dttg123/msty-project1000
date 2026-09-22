@@ -30,4 +30,4 @@ assert.equal(metrics.projectMonth[0].symbol,'MSTY');
 assert.equal(metrics.projectMonth[0].actual,100);
 assert.equal(metrics.pace.monthly,400/3,'recent three-month average must use actual deposits only');
 assert.equal(metrics.pace.annualized,1600);
-console.log('DividendOS v0.11.2 home metrics QA: PASS');
+console.log('DividendOS v0.11.3 home metrics QA: PASS');

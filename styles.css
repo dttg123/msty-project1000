@@ -913,7 +913,7 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .cashflow-mode button.active { background:var(--accent-soft); color:var(--accent); }
 .chart-instruction { margin:10px 0 0; color:var(--muted); font-size:10px; }
 .cashflow-chart { height:154px; display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); align-items:end; gap:4px; margin-top:18px; overflow:hidden; }
-.cashflow-chart.year-bars { grid-template-columns:repeat(6,minmax(40px,1fr)); gap:8px; overflow-x:auto; }
+.cashflow-chart.year-bars { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:minmax(48px,1fr); gap:8px; overflow-x:auto; }
 .cashflow-month { min-width:0; text-align:center; }
 .cashflow-month { border:0; padding:0; background:transparent; color:inherit; cursor:pointer; }
 .cashflow-bars { height:116px; display:flex; align-items:flex-end; justify-content:center; position:relative; border-bottom:1px solid var(--line); }
@@ -921,7 +921,7 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .cashflow-actual { background:linear-gradient(180deg,var(--accent-2),var(--accent)); z-index:2; }
 .cashflow-estimate { position:absolute; bottom:0; background:rgba(100,91,255,.2); border:1px dashed rgba(100,91,255,.55); }
 .cashflow-month span { display:block; margin-top:7px; color:var(--muted); font-size:8px; white-space:nowrap; }
-.cashflow-month:nth-child(even) span { visibility:hidden; }
+.cashflow-month span { visibility:visible; }
 .cashflow-month.active .cashflow-bars { border-bottom-color:var(--accent); }
 .cashflow-month.active span { color:var(--accent); font-weight:900; visibility:visible; }
 .cashflow-selection { margin-top:15px; padding:14px; border:1px solid var(--line); border-radius:16px; background:var(--surface-strong); }
@@ -945,6 +945,18 @@ html[data-theme="dark"] .dividend-flow-card { background:linear-gradient(100deg,
 .month-actual-summary strong { margin:5px 0; font-size:29px; }
 .month-composition { margin:0 0 20px; }
 .month-composition h4 { margin:0; font-size:14px; }
+.year-range-switch { display:flex; gap:6px; margin-top:11px; }
+.year-range-switch button { min-height:34px; padding:0 10px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--muted); font-size:10px; font-weight:850; }
+.year-range-switch button.active { border-color:rgba(100,91,255,.38); background:var(--accent-soft); color:var(--accent); }
+.manual-tools { padding:0; }
+.manual-tools>summary { min-height:64px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; list-style:none; cursor:pointer; }
+.manual-tools>summary::-webkit-details-marker { display:none; }
+.manual-tools>summary strong,.manual-tools>summary span { display:block; }
+.manual-tools>summary strong { font-size:14px; }
+.manual-tools>summary span { margin-top:4px; color:var(--muted); font-size:11px; }
+.manual-tools[open]>summary .chev { transform:rotate(180deg); }
+.manual-tools-body { padding:0 18px 18px; border-top:1px solid var(--line); }
+.manual-tools-body .support-actions { grid-template-columns:repeat(3,minmax(0,1fr)); margin-top:14px; }
 .card-link { width:100%; display:flex; justify-content:space-between; margin-top:13px; padding:12px 0 0; border:0; border-top:1px solid var(--line); background:transparent; color:var(--accent); font-size:12px; font-weight:850; }
 .cashflow-head { align-items:center; }
 .cashflow-head>strong { color:var(--accent); font-size:20px; white-space:nowrap; }

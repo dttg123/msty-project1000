@@ -17,6 +17,8 @@ state.dividends.push({id:'d1',projectId:'p-msty',date:'2026-01-15',amountUSD:15,
 
 let selectedProjectId='p-msty';
 let chartMode='month';
+let homeMode='month';
+let homeYearRange='5';
 let portfolioCategory='highYield';
 const portfolio=createPortfolioEngine(()=>state,()=>selectedProjectId);
 const formatters=createFormatters(()=>state);
@@ -26,7 +28,8 @@ const views=createViews({
   setSelectedProjectId:value=>{selectedProjectId=value;},
   getChartMode:()=> chartMode,
   getChartSelection:()=> '',
-  getHomeCashflowMode:()=> 'month',
+  getHomeCashflowMode:()=>homeMode,
+  getHomeYearRange:()=>homeYearRange,
   getCashflowMonthKey:()=> '',
   getPortfolioCategory:()=>portfolioCategory,
   setPortfolioCategory:value=>{portfolioCategory=value;},
@@ -54,6 +57,11 @@ assert.doesNotMatch(elements.get('page-home').innerHTML,/남은 예상|월말 �
 assert.match(elements.get('page-home').innerHTML,/다음 목표/);
 assert.equal((elements.get('page-home').innerHTML.match(/<article class="card/g)||[]).length,3,'home must stay at three cards');
 assert.doesNotMatch(elements.get('page-home').innerHTML,/[①②③④⑤⑥]/);
+homeMode='year';views.renderHome();
+assert.match(elements.get('page-home').innerHTML,/data-home-year-range="5"/);
+assert.match(elements.get('page-home').innerHTML,/data-home-year-range="10"/);
+assert.match(elements.get('page-home').innerHTML,/data-home-year-range="all"/);
+homeMode='month';views.renderHome();
 assert.match(elements.get('page-projects').innerHTML,/포트폴리오/);
 assert.match(elements.get('page-projects').innerHTML,/첫 배당/);
 assert.match(elements.get('page-projects').innerHTML,/2건 · 눌러서 보기/);
@@ -71,8 +79,12 @@ assert.match(elements.get('page-projects').innerHTML,/배당 현금흐름/);
 assert.match(elements.get('page-projects').innerHTML,/portfolio-income-hero/);
 assert.match(elements.get('page-projects').innerHTML,/trend-bars/);
 assert.match(elements.get('page-projects').innerHTML,/26\.01/);
-assert.equal((elements.get('page-projects').innerHTML.match(/data-add-dividend>/g)||[]).length,1,'one primary dividend entry action');
-assert.ok(elements.get('page-projects').innerHTML.indexOf('data-add-dividend>')<elements.get('page-projects').innerHTML.indexOf('portfolio-cashflow'),'entry actions directly follow holdings');
+assert.equal((elements.get('page-projects').innerHTML.match(/data-add-dividend>/g)||[]).length,1,'manual dividend fallback must remain available');
+assert.match(elements.get('page-projects').innerHTML,/class="card manual-tools"/);
+assert.match(elements.get('page-projects').innerHTML,/토스 미연동·누락 기록 보정용/);
+assert.ok(elements.get('page-projects').innerHTML.indexOf('data-add-dividend>')>elements.get('page-projects').innerHTML.indexOf('배당 포함 성과'),'manual entry must not occupy the primary summary');
+assert.doesNotMatch(elements.get('page-projects').innerHTML,/class="price-shortcut"/);
+assert.match(elements.get('page-projects').innerHTML,/data-income-project="p-msty"/);
 assert.doesNotMatch(elements.get('page-home').innerHTML,/cashflow-selected/,'do not repeat monthly totals below chart');
 assert.doesNotMatch(elements.get('page-home').innerHTML,/월말 예상 합계/);
 assert.match(elements.get('page-home').innerHTML,/최근 3개월 월평균/);
@@ -83,7 +95,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/현재 월배당/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/예상 달성일/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.11\.2/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.11\.3/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
 assert.match(elements.get('page-settings').innerHTML,/id="dividendSettingsForm"/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/<details class="card settings-section" open/);
@@ -111,4 +123,4 @@ state.trades.push({id:'goal',projectId:'p-msty',date:'2026-02-01',type:'buy',buy
 views.renderGoals();
 assert.match(elements.get('page-goal').innerHTML,/원금회수 시작/);
 assert.match(elements.get('page-goal').innerHTML,/data-goal-mode="p-msty:cashflow" class="active"/);
-console.log('DividendOS v0.11.2 view QA: PASS');
+console.log('DividendOS v0.11.3 view QA: PASS');

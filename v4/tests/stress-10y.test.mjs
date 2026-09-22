@@ -86,4 +86,4 @@ assert.doesNotMatch(elements.get('page-projects').innerHTML,/class="card transac
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card goal-step-card"[^>]* open/);
 assert.match(elements.get('page-goal').innerHTML,/원금회수/);
 assert.ok(elements.get('page-projects').innerHTML.length<250000,'portfolio HTML grew unexpectedly large');
-console.log(`DividendOS v0.11.2 10-year stress QA: PASS (${restored.trades.length} trades, ${restored.dividends.length} dividends)`);
+console.log(`DividendOS v0.11.3 10-year stress QA: PASS (${restored.trades.length} trades, ${restored.dividends.length} dividends)`);
