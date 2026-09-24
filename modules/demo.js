@@ -8,7 +8,7 @@ export function demoState(now=new Date()) {
     ['CONY','YieldMax COIN Option Income','highYield','weekly',160,10.22,1],
     ['NVDY','YieldMax NVDA Option Income','highYield','weekly',120,16.48,2],
     ['YMAX','YieldMax Universe Fund','highYield','weekly',190,12.31,3],
-    ['SCHD','Schwab US Dividend Equity','dividend','quarterly',150,28.40,4],
+    ['SCHD','Schwab US Dividend Equity','growth','quarterly',150,28.40,4],
     ['KO','Coca-Cola','dividend','quarterly',60,67.20,5]
   ];
   state.projects=specs.map(([symbol,name,category,frequency,,price,colorIndex],index)=>{

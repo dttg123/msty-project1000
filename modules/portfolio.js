@@ -1,6 +1,7 @@
 import { blankRecovery } from './state.js';
 import { clamp, isDate, n, todayISO } from './utils.js';
-import { incomeEstimate } from './income.js?v=0.11.3-r53';
+import { incomeEstimate } from './income.js?v=0.12.0-r55';
+import { buildDividendAnalytics } from './dividend-analytics.js?v=0.12.0-r55';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
@@ -121,6 +122,8 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const monthlyEstimate=income.monthly,shortMonthlyEstimate=income.shortMonthly;
     const adjustmentTotal=postedAdjustments.reduce((sum,row)=>sum+n(row.amountUSD),0);
     const dividendAvailable=Math.max(0,n(project.initialDividendBalance))+dividendsTotal+adjustmentTotal-reinvestAmount;
+    const analytics=buildDividendAnalytics(project,postedDividends,projectRows('splits',project.id),avgCost,asOf);
+    const lifetimeDividendRecoveryPct=directBuyCost>0?dividendsTotal/directBuyCost*100:0;
     const cashLedger=[
       ...(n(project.initialDividendBalance)?[{id:'opening-balance',date:project.initialDividendBalanceDate||'0000-01-01',createdAt:'',kind:'opening',amountUSD:Math.max(0,n(project.initialDividendBalance))}]:[]),
       ...postedDividends.map(row=>({...row,kind:'dividend',amountUSD:n(row.amountUSD)})),
@@ -135,7 +138,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
       currentTarget,progress:currentTarget>0?shares/currentTarget:0,dividendsTotal,yearDividends,currentMonthDividends,trailing12Dividends,
       recentDividend,monthlyEstimate,shortMonthlyEstimate,rawMonthlyEstimate,rawShortMonthlyEstimate,estimateReliable,medianDividendGapDays:medianGap,
       stablePerShare,shortPerShare,perShareTrendPct,annualizedDistributionPerShare,annualizedCurrentYield,
-      latestDividendAgeDays,estimateStale,dividendAvailable,cashLedger,income,
+      latestDividendAgeDays,estimateStale,dividendAvailable,cashLedger,income,analytics,lifetimeDividendRecoveryPct,
       minDividendBalance,cashDeficitEvents,totalReturn:priceAvailable?unrealized+realized+dividendsTotal:null,
       targetReachedDate,targetBasisSuggestion,milestoneDates,oversells,effectiveSells
     };

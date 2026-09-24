@@ -9,3 +9,4 @@ export const getCloudDocument = async uid => (await cloud()).getCloudDocument(ui
 export const getLegacyCloudDocument = async uid => (await cloud()).getLegacyCloudDocument(uid);
 export const saveCloudDocument = async (uid,payload) => (await cloud()).saveCloudDocument(uid,payload);
 export const subscribeCloudDocument = async (...args) => (await cloud()).subscribeCloudDocument(...args);
+

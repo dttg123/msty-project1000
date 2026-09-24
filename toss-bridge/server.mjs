@@ -130,3 +130,4 @@ app.get('/v1/toss/snapshot',authorize,async(req,res)=>{
 
 app.use((_req,res)=>res.status(404).json({code:'not-found',message:'지원하지 않는 경로입니다.'}));
 app.listen(port,()=>console.log(`DividendOS Toss read-only bridge listening on ${port}`));
+

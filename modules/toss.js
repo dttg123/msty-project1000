@@ -25,6 +25,12 @@ function tradeSignature(row) {
   return [symbol,date,type,shares.toFixed(8),price.toFixed(4)].join('|');
 }
 
+function dividendSignature(row) {
+  const symbol=symbolOf(row?.symbol),date=dateOf(row?.date),amount=Math.max(0,n(row?.amountUSD));
+  if(!symbol||!date||amount<=0)return '';
+  return [symbol,date,amount.toFixed(2)].join('|');
+}
+
 export function normalizeTossHolding(row) {
   const symbol=symbolOf(row?.symbol);
   if(!symbol)return null;
@@ -85,7 +91,7 @@ export function mergeTossSourceLedger(current={},snapshot={},observedAt=new Date
   };
 }
 
-export function buildTossSync(snapshot, {existingTrades=[], appPositions=[]}={}) {
+export function buildTossSync(snapshot, {existingTrades=[],existingDividends=[], appPositions=[]}={}) {
   const existingIds=new Set(existingTrades.filter(row=>row?.source?.provider==='toss').map(row=>String(row.source.externalId||'')));
   const manualSignatureCounts=new Map();
   for(const trade of existingTrades.filter(row=>row?.source?.provider!=='toss')){
@@ -111,12 +117,28 @@ export function buildTossSync(snapshot, {existingTrades=[], appPositions=[]}={})
     if(manualMatches>0){manualSignatureCounts.set(signature,manualMatches-1);matchedExistingCount++;seen.add(row.externalId);continue;}
     seen.add(row.externalId);candidates.push(row);
   }
+  const existingDividendIds=new Set(existingDividends.filter(row=>row?.source?.provider==='toss').map(row=>String(row.source.externalId||'')));
+  const manualDividendSignatureCounts=new Map();
+  for(const dividend of existingDividends.filter(row=>row?.source?.provider!=='toss')){
+    const signature=dividendSignature(dividend);if(signature)manualDividendSignatureCounts.set(signature,(manualDividendSignatureCounts.get(signature)||0)+1);
+  }
+  const seenDividends=new Set(),dividendCandidates=[];let matchedExistingDividendCount=0;
+  for(const raw of Array.isArray(snapshot?.dividends)?snapshot.dividends:[]){
+    const row=normalizeTossDividend(raw);
+    if(!row){ignored.push({reason:'invalid-dividend'});continue;}
+    if(row.currency!=='USD'){ignored.push({...row,reason:'currency'});continue;}
+    if(seenDividends.has(row.externalId)||existingDividendIds.has(row.externalId))continue;
+    const signature=dividendSignature(row),manualMatches=manualDividendSignatureCounts.get(signature)||0;
+    if(manualMatches>0){manualDividendSignatureCounts.set(signature,manualMatches-1);matchedExistingDividendCount++;seenDividends.add(row.externalId);continue;}
+    seenDividends.add(row.externalId);dividendCandidates.push(row);
+  }
   candidates.sort((a,b)=>a.date.localeCompare(b.date)||a.externalId.localeCompare(b.externalId));
+  dividendCandidates.sort((a,b)=>a.date.localeCompare(b.date)||a.externalId.localeCompare(b.externalId));
   return {
     accountLabel:String(snapshot?.accountLabel||'토스증권 계좌'),
     fetchedAt:String(snapshot?.fetchedAt||new Date().toISOString()),
-    holdings,prices,comparisons,candidates,
-    ignoredCount:ignored.length,matchedExistingCount,historyTruncated:!!snapshot?.historyTruncated,
+    holdings,prices,comparisons,candidates,dividendCandidates,
+    ignoredCount:ignored.length,matchedExistingCount,matchedExistingDividendCount,historyTruncated:!!snapshot?.historyTruncated,
     unsupportedCurrencyCount:ignored.filter(row=>row.reason==='currency').length
   };
 }
@@ -130,12 +152,32 @@ export function mergeTossCandidates(current=[], incoming=[]) {
   return [...map.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.externalId).localeCompare(String(b.externalId)));
 }
 
+export function mergeTossDividendCandidates(current=[],incoming=[]){
+  const map=new Map();
+  for(const raw of [...current,...incoming]){
+    const row=normalizeTossDividend(raw),id=String(row?.externalId||'');
+    if(row?.currency==='USD'&&id&&!map.has(id))map.set(id,row);
+  }
+  return [...map.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.externalId).localeCompare(String(b.externalId)));
+}
+
 export function tossCandidateToTrade(candidate,{projectId,id,createdAt=new Date().toISOString()}={}) {
   const row=normalizeTossOrder(candidate);
   if(!row||row.currency!=='USD'||!projectId||!id)return null;
   return {
     id,projectId,symbol:row.symbol,date:row.date,type:row.type,buyType:row.buyType,
     shares:row.shares,price:row.price,reinvestAmountUSD:0,note:row.note,createdAt,
+    source:{provider:'toss',externalId:row.externalId}
+  };
+}
+
+
+export function tossCandidateToDividend(candidate,{projectId,id,sharesAtPayment=0,createdAt=new Date().toISOString()}={}){
+  const row=normalizeTossDividend(candidate);
+  if(!row||row.currency!=='USD'||!projectId||!id)return null;
+  return {
+    id,projectId,symbol:row.symbol,date:row.date,amountUSD:row.amountUSD,sharesAtPayment:Math.max(0,n(sharesAtPayment)),
+    referencePrice:0,rocPercent:null,rocStatus:'estimated',note:'토스 배당 승인 가져오기',createdAt,
     source:{provider:'toss',externalId:row.externalId}
   };
 }

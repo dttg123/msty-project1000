@@ -6,7 +6,13 @@ export function blankRecovery() {
 }
 
 const HIGH_YIELD_SYMBOLS = new Set(['MSTY','CONY','NVDY','TSLY','ULTY','YMAX','YMAG','AMZY','APLY','GOOY','NFLY','OARK']);
-export function inferProjectCategory(symbol='') { return HIGH_YIELD_SYMBOLS.has(String(symbol).toUpperCase())?'highYield':'dividend'; }
+const DIVIDEND_GROWTH_SYMBOLS = new Set(['SCHD','VIG','DGRO','DGRW','NOBL','KO','PEP','PG','JNJ','MCD','O','LOW','HD']);
+export function inferProjectCategory(symbol='') {
+  const normalized=String(symbol).toUpperCase();
+  if(HIGH_YIELD_SYMBOLS.has(normalized))return 'highYield';
+  if(DIVIDEND_GROWTH_SYMBOLS.has(normalized))return 'growth';
+  return 'dividend';
+}
 
 export function blankProject(symbol = 'MSTY', name = 'YieldMax MSTR Option Income') {
   return {
@@ -25,7 +31,7 @@ export function blankState() {
     version:4,
     settings:{ exchangeRate:1370, exchangeRateMode:'manual', displayCurrency:'USD', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
     projects:[project], trades:[], dividends:[], splits:[], cashAdjustments:[],
-    integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastSuccessfulAt:'', lastAttemptAt:'', lastError:'', accountLabel:'', candidates:[], holdings:[], comparisons:[], ignoredCount:0, matchedExistingCount:0, unsupportedCurrencyCount:0, historyTruncated:false, syncSequence:0, sourceLedger:{orders:[],dividends:[]} } },
+    integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastSuccessfulAt:'', lastAttemptAt:'', lastError:'', accountLabel:'', candidates:[], dividendCandidates:[], holdings:[], comparisons:[], ignoredCount:0, matchedExistingCount:0, matchedExistingDividendCount:0, unsupportedCurrencyCount:0, historyTruncated:false, syncSequence:0, sourceLedger:{orders:[],dividends:[]} } },
     meta:{ createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), lastBackupAt:'', lastLocalSaveAt:'', lastCloudSaveAt:'', migratedFrom:'', migrationCheckedAt:'', celebratedMilestones:[] }
   };
 }
@@ -83,7 +89,7 @@ export function normalizeV4(raw) {
   result.projects = Array.isArray(raw.projects) ? raw.projects.map((project,index) => ({
     ...blankProject(project.symbol || `ASSET${index+1}`,project.name || project.symbol || '배당 종목'), ...project,
     id:project.id || uid('p'), symbol:String(project.symbol || `ASSET${index+1}`).toUpperCase(),
-    recovery:{...blankRecovery(), ...(project.recovery || {})}, category:['dividend','highYield'].includes(project.category)?project.category:inferProjectCategory(project.symbol), colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
+    recovery:{...blankRecovery(), ...(project.recovery || {})}, category:['dividend','growth','highYield'].includes(project.category)?project.category:inferProjectCategory(project.symbol), colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
   })) : base.projects;
   for (const key of ['trades','dividends','splits','cashAdjustments']) result[key] = Array.isArray(raw[key]) ? raw[key] : [];
   result.integrations = {toss:{...base.integrations.toss, ...(raw.integrations?.toss || {}),sourceLedger:{...base.integrations.toss.sourceLedger,...(raw.integrations?.toss?.sourceLedger||{})}}};

@@ -72,3 +72,4 @@ Do not label this a 9/10 complete replacement yet. A numeric self-rating cannot 
 3. Confirming backup-file download on that phone. The ZIP encoder/importer and real chooser restore were tested separately.
 
 Toss credentials, real API connectivity, live exchange rates and orders are deliberately outside this release's verified scope. Predictions are estimates from recorded payments, not confirmed issuer schedules.
+

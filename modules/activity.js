@@ -4,7 +4,9 @@ export function historicalIncome(rows, mode, year, today) {
   const posted=rows.filter(r=>isDate(r.date)&&r.date<=today&&n(r.amountUSD)>0);
   if(mode==='month'&&year)return Array.from({length:12},(_,i)=>{const key=`${year}-${String(i+1).padStart(2,'0')}`;return {key,label:`${i+1}월`,value:posted.filter(r=>r.date.startsWith(key)).reduce((s,r)=>s+n(r.amountUSD),0)};});
   const grouped=new Map();for(const r of posted){const key=r.date.slice(0,4);grouped.set(key,(grouped.get(key)||0)+n(r.amountUSD));}
-  return [...grouped].sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>({key,label:key,value}));
+  if(!grouped.size)return [];
+  const first=Math.min(...[...grouped.keys()].map(Number)),last=Number(String(today).slice(0,4));
+  return Array.from({length:last-first+1},(_,index)=>{const key=String(first+index);return {key,label:key,value:grouped.get(key)||0};});
 }
 
 export function selectRecords(rows, filter={}) {

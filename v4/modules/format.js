@@ -25,3 +25,4 @@ export function createFormatters(getState) {
 
   return { displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors };
 }
+

@@ -25,7 +25,10 @@ export function buildHomeMetrics(calcs, dividendRows, now=new Date()) {
   });
   const yearMap=new Map();
   actual.forEach(row=>{const key=row.date.slice(0,4),item=yearMap.get(key)||{key,label:key,actual:0,count:0};item.actual+=n(row.amountUSD);item.count++;yearMap.set(key,item);});
-  const years=[...yearMap.values()].sort((a,b)=>a.key.localeCompare(b.key));
+  const firstYear=yearMap.size?Math.min(...[...yearMap.keys()].map(Number)):null;
+  const years=firstYear===null?[]:Array.from({length:Number(currentYear)-firstYear+1},(_,index)=>{
+    const key=String(firstYear+index);return yearMap.get(key)||{key,label:key,actual:0,count:0};
+  });
   const trailingMonths=Array.from({length:6},(_,index)=>{
     const date=new Date(today.getFullYear(),today.getMonth()-5+index,1,12),key=monthKey(date);
     return sum(actual.filter(row=>row.date.startsWith(key)));

@@ -78,3 +78,4 @@ export function buildMigrationAudit(legacyRaw,migratedState,migratedCalc) {
   ];
   return {version:1,checkedAt:new Date().toISOString(),passed:checks.every(check=>check.passed),checks,source,target};
 }
+

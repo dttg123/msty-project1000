@@ -1,6 +1,11 @@
 export const STATE_KEY = 'state';
 export const SAFETY_KEY = 'safetyBackup';
 export const PAGES = ['home', 'projects', 'goal', 'settings'];
+export const PROJECT_CATEGORIES = [
+  ['highYield','고배당·인컴'],
+  ['growth','배당성장'],
+  ['dividend','일반 배당']
+];
 export const PROJECT_COLORS = [
   ['#6858f5', '#9a84ff'],
   ['#f06d38', '#ff9b68'],

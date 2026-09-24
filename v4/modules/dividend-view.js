@@ -49,3 +49,4 @@ export function renderDividendView(context) {
       ${total.staleEstimateCount?`<article class="card compact"><div class="row-title">월환산 점검 필요</div><div class="row-sub">${n(total.staleEstimateCount)}개 종목은 기록 수·최근 지급일·지급 간격 조건이 부족해 추정치를 숨겼습니다.</div></article>`:''}
     </div>`;
 }
+
