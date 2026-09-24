@@ -1,20 +1,20 @@
-import { monthActivity } from './modules/activity.js?v=0.12.0-r56';
-import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.0-r56';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.0-r56';
-import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.0-r56';
-import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.0-r56';
-import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.0-r56';
-import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.0-r56';
-import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.0-r56';
-import { createFormatters } from './modules/format.js?v=0.12.0-r56';
-import { createViews } from './modules/views.js?v=0.12.0-r56';
-import { buildMigrationAudit } from './modules/migration.js?v=0.12.0-r56';
-import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.0-r56';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.0-r56';
-import { validateLedger } from './modules/validation.js?v=0.12.0-r56';
-import { demoState } from './modules/demo.js?v=0.12.0-r56';
-import { FREQUENCIES } from './modules/income.js?v=0.12.0-r56';
-import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.0-r56';
+import { monthActivity } from './modules/activity.js?v=0.12.0-r57';
+import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.0-r57';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.0-r57';
+import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.0-r57';
+import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.0-r57';
+import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.0-r57';
+import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.0-r57';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.0-r57';
+import { createFormatters } from './modules/format.js?v=0.12.0-r57';
+import { createViews } from './modules/views.js?v=0.12.0-r57';
+import { buildMigrationAudit } from './modules/migration.js?v=0.12.0-r57';
+import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.0-r57';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.0-r57';
+import { validateLedger } from './modules/validation.js?v=0.12.0-r57';
+import { demoState } from './modules/demo.js?v=0.12.0-r57';
+import { FREQUENCIES } from './modules/income.js?v=0.12.0-r57';
+import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.0-r57';
 
 (() => {
   'use strict';
@@ -579,7 +579,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.0-r56').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.0-r57').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

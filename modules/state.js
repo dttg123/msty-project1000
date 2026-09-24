@@ -1,5 +1,5 @@
-import { PROJECT_COLORS } from './constants.js?v=0.12.0-r56';
-import { clone, n, todayISO, uid } from './utils.js?v=0.12.0-r56';
+import { PROJECT_COLORS } from './constants.js?v=0.12.0-r57';
+import { clone, n, todayISO, uid } from './utils.js?v=0.12.0-r57';
 
 export function blankRecovery() {
   return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'' };
@@ -29,7 +29,7 @@ export function blankState() {
   const project = blankProject();
   return {
     version:4,
-    settings:{ exchangeRate:1370, exchangeRateMode:'manual', displayCurrency:'USD', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
+    settings:{ exchangeRate:1370, exchangeRateMode:'manual', displayCurrency:'KRW', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
     projects:[project], trades:[], dividends:[], splits:[], cashAdjustments:[],
     integrations:{ toss:{ status:'not_connected', lastSyncAt:'', lastSuccessfulAt:'', lastAttemptAt:'', lastError:'', accountLabel:'', candidates:[], dividendCandidates:[], holdings:[], comparisons:[], ignoredCount:0, matchedExistingCount:0, matchedExistingDividendCount:0, unsupportedCurrencyCount:0, historyTruncated:false, syncSequence:0, sourceLedger:{orders:[],dividends:[]} } },
     meta:{ createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), lastBackupAt:'', lastLocalSaveAt:'', lastCloudSaveAt:'', migratedFrom:'', migrationCheckedAt:'', celebratedMilestones:[] }
