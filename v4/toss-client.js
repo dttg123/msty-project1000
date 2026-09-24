@@ -124,15 +124,16 @@ async function directClosedOrders(accountSeq,from,to) {
 async function fetchDirectSnapshot({from=TOSS_SYNC_FROM,symbols=[]}={}) {
   const today=new Date().toISOString().slice(0,10),checkedFrom=validDate(from,TOSS_SYNC_FROM),safeFrom=checkedFrom>today?today:checkedFrom;
   const accounts=await directGet('/api/v1/accounts');
-  const list=Array.isArray(accounts)?accounts:[],account=list.find(row=>row.accountType==='BROKERAGE')||list[0];
-  if(!account)throw Object.assign(new Error('조회 가능한 토스증권 계좌가 없습니다.'),{code:'no-account'});
+  const list=Array.isArray(accounts)?accounts:[],brokerage=list.filter(row=>row.accountType==='BROKERAGE'),selected=brokerage.length?brokerage:list;
+  if(!selected.length)throw Object.assign(new Error('조회 가능한 토스증권 계좌가 없습니다.'),{code:'no-account'});
   const clean=cleanSymbols(symbols);
-  const [holdingResult,orderResult,priceResult]=await Promise.all([
-    directGet('/api/v1/holdings',account.accountSeq),
-    directClosedOrders(account.accountSeq,safeFrom,today),
-    clean.length?directGet(`/api/v1/prices?${new URLSearchParams({symbols:clean.join(',')})}`):Promise.resolve([])
-  ]);
-  return {accountLabel:maskAccount(account.accountNo),fetchedAt:new Date().toISOString(),from:safeFrom,holdings:Array.isArray(holdingResult?.items)?holdingResult.items:[],prices:Array.isArray(priceResult)?priceResult:[],orders:orderResult.orders,dividends:[],historyTruncated:orderResult.truncated};
+  const accountResults=await Promise.all(selected.map(async account=>{
+    const [holdingResult,orderResult]=await Promise.all([directGet('/api/v1/holdings',account.accountSeq),directClosedOrders(account.accountSeq,safeFrom,today)]);
+    const attach=row=>({...row,accountId:String(account.accountSeq??account.accountNo??''),accountLabel:maskAccount(account.accountNo)});
+    return {holdings:(Array.isArray(holdingResult?.items)?holdingResult.items:[]).map(attach),orders:orderResult.orders.map(attach),truncated:orderResult.truncated};
+  }));
+  const priceResult=clean.length?await directGet(`/api/v1/prices?${new URLSearchParams({symbols:clean.join(',')})}`,selected[0].accountSeq):[];
+  return {accountLabel:selected.length===1?maskAccount(selected[0].accountNo):`토스증권 ${selected.length}계좌`,fetchedAt:new Date().toISOString(),from:safeFrom,holdings:accountResults.flatMap(row=>row.holdings),prices:Array.isArray(priceResult)?priceResult:[],orders:accountResults.flatMap(row=>row.orders),dividends:[],historyTruncated:accountResults.some(row=>row.truncated)};
 }
 
 async function fetchBridgeSnapshot({from=TOSS_SYNC_FROM,symbols=[]}={}) {

@@ -255,13 +255,30 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .agenda-status.actual{color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent)}
 .agenda-status.expected{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .agenda-action{display:block;margin:5px 0 0 auto;padding:4px 0;border:0;background:transparent;color:var(--accent);font:inherit;font-size:11px;font-weight:700}
-.portfolio-categories.four{grid-template-columns:repeat(2,minmax(0,1fr))}
-.portfolio-categories.four button{min-width:0;padding:0 12px;font-size:12px}
+.portfolio-filter-heading{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:8px}
+.portfolio-filter-heading span{font-size:12px;font-weight:850}
+.portfolio-filter-heading small{color:var(--muted);font-size:9px;text-align:right}
+.portfolio-filter-chips{display:flex;gap:7px;overflow-x:auto;margin-bottom:12px;padding:1px 1px 4px;scrollbar-width:none}
+.portfolio-filter-chips::-webkit-scrollbar{display:none}
+.portfolio-filter-chips button{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-height:38px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface-strong);color:var(--muted);font:inherit;font-size:11px;font-weight:800}
+.portfolio-filter-chips button.active{border-color:color-mix(in srgb,var(--accent) 42%,var(--line));background:var(--accent-soft);color:var(--accent)}
+.portfolio-filter-chips b{font-size:9px}
 .project-select-label{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px;margin:0 0 12px;color:var(--muted);font-size:12px;font-weight:800}
 .project-select-label .input{min-width:0}
 .strategy-tag{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--project-a,var(--accent)) 12%,transparent);color:var(--project-a,var(--accent));font-size:10px;font-weight:850}
-.payment-spark{height:86px;display:flex;align-items:flex-end;gap:7px;margin-top:15px;padding:9px 3px 0;border-bottom:1px solid var(--line)}
-.payment-spark i{flex:1;min-width:7px;max-width:34px;border-radius:7px 7px 2px 2px;background:linear-gradient(180deg,var(--project-b,#9a84ff),var(--project-a,var(--accent)));opacity:.9}
+.payment-trend-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:15px}
+.payment-trend-summary>div{padding:12px;border-radius:13px;background:var(--surface-strong)}
+.payment-trend-summary span{display:block;color:var(--muted);font-size:10px}
+.payment-trend-summary strong{display:block;margin-top:6px;font-size:15px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.payment-spark{height:116px;display:flex;align-items:flex-end;gap:5px;overflow-x:auto;margin-top:11px;padding:8px 1px 0;border-bottom:1px solid var(--line);scrollbar-width:none}
+.payment-spark::-webkit-scrollbar{display:none}
+.payment-spark button{display:flex;flex:1 0 42px;min-width:42px;height:100%;padding:0 1px;border:0;background:transparent;color:inherit;flex-direction:column;align-items:center;justify-content:flex-end;font:inherit}
+.payment-spark b{display:block;max-width:58px;margin-bottom:5px;color:var(--muted);font-size:8px;font-weight:700;white-space:nowrap}
+.payment-spark i{display:block;width:min(24px,72%);min-height:12px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,var(--project-b,#9a84ff),var(--project-a,var(--accent)));opacity:.92}
+.payment-spark small{display:block;margin:5px 0 6px;color:var(--muted);font-size:8px}
+.payment-spark button:active i{filter:brightness(1.2)}
+.project-tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sync-tag{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green);font-size:10px;font-weight:850}
 .trend-sentence{display:grid;gap:5px;margin-top:12px}
 .trend-sentence strong{font-size:15px}
 .trend-sentence span{font-size:12px;color:var(--muted)}
@@ -283,4 +300,4 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .five-year-summary span,.five-year-summary strong{display:block}
 .five-year-summary span{color:var(--muted);font-size:10px}
 .five-year-summary strong{margin-top:5px;font-size:13px}
-@media(max-width:380px){.strategy-metrics{grid-template-columns:1fr 1fr;row-gap:14px}.strategy-metrics>div:nth-child(3){padding-left:0;border-left:0}.portfolio-categories.four button{font-size:11px}}
+@media(max-width:380px){.strategy-metrics{grid-template-columns:1fr 1fr;row-gap:14px}.strategy-metrics>div:nth-child(3){padding-left:0;border-left:0}.portfolio-filter-chips button{padding:0 10px;font-size:10px}}

@@ -1,4 +1,4 @@
-import { esc, n } from './utils.js?v=0.12.0-r57';
+import { esc, n } from './utils.js?v=0.12.1-r58';
 
 export function renderDividendView(context) {
   const {

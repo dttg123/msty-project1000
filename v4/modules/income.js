@@ -1,4 +1,4 @@
-import { isDate, n } from './utils.js?v=0.12.0-r57';
+import { isDate, n } from './utils.js?v=0.12.1-r58';
 
 export const FREQUENCIES = {
   weekly: {label:'주배당',year:52,months:0,stable:8,short:4,maxAge:45,maxGap:21},
@@ -16,8 +16,9 @@ export function incomeEstimate(project, dividends, splits, shares, now=new Date(
   const grouped=new Map();
   for(const row of rows){
     const factor=splits.filter(s=>isDate(s.date)&&s.date>row.date&&s.date<=today&&n(s.from)>0&&n(s.to)>0).reduce((a,s)=>a*n(s.to)/n(s.from),1);
-    const key=row.date, previous=grouped.get(key)||{date:key,amount:0,perShare:0,known:true};
+    const key=row.date, previous=grouped.get(key)||{date:key,amount:0,perShare:0,known:true,ids:[]};
     previous.amount+=n(row.amountUSD);
+    previous.ids.push(row.id);
     if(n(row.sharesAtPayment)>0)previous.perShare+=n(row.amountUSD)/(n(row.sharesAtPayment)*factor);else previous.known=false;
     grouped.set(key,previous);
   }

@@ -32,4 +32,19 @@ const sameDaySnapshot={dividends:[
 const sameDay=buildTossSync(sameDaySnapshot,{existingDividends:[{symbol:'MSTY',date:'2026-01-15',amountUSD:10}]});
 assert.equal(sameDay.matchedExistingDividendCount,1);
 assert.equal(sameDay.dividendCandidates.length,1,'one manual record must consume only one same-day Toss payment');
+const multiAccount=buildTossSync({
+  orders:[{...row,id:'shared-order',accountId:'acct-1',securityId:'US-MSTY',market:'NASDAQ'},{...row,id:'shared-order',accountId:'acct-2',securityId:'US-MSTY',market:'NASDAQ'}],
+  holdings:[{symbol:'MSTY',shares:2,currency:'USD',accountId:'acct-1',securityId:'US-MSTY',market:'NASDAQ'},{symbol:'MSTY',shares:3,currency:'USD',accountId:'acct-2',securityId:'US-MSTY',market:'NASDAQ'}]
+},{appPositions:[{symbol:'MSTY',assetKey:'toss:NASDAQ:US-MSTY',shares:5}]});
+assert.equal(multiAccount.candidates.length,2,'same order id from two accounts must remain distinct');
+assert.notEqual(multiAccount.candidates[0].externalId,multiAccount.candidates[1].externalId);
+assert.equal(mergeTossCandidates(multiAccount.candidates,multiAccount.candidates).length,2,'normalizing linked candidates again must not duplicate the account prefix');
+assert.equal(multiAccount.holdings.length,1,'same security across accounts is aggregated for portfolio comparison');
+assert.equal(multiAccount.holdings[0].shares,5);
+assert.deepEqual(multiAccount.holdings[0].accounts,['acct-1','acct-2']);
+assert.equal(multiAccount.comparisons[0].difference,0);
+assert.equal(buildTossSync({orders:[{...row,id:'legacy-id',accountId:'acct-1'}]},{existingTrades:[{source:{provider:'toss',externalId:'legacy-id'}}]}).candidates.length,0,'pre-account Toss ids remain duplicate-safe');
+const linked=tossCandidateToDividend({id:'div-account',accountId:'acct-1',securityId:'US-MSTY',market:'NASDAQ',symbol:'MSTY',date:'2026-01-22',netAmount:9,currency:'USD'},{projectId:'p-msty',id:'d-account'});
+assert.equal(linked.source.accountId,'acct-1');
+assert.equal(linked.source.assetKey,'toss:NASDAQ:US-MSTY');
 console.log('Toss offline adapter: PASS (no account requests)');

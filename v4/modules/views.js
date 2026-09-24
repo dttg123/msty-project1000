@@ -1,9 +1,9 @@
-import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.0-r57';
-import { APP_VERSION } from '../backup.js?v=0.12.0-r57';
-import { frequencyOf } from './income.js?v=0.12.0-r57';
-import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.0-r57';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.0-r57';
-import { PROJECT_CATEGORIES } from './constants.js?v=0.12.0-r57';
+import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.1-r58';
+import { APP_VERSION } from '../backup.js?v=0.12.1-r58';
+import { frequencyOf } from './income.js?v=0.12.1-r58';
+import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.1-r58';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.1-r58';
+import { PROJECT_CATEGORIES } from './constants.js?v=0.12.1-r58';
 
 export function createViews(context) {
   const {
@@ -23,7 +23,8 @@ export function createViews(context) {
   function paymentTrendHTML(calc){
     const rows=calc.income.payments.slice(0,8),ordered=[...rows].reverse(),values=ordered.map(row=>row.known?row.perShare:row.amount),max=Math.max(1,...values),recent=rows.slice(0,4),prior=rows.slice(4,8),valueOf=row=>row.known?row.perShare:row.amount,average=list=>list.length?list.reduce((sum,row)=>sum+valueOf(row),0)/list.length:0,recentAvg=average(recent),priorAvg=average(prior),change=recent.length===4&&prior.length===4&&priorAvg>0?(recentAvg/priorAvg-1)*100:null,perShare=rows.length&&rows.every(row=>row.known);
     if(!rows.length)return '<p class="empty-inline">실제 입금이 쌓이면 지급 추세를 보여줍니다.</p>';
-    return `<div class="payment-spark" role="img" aria-label="최근 실제 지급액 추세">${ordered.map((row,index)=>`<i style="height:${Math.max(12,values[index]/max*100)}%" title="${esc(fmtDate(row.date))} · ${esc(perShare?fmtMoney(values[index],4)+' / 주':fmtMoney(values[index],2))}"></i>`).join('')}</div><div class="trend-sentence"><strong>${recent.length===4?`최근 4회 평균 ${fmtMoney(recentAvg,perShare?4:2)}${perShare?' / 주':''}`:'최근 기록 '+recent.length+'회'}</strong><span class="${change===null?'':signClass(change)}">${change===null?'8회가 쌓이면 이전 4회와 비교합니다.':`이전 4회보다 ${change>=0?'증가':'감소'} ${fmtPct(Math.abs(change))}`}</span></div>`;
+    const latest=valueOf(rows[0]),previous=rows[1]?valueOf(rows[1]):0,latestChange=previous>0?(latest/previous-1)*100:null;
+    return `<div class="payment-trend-summary"><div><span>최근 지급</span><strong>${fmtMoney(latest,perShare?4:2)}${perShare?' / 주':''}</strong></div><div><span>직전 지급 대비</span><strong class="${latestChange===null?'':signClass(latestChange)}">${latestChange===null?'비교 전':`${latestChange>=0?'+':''}${fmtPct(latestChange)}`}</strong></div></div><div class="payment-spark" aria-label="날짜별 실제 지급액">${ordered.map((row,index)=>`<button type="button" ${row.ids?.[0]?`data-view-record="dividend:${esc(row.ids[0])}"`:''} aria-label="${esc(fmtDate(row.date))} ${esc(perShare?fmtMoney(values[index],4)+' 주당':fmtMoney(values[index],2))}"><b>${esc(fmtMoney(values[index],perShare?4:0))}</b><i style="height:${Math.max(12,values[index]/max*58)}px"></i><small>${esc(row.date.slice(5).replace('-','.'))}</small></button>`).join('')}</div><div class="trend-sentence"><strong>${recent.length===4?`최근 4회 평균 ${fmtMoney(recentAvg,perShare?4:2)}${perShare?' / 주':''}`:`최근 실제 지급 ${recent.length}회`}</strong><span class="${change===null?'':signClass(change)}">${change===null?'각 막대를 누르면 해당 입금 기록을 확인합니다.':`이전 4회 평균보다 ${change>=0?'증가':'감소'} ${fmtPct(Math.abs(change))}`}</span></div>${perShare?'':'<p class="detail-note">일부 기록에 지급 당시 주수가 없어 해당 회차는 실제 입금액으로 표시합니다.</p>'}`;
   }
 
   function annualDpsHTML(calc){
@@ -32,7 +33,7 @@ export function createViews(context) {
   }
 
   function strategyInsightHTML(calc){
-    if(calc.project.category==='highYield')return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>실제 지급 추세</strong><span>최근 최대 8회</span></div>${paymentTrendHTML(calc)}<div class="strategy-metrics"><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>평단 기준 세후 YOC</span><strong>${calc.analytics.trailingYoc===null?'—':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>배당 원금회수</span><strong>${fmtPct(calc.lifetimeDividendRecoveryPct)}</strong></div></div><p class="detail-note">예상값 없이 실제 세후 입금과 외부투입 원금만 사용합니다.</p></article>`;
+    if(calc.project.category==='highYield')return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>주당 실제 지급액</strong><span>최근 최대 8회</span></div>${paymentTrendHTML(calc)}<div class="strategy-metrics"><div><span>최근 12개월 세후</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>평단 기준 세후 YOC</span><strong>${calc.analytics.trailingYoc===null?'—':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>누적 세후분배금 ÷ 순투입원금</span><strong>${fmtPct(calc.lifetimeDividendRecoveryPct)}</strong></div></div><p class="detail-note">예상 배당은 섞지 않습니다. 마지막 비율은 투자수익 지표이며 실제 원금 보전이나 회수를 뜻하지 않습니다.</p></article>`;
     if(calc.project.category==='growth')return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>배당 성장</strong><span>완료 연도 기준</span></div>${annualDpsHTML(calc)}<p class="detail-note">분할을 보정한 실제 주당배당 기준입니다. 현재 진행 중인 연도는 성장률에서 제외합니다.</p></article>`;
     return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>배당 기록</strong><span>같은 기간 비교</span></div><div class="strategy-metrics"><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>평단 기준 세후 YOC</span><strong>${calc.analytics.trailingYoc===null?'—':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>전년 동기 대비</span><strong class="${calc.analytics.ytdChange===null?'':signClass(calc.analytics.ytdChange)}">${finitePct(calc.analytics.ytdChange)}</strong></div></div></article>`;
   }
@@ -138,19 +139,19 @@ export function createViews(context) {
   }
 
   function renderProjects() {
-    const allProjects=activeProjects(); let category=getPortfolioCategory?.()||'highYield',projects=category==='all'?allProjects:allProjects.filter(project=>project.category===category),selectedProjectId=getSelectedProjectId();
+    const allProjects=activeProjects(); let category=getPortfolioCategory?.()||'all',projects=category==='all'?allProjects:allProjects.filter(project=>project.category===category),selectedProjectId=getSelectedProjectId();
 
     if(!selectedProjectId||!projects.some(project=>project.id===selectedProjectId)){selectedProjectId=projects[0]?.id||'';setSelectedProjectId(selectedProjectId);}
     const calc=projects.length?computeProject(selectedProjectId):null, page=document.getElementById('page-projects');
-    if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<div class="portfolio-categories four">${[['all','전체'],...PROJECT_CATEGORIES].map(([key,label])=>`<button data-portfolio-category="${key}" class="${category===key?'active':''}">${label}</button>`).join('')}</div><article class="card empty-project"><p>이 분류에 등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
+    if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<div class="portfolio-filter-chips" aria-label="분석 필터">${[['all','전체'],...PROJECT_CATEGORIES].map(([key,label])=>`<button data-portfolio-category="${key}" class="${category===key?'active':''}">${label}</button>`).join('')}</div><article class="card empty-project"><p>이 분석 필터에 해당하는 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
     const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, allRows=combinedRecords(calc),filter=getHistoryFilter?.()||{},rows=selectRecords(allRows,filter),historyLimit=getHistoryLimit?.()||10;
     page.innerHTML=`
       <div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
-      <div class="portfolio-categories four">${[['all','전체'],...PROJECT_CATEGORIES].map(([key,label])=>`<button class="${category===key?'active':''}" data-portfolio-category="${key}"><span>${label}</span><strong>${key==='all'?allProjects.length:allProjects.filter(x=>x.category===key).length}</strong></button>`).join('')}</div>
+      <div class="portfolio-filter-heading"><span>종목 ${allProjects.length}개</span><small>운용 성격으로 좁혀보기 · 토스 연결과 무관</small></div><div class="portfolio-filter-chips" aria-label="운용 성격 분석 필터">${[['all','전체'],...PROJECT_CATEGORIES].map(([key,label])=>`<button class="${category===key?'active':''}" data-portfolio-category="${key}">${label}<b>${key==='all'?allProjects.length:allProjects.filter(x=>x.category===key).length}</b></button>`).join('')}</div>
       ${projects.length>4?`<label class="project-select-label">종목 선택<select class="input" data-project-select>${projects.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.symbol)} · ${esc(categoryLabel(x.category))}</option>`).join('')}</select></label>`:`<div class="project-tabs">${projects.map(x=>`<button class="project-tab ${x.id===p.id?'active':''}" data-select-project="${x.id}">${esc(x.symbol)}</button>`).join('')}</div>`}
       <div class="stack portfolio-stack">
         <article class="card portfolio-summary" style="--project-a:${colors[0]};--project-b:${colors[1]}">
-          <div class="portfolio-heading"><div><div class="project-symbol">${esc(p.symbol)}</div><div class="project-name">${esc(p.name)}</div><span class="strategy-tag">${esc(categoryLabel(p.category))}</span></div><button class="btn soft small project-settings-shortcut" data-project-settings aria-label="${esc(p.symbol)} 종목 설정">설정</button></div>
+          <div class="portfolio-heading"><div><div class="project-symbol">${esc(p.symbol)}</div><div class="project-name">${esc(p.name)}</div><div class="project-tags"><span class="strategy-tag">${esc(categoryLabel(p.category))}</span>${(p.brokerLinks||[]).some(link=>link.provider==='toss')?'<span class="sync-tag">토스 연결</span>':''}</div></div><button class="btn soft small project-settings-shortcut" data-project-settings aria-label="${esc(p.symbol)} 종목 설정">설정</button></div>
           <div class="value-line"><div class="value-caption"><span>평가금액</span><small>${calc.priceAvailable?'현재가 반영':'현재가 미입력'}</small></div><strong>${calc.priceAvailable?fmtMoney(calc.marketValue):'—'}</strong><small class="${calc.priceAvailable?signClass(calc.unrealized):''}">${calc.priceAvailable?`평가손익 ${fmtSignedMoney(calc.unrealized)}`:'토스 연동 전에는 아래 수동 관리에서 입력할 수 있습니다.'}</small></div>
           <div class="holding-row"><div><span>보유주수</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>평균단가</span><strong>${fmtMoney(calc.avgCost)}</strong></div></div>
         </article>
@@ -210,7 +211,7 @@ export function createViews(context) {
           <div><label class="input-label">연간 세후배당 관리기준 (원)</label><input class="input" name="thresholdKRW" type="number" min="0" step="10000" value="${n(state.settings.thresholdKRW)}"></div>
           <button class="btn secondary" type="submit">배당 기준 저장</button>
         </form><p class="tiny muted" style="margin-top:10px">홈과 현금흐름은 실제 입금 기록만 집계합니다.</p></div></details>
-        <details class="card settings-section" name="settings"><summary><div><div class="card-title">종목별 설정</div><div class="sub-number">운용 유형 · 목표 · 그래프 색상</div></div><b class="chev">⌄</b></summary><div class="settings-section-body"><div class="list settings-project-list">${activeProjects().map(project=>`<div class="list-row"><div><div class="row-title"><span class="project-color-dot" style="background:${projectColors(project)[0]}"></span>${esc(project.symbol)}</div><div class="row-sub">${esc(categoryLabel(project.category))} · 목표 ${fmtShares(project.targetUnits)}주</div></div><button class="mini-icon" data-settings-project="${project.id}">수정</button></div>`).join('')}</div></div></details>
+        <details class="card settings-section" name="settings"><summary><div><div class="card-title">종목별 설정</div><div class="sub-number">운용 성격 · 목표 · 그래프 색상</div></div><b class="chev">⌄</b></summary><div class="settings-section-body"><div class="list settings-project-list">${activeProjects().map(project=>`<div class="list-row"><div><div class="row-title"><span class="project-color-dot" style="background:${projectColors(project)[0]}"></span>${esc(project.symbol)}</div><div class="row-sub">${esc(categoryLabel(project.category))} · 목표 ${fmtShares(project.targetUnits)}주</div></div><button class="mini-icon" data-settings-project="${project.id}">수정</button></div>`).join('')}</div></div></details>
         <details class="card settings-section" name="settings"><summary><div><div class="card-title">토스증권 읽기 전용</div><div class="sub-number">보유주식 · 현재가 · 체결 대조</div></div><span class="status-pill ${toss.status==='connected'?'positive':''}">${tossStatus}</span><b class="chev">⌄</b></summary><div class="settings-section-body">
           <p class="tiny muted">${esc(tossDescription)}</p>
           <p class="tiny muted toss-capability-note">현재 공개 API 연동 범위는 보유주식·현재가·체결입니다. 배당 입금은 API 응답에 포함될 때만 승인 후보로 받고, 그 전에는 수동 보정 기록을 V4에 영구 보존합니다.</p>
@@ -230,7 +231,7 @@ export function createViews(context) {
             ${directConfig.hasSecret?'<button class="text-button danger-text" type="button" data-clear-toss-direct>이 기기의 연결정보 삭제</button>':''}
           </div>`:''}
           ${toss.accountLabel?`<div class="row-sub">${esc(toss.accountLabel)}${toss.lastSyncAt?` · ${fmtDate(toss.lastSyncAt.slice(0,10))} 조회`:''}</div>`:''}
-          ${tossComparisons.length?`<div class="list" style="margin-top:12px">${tossComparisons.map(row=>`<div class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${fmtShares(row.shares)}주</div><div class="row-sub">앱 ${fmtShares(row.appShares)}주${row.supported?'':' · 원화 종목은 대조만'}</div></div><div class="row-value ${Math.abs(n(row.difference))<.0001?'positive':''}">${Math.abs(n(row.difference))<.0001?'일치':`${n(row.difference)>0?'+':''}${fmtShares(row.difference)}주`}</div></div>`).join('')}</div>`:''}
+          ${tossComparisons.length?`<div class="list" style="margin-top:12px">${tossComparisons.map(row=>`<div class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${fmtShares(row.shares)}주</div><div class="row-sub">${row.accounts?.length>1?`${row.accounts.length}계좌 합산 · `:''}앱 ${fmtShares(row.appShares)}주${row.supported?'':' · 원화 종목은 대조만'}</div></div><div class="row-value ${Math.abs(n(row.difference))<.0001?'positive':''}">${Math.abs(n(row.difference))<.0001?'일치':`${n(row.difference)>0?'+':''}${fmtShares(row.difference)}주`}</div></div>`).join('')}</div>`:''}
           ${toss.unsupportedCurrencyCount?`<p class="tiny muted">원화 체결 ${toss.unsupportedCurrencyCount}건은 USD 원장에 섞지 않고 제외했습니다.</p>`:''}
           ${toss.matchedExistingCount?`<p class="tiny muted">기존 수동 거래와 일치한 토스 체결 ${toss.matchedExistingCount}건은 중복 저장하지 않았습니다.</p>`:''}${toss.matchedExistingDividendCount?`<p class="tiny muted">기존 배당과 일치한 토스 입금 ${toss.matchedExistingDividendCount}건은 중복 저장하지 않았습니다.</p>`:''}
           ${(toss.sourceLedger?.orders?.length||toss.sourceLedger?.dividends?.length)?`<p class="tiny positive">기기 보존 원본 · 거래 ${toss.sourceLedger.orders.length}건 · 배당 ${toss.sourceLedger.dividends.length}건${toss.lastSuccessfulAt?' · 마지막 성공 '+fmtDate(toss.lastSuccessfulAt.slice(0,10)):''}</p>`:''}
