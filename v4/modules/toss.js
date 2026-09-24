@@ -1,4 +1,4 @@
-import { isDate, n, todayISO } from './utils.js?v=0.12.1-r58';
+import { isDate, n, todayISO } from './utils.js?v=0.12.2-r59';
 
 const SYMBOL_PATTERN = /^[A-Z0-9.-]{1,16}$/;
 

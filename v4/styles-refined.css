@@ -195,6 +195,12 @@ body{background:var(--bg);background-image:none}
 .record-detail-grid span{color:var(--muted);font-size:13px}
 .record-detail-grid strong{text-align:right;font-size:14px;font-variant-numeric:tabular-nums}
 .record-note{padding:13px 14px;border-radius:12px;background:var(--surface);color:var(--muted);font-size:13px}
+.record-source-note{margin:12px 0 0;color:var(--muted);font-size:12px;text-align:center}
+.record-manage{margin-top:12px;border-top:1px solid var(--line)}
+.record-manage summary{padding:13px 2px 7px;color:var(--muted);font-size:12px;cursor:pointer}
+.record-manage>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 2px 3px}
+.record-manage p{margin:0;color:var(--muted);font-size:11px;line-height:1.45}
+.record-close{width:100%;margin-top:14px}
 .record-delete-link{width:100%;min-height:44px;margin-top:8px;border:0;background:transparent;color:var(--red);font:inherit;font-size:13px}
 
 .color-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0;padding:0;border:0}
@@ -255,14 +261,6 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .agenda-status.actual{color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent)}
 .agenda-status.expected{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .agenda-action{display:block;margin:5px 0 0 auto;padding:4px 0;border:0;background:transparent;color:var(--accent);font:inherit;font-size:11px;font-weight:700}
-.portfolio-filter-heading{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:8px}
-.portfolio-filter-heading span{font-size:12px;font-weight:850}
-.portfolio-filter-heading small{color:var(--muted);font-size:9px;text-align:right}
-.portfolio-filter-chips{display:flex;gap:7px;overflow-x:auto;margin-bottom:12px;padding:1px 1px 4px;scrollbar-width:none}
-.portfolio-filter-chips::-webkit-scrollbar{display:none}
-.portfolio-filter-chips button{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-height:38px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface-strong);color:var(--muted);font:inherit;font-size:11px;font-weight:800}
-.portfolio-filter-chips button.active{border-color:color-mix(in srgb,var(--accent) 42%,var(--line));background:var(--accent-soft);color:var(--accent)}
-.portfolio-filter-chips b{font-size:9px}
 .project-select-label{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px;margin:0 0 12px;color:var(--muted);font-size:12px;font-weight:800}
 .project-select-label .input{min-width:0}
 .strategy-tag{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--project-a,var(--accent)) 12%,transparent);color:var(--project-a,var(--accent));font-size:10px;font-weight:850}
@@ -287,6 +285,9 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .strategy-metrics>div+div{padding-left:9px;border-left:1px solid var(--line)}
 .strategy-metrics span{display:block;color:var(--muted);font-size:10px;line-height:1.35}
 .strategy-metrics strong{display:block;margin-top:7px;font-size:14px;line-height:1.25;overflow-wrap:anywhere}
+.metric-explain{display:grid;gap:7px;margin-top:14px;padding:12px 13px;border-radius:12px;background:var(--surface-strong)}
+.metric-explain p{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
+.metric-explain b{color:var(--text);margin-right:4px}
 .annual-dps-chart{height:102px;display:flex;align-items:flex-end;gap:10px;margin-top:16px;padding:0 3px;border-bottom:1px solid var(--line)}
 .annual-dps-chart>div{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px}
 .annual-dps-chart b{width:min(28px,72%);border-radius:7px 7px 2px 2px;background:linear-gradient(180deg,var(--project-b,#9a84ff),var(--project-a,var(--accent)))}
@@ -300,4 +301,4 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .five-year-summary span,.five-year-summary strong{display:block}
 .five-year-summary span{color:var(--muted);font-size:10px}
 .five-year-summary strong{margin-top:5px;font-size:13px}
-@media(max-width:380px){.strategy-metrics{grid-template-columns:1fr 1fr;row-gap:14px}.strategy-metrics>div:nth-child(3){padding-left:0;border-left:0}.portfolio-filter-chips button{padding:0 10px;font-size:10px}}
+@media(max-width:380px){.strategy-metrics{grid-template-columns:1fr 1fr;row-gap:14px}.strategy-metrics>div:nth-child(3){padding-left:0;border-left:0}}

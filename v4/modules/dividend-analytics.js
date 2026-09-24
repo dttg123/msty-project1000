@@ -1,4 +1,4 @@
-import { isDate, n } from './utils.js?v=0.12.1-r58';
+import { isDate, n } from './utils.js?v=0.12.2-r59';
 
 function splitFactorAfter(date,splits,today){
   return splits.filter(row=>isDate(row.date)&&row.date>date&&row.date<=today&&n(row.from)>0&&n(row.to)>0)

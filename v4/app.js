@@ -1,20 +1,20 @@
-import { monthActivity } from './modules/activity.js?v=0.12.1-r58';
-import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.1-r58';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.1-r58';
-import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.1-r58';
-import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.1-r58';
-import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.1-r58';
-import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.1-r58';
-import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.1-r58';
-import { createFormatters } from './modules/format.js?v=0.12.1-r58';
-import { createViews } from './modules/views.js?v=0.12.1-r58';
-import { buildMigrationAudit } from './modules/migration.js?v=0.12.1-r58';
-import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.1-r58';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.1-r58';
-import { validateLedger } from './modules/validation.js?v=0.12.1-r58';
-import { demoState } from './modules/demo.js?v=0.12.1-r58';
-import { FREQUENCIES } from './modules/income.js?v=0.12.1-r58';
-import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.1-r58';
+import { monthActivity } from './modules/activity.js?v=0.12.2-r59';
+import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.2-r59';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.2-r59';
+import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.2-r59';
+import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.2-r59';
+import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.2-r59';
+import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.2-r59';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.2-r59';
+import { createFormatters } from './modules/format.js?v=0.12.2-r59';
+import { createViews } from './modules/views.js?v=0.12.2-r59';
+import { buildMigrationAudit } from './modules/migration.js?v=0.12.2-r59';
+import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.2-r59';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.2-r59';
+import { validateLedger } from './modules/validation.js?v=0.12.2-r59';
+import { demoState } from './modules/demo.js?v=0.12.2-r59';
+import { FREQUENCIES } from './modules/income.js?v=0.12.2-r59';
+import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.2-r59';
 
 (() => {
   'use strict';
@@ -287,7 +287,9 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     if(kind==='dividend')details=`<div><span>세후 배당</span><strong>${fmtMoney(row.amountUSD,2)}</strong></div><div><span>지급 기준 주수</span><strong>${n(row.sharesAtPayment)>0?fmtShares(row.sharesAtPayment)+'주':'기록 없음'}</strong></div>`;
     if(kind==='cash')details=`<div><span>보정액</span><strong>${fmtSignedMoney(row.amountUSD)}</strong></div><div><span>사유</span><strong>${esc(row.label||'잔액 보정')}</strong></div>`;
     if(kind==='split')details=`<div><span>변경 비율</span><strong>${n(row.from)} → ${n(row.to)}</strong></div>`;
-    openModal(`<h3 class="modal-title">${esc(project?.symbol||row.symbol||'')} ${labels[kind]||'기록'}</h3><p class="modal-desc">${fmtDate(row.date)}${row.source?.provider==='toss'?' · 토스에서 가져온 기록':''}</p><div class="record-detail-grid">${details}</div>${row.note?`<p class="record-note">${esc(row.note)}</p>`:''}<div class="modal-actions"><button class="btn soft" data-close-modal>닫기</button><button class="btn primary" data-edit-record="${esc(token)}">수정</button></div>`);
+    const fromToss=row.source?.provider==='toss';
+    const management=fromToss?'<p class="record-source-note">토스 원본 기록은 이 앱에서 수정하지 않습니다.</p>':`<details class="record-manage"><summary>기록 관리</summary><div><p>직접 입력한 값이 잘못된 경우에만 고치세요.</p><button class="btn soft small" data-edit-record="${esc(token)}">직접 입력값 고치기</button></div></details>`;
+    openModal(`<h3 class="modal-title">${esc(project?.symbol||row.symbol||'')} ${labels[kind]||'기록'}</h3><p class="modal-desc">${fmtDate(row.date)}${fromToss?' · 토스에서 가져온 기록':''}</p><div class="record-detail-grid">${details}</div>${row.note?`<p class="record-note">${esc(row.note)}</p>`:''}${management}<button class="btn primary record-close" data-close-modal>닫기</button>`);
   }
   function editRecord(token) { const {kind,row}=recordByToken(token);if(!row)return;if(kind==='trade')openTradeForm(row);if(kind==='dividend')openDividendForm(row);if(kind==='cash')openCashForm(row);if(kind==='split')openSplitForm(row); }
   function deleteRecord(token) { const {key,row}=recordByToken(token);if(!row)return;confirmAction('기록 삭제',`${fmtDate(row.date)} 기록을 삭제합니다.`,async()=>{await storageSet(SAFETY_KEY,clone(state));const previous=state[key];state[key]=state[key].filter(x=>x.id!==row.id);if((key==='trades'||key==='splits')&&computeProject(row.projectId).oversells.length){state[key]=previous;toast('이 기록을 삭제하면 이후 매도가 보유주수를 초과하므로 삭제하지 않았습니다.');return;}await saveState(true);renderAll();showPage('projects');toast('기록을 삭제했습니다.');},'삭제'); }
@@ -590,7 +592,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.1-r58').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.2-r59').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

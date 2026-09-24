@@ -1,13 +1,13 @@
-import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.1-r58';
-import { APP_VERSION } from '../backup.js?v=0.12.1-r58';
-import { frequencyOf } from './income.js?v=0.12.1-r58';
-import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.1-r58';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.1-r58';
-import { PROJECT_CATEGORIES } from './constants.js?v=0.12.1-r58';
+import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.2-r59';
+import { APP_VERSION } from '../backup.js?v=0.12.2-r59';
+import { frequencyOf } from './income.js?v=0.12.2-r59';
+import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.2-r59';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.2-r59';
+import { PROJECT_CATEGORIES } from './constants.js?v=0.12.2-r59';
 
 export function createViews(context) {
   const {
-    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getChartSelection, getHomeCashflowMode, getHomeYearRange, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getPortfolioCategory, setPortfolioCategory, getCurrentUser, isTossBridgeConfigured,
+    getState, getSelectedProjectId, setSelectedProjectId, getChartMode, getChartSelection, getHomeCashflowMode, getHomeYearRange, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getCurrentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -29,13 +29,13 @@ export function createViews(context) {
 
   function annualDpsHTML(calc){
     const analytics=calc.analytics,years=analytics.years.filter(row=>row.known&&row.dps>0).slice(-6),max=Math.max(1,...years.map(row=>row.dps));
-    return `<div class="strategy-metrics"><div><span>최근 12개월 실제</span><strong>${fmtMoney(analytics.trailingNet,2)}</strong></div><div><span>평단 기준 세후 YOC</span><strong>${analytics.trailingYoc===null?'—':fmtPct(analytics.trailingYoc)}</strong></div><div><span>연속 증가</span><strong>${analytics.increaseStreak?analytics.increaseStreak+'년':'확인 전'}</strong></div></div>${years.length?`<div class="annual-dps-chart" aria-label="연도별 실제 주당배당">${years.map(row=>`<div><b style="height:${Math.max(10,row.dps/max*78)}px"></b><span>${row.year.slice(2)}</span></div>`).join('')}</div>`:'<p class="empty-inline">완료된 연도 기록이 쌓이면 주당배당 성장을 보여줍니다.</p>'}<div class="growth-rate-row"><span>3년 ${finitePct(analytics.cagr3)}</span><span>5년 ${finitePct(analytics.cagr5)}</span><span>10년 ${finitePct(analytics.cagr10)}</span></div>${analytics.cutCount?`<p class="strategy-warning">기록상 배당 감소 ${analytics.cutCount}회</p>`:''}`;
+    return `<div class="strategy-metrics"><div><span>최근 1년 받은 배당</span><strong>${fmtMoney(analytics.trailingNet,2)}</strong></div><div><span>내 매입금 기준 1년 배당률</span><strong>${analytics.trailingYoc===null?'—':fmtPct(analytics.trailingYoc)}</strong></div><div><span>연속 증가</span><strong>${analytics.increaseStreak?analytics.increaseStreak+'년':'확인 전'}</strong></div></div>${years.length?`<div class="annual-dps-chart" aria-label="연도별 실제 주당배당">${years.map(row=>`<div><b style="height:${Math.max(10,row.dps/max*78)}px"></b><span>${row.year.slice(2)}</span></div>`).join('')}</div>`:'<p class="empty-inline">완료된 연도 기록이 쌓이면 주당배당 성장을 보여줍니다.</p>'}<div class="growth-rate-row"><span>3년 ${finitePct(analytics.cagr3)}</span><span>5년 ${finitePct(analytics.cagr5)}</span><span>10년 ${finitePct(analytics.cagr10)}</span></div>${analytics.cutCount?`<p class="strategy-warning">기록상 배당 감소 ${analytics.cutCount}회</p>`:''}`;
   }
 
   function strategyInsightHTML(calc){
-    if(calc.project.category==='highYield')return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>주당 실제 지급액</strong><span>최근 최대 8회</span></div>${paymentTrendHTML(calc)}<div class="strategy-metrics"><div><span>최근 12개월 세후</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>평단 기준 세후 YOC</span><strong>${calc.analytics.trailingYoc===null?'—':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>누적 세후분배금 ÷ 순투입원금</span><strong>${fmtPct(calc.lifetimeDividendRecoveryPct)}</strong></div></div><p class="detail-note">예상 배당은 섞지 않습니다. 마지막 비율은 투자수익 지표이며 실제 원금 보전이나 회수를 뜻하지 않습니다.</p></article>`;
+    if(calc.project.category==='highYield')return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>주당 실제 지급액</strong><span>최근 최대 8회</span></div>${paymentTrendHTML(calc)}<div class="strategy-metrics easy-yield-metrics"><div><span>최근 1년 받은 배당</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>내 매입금 기준<br>1년 배당률</span><strong>${calc.analytics.trailingYoc===null?'—':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>투입금 대비<br>누적 배당률</span><strong>${fmtPct(calc.lifetimeDividendRecoveryPct)}</strong></div></div><div class="metric-explain"><p><b>1년 배당률</b> 현재 보유분을 산 금액과 최근 1년간 받은 세후 배당을 비교합니다.</p><p><b>누적 배당률</b> 지금까지 직접 넣은 투자금과 받은 세후 배당 전체를 비교합니다.</p></div><p class="detail-note">실제 입금만 사용하며 예상 배당은 섞지 않습니다. 두 비율 모두 원금 회수를 뜻하지 않습니다.</p></article>`;
     if(calc.project.category==='growth')return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>배당 성장</strong><span>완료 연도 기준</span></div>${annualDpsHTML(calc)}<p class="detail-note">분할을 보정한 실제 주당배당 기준입니다. 현재 진행 중인 연도는 성장률에서 제외합니다.</p></article>`;
-    return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>배당 기록</strong><span>같은 기간 비교</span></div><div class="strategy-metrics"><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>평단 기준 세후 YOC</span><strong>${calc.analytics.trailingYoc===null?'—':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>전년 동기 대비</span><strong class="${calc.analytics.ytdChange===null?'':signClass(calc.analytics.ytdChange)}">${finitePct(calc.analytics.ytdChange)}</strong></div></div></article>`;
+    return `<article class="card portfolio-section strategy-card"><div class="detail-title"><strong>배당 기록</strong><span>같은 기간 비교</span></div><div class="strategy-metrics"><div><span>최근 1년 받은 배당</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>내 매입금 기준 1년 배당률</span><strong>${calc.analytics.trailingYoc===null?'—':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>전년 동기 대비</span><strong class="${calc.analytics.ytdChange===null?'':signClass(calc.analytics.ytdChange)}">${finitePct(calc.analytics.ytdChange)}</strong></div></div></article>`;
   }
 
   function periodKey(dateString,mode) {
@@ -139,16 +139,15 @@ export function createViews(context) {
   }
 
   function renderProjects() {
-    const allProjects=activeProjects(); let category=getPortfolioCategory?.()||'all',projects=category==='all'?allProjects:allProjects.filter(project=>project.category===category),selectedProjectId=getSelectedProjectId();
+    const projects=activeProjects(); let selectedProjectId=getSelectedProjectId();
 
     if(!selectedProjectId||!projects.some(project=>project.id===selectedProjectId)){selectedProjectId=projects[0]?.id||'';setSelectedProjectId(selectedProjectId);}
     const calc=projects.length?computeProject(selectedProjectId):null, page=document.getElementById('page-projects');
-    if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<div class="portfolio-filter-chips" aria-label="분석 필터">${[['all','전체'],...PROJECT_CATEGORIES].map(([key,label])=>`<button data-portfolio-category="${key}" class="${category===key?'active':''}">${label}</button>`).join('')}</div><article class="card empty-project"><p>이 분석 필터에 해당하는 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
+    if(!calc){page.innerHTML=`${sectionTitle('포트폴리오')}<article class="card empty-project"><p>아직 등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
     const p=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, allRows=combinedRecords(calc),filter=getHistoryFilter?.()||{},rows=selectRecords(allRows,filter),historyLimit=getHistoryLimit?.()||10;
     page.innerHTML=`
       <div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>
-      <div class="portfolio-filter-heading"><span>종목 ${allProjects.length}개</span><small>운용 성격으로 좁혀보기 · 토스 연결과 무관</small></div><div class="portfolio-filter-chips" aria-label="운용 성격 분석 필터">${[['all','전체'],...PROJECT_CATEGORIES].map(([key,label])=>`<button class="${category===key?'active':''}" data-portfolio-category="${key}">${label}<b>${key==='all'?allProjects.length:allProjects.filter(x=>x.category===key).length}</b></button>`).join('')}</div>
-      ${projects.length>4?`<label class="project-select-label">종목 선택<select class="input" data-project-select>${projects.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.symbol)} · ${esc(categoryLabel(x.category))}</option>`).join('')}</select></label>`:`<div class="project-tabs">${projects.map(x=>`<button class="project-tab ${x.id===p.id?'active':''}" data-select-project="${x.id}">${esc(x.symbol)}</button>`).join('')}</div>`}
+      ${projects.length===1?'':projects.length>4?`<label class="project-select-label">종목 선택<select class="input" data-project-select>${projects.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.symbol)}</option>`).join('')}</select></label>`:`<div class="project-tabs">${projects.map(x=>`<button class="project-tab ${x.id===p.id?'active':''}" data-select-project="${x.id}">${esc(x.symbol)}</button>`).join('')}</div>`}
       <div class="stack portfolio-stack">
         <article class="card portfolio-summary" style="--project-a:${colors[0]};--project-b:${colors[1]}">
           <div class="portfolio-heading"><div><div class="project-symbol">${esc(p.symbol)}</div><div class="project-name">${esc(p.name)}</div><div class="project-tags"><span class="strategy-tag">${esc(categoryLabel(p.category))}</span>${(p.brokerLinks||[]).some(link=>link.provider==='toss')?'<span class="sync-tag">토스 연결</span>':''}</div></div><button class="btn soft small project-settings-shortcut" data-project-settings aria-label="${esc(p.symbol)} 종목 설정">설정</button></div>
