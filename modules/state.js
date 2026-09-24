@@ -1,5 +1,5 @@
-import { PROJECT_COLORS } from './constants.js';
-import { clone, n, todayISO, uid } from './utils.js';
+import { PROJECT_COLORS } from './constants.js?v=0.12.0-r56';
+import { clone, n, todayISO, uid } from './utils.js?v=0.12.0-r56';
 
 export function blankRecovery() {
   return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'' };

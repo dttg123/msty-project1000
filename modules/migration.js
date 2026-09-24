@@ -1,5 +1,5 @@
-import { repairLegacy } from './state.js';
-import { clone, n } from './utils.js';
+import { repairLegacy } from './state.js?v=0.12.0-r56';
+import { clone, n } from './utils.js?v=0.12.0-r56';
 
 const EPSILON = 1e-7;
 
