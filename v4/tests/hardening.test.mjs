@@ -6,10 +6,10 @@ import {createPortfolioEngine} from '../modules/portfolio.js';
 import {validateLedger} from '../modules/validation.js';
 import {incomeEstimate} from '../modules/income.js';
 import {createStoreZip,readStateFromBackupFile} from '../backup.js';
-const localRoot=resolve(import.meta.dirname,'..'),root=existsSync(resolve(localRoot,'v4/modules'))?localRoot:resolve(localRoot,'..');
+const root=resolve(import.meta.dirname,'..');
 let checks=0;
 const check=(v,msg)=>{assert.ok(v,msg);checks++};
-for(const prefix of ['','v4/']){
+for(const prefix of ['']){
  for(const file of ['app.js','backup.js','storage.js','auth.js','cloud.js',...readdirSync(root+'/'+prefix+'modules').filter(x=>x.endsWith('.js')).map(x=>'modules/'+x)]){
   const path=resolve(root,prefix,file),source=readFileSync(path,'utf8');
   for(const m of source.matchAll(/(?:from\s*|import\s*\()\s*['"](\.[^'"]+)['"]/g))check(existsSync(resolve(dirname(path),m[1].split('?')[0])),`missing dependency ${prefix+file}: ${m[1]}`);

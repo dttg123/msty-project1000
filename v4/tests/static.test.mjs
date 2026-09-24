@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const repoRoot=resolve(root,'..');
 const runtimeFiles=['index.html','styles.css','app.js','auth.js','backup.js','cloud.js','firebase.js','storage.js','sw.js','manifest.webmanifest','runtime-config.js','toss-client.js'];
 for (const file of runtimeFiles) assert.ok(existsSync(resolve(root,file)),`missing ${file}`);
 
@@ -50,10 +51,11 @@ assert.ok(readFileSync(resolve(root,'storage.js'),'utf8').includes("storageMode=
 assert.ok(app.includes("toss-client.js?v=0.12.0-r57"));
 assert.ok(app.includes("syncTossReadOnly"));
 assert.ok(!readFileSync(resolve(root,'runtime-config.js'),'utf8').includes('client_secret'));
-assert.ok(readFileSync(resolve(root,'toss-bridge/server.mjs'),'utf8').includes("app.get('/v1/toss/snapshot'"));
-assert.ok(!readFileSync(resolve(root,'toss-bridge/server.mjs'),'utf8').includes("app.post('/api/v1/orders'"));
-assert.ok(readFileSync(resolve(root,'toss-bridge/server.mjs'),'utf8').includes("'ALLOWED_FIREBASE_UID'"));
-assert.ok(readFileSync(resolve(root,'toss-bridge/server.mjs'),'utf8').includes("/api/v1/prices?"));
+const tossBridge=readFileSync(resolve(root,'../toss-bridge/server.mjs'),'utf8');
+assert.ok(tossBridge.includes("app.get('/v1/toss/snapshot'"));
+assert.ok(!tossBridge.includes("app.post('/api/v1/orders'"));
+assert.ok(tossBridge.includes("'ALLOWED_FIREBASE_UID'"));
+assert.ok(tossBridge.includes("/api/v1/prices?"));
 assert.ok(app.includes('선택한 거래 조합은 과매도를 만들 수 있어 저장하지 않았습니다.'));
 assert.ok(app.includes('PROJECT_COLOR_NAMES'));
 assert.ok(app.includes('data-delete-from-edit'));
@@ -78,4 +80,10 @@ assert.ok(index.includes('로그인 없이 사용'));
 assert.ok(app.includes("'[data-open-project],[data-goal-detail]'"));
 assert.ok(readFileSync(resolve(root,'toss-client.js'),'utf8').includes("dividend-os-toss-direct-v1"));
 assert.ok(!readFileSync(resolve(root,'modules/state.js'),'utf8').includes('clientSecret'));
+assert.ok(!existsSync(resolve(repoRoot,'modules')),'root app modules must not be duplicated');
+assert.ok(!existsSync(resolve(repoRoot,'tests')),'root tests must not be duplicated');
+assert.ok(!existsSync(resolve(root,'toss-bridge')),'Toss bridge must have one canonical copy');
+const rootIndex=readFileSync(resolve(repoRoot,'index.html'),'utf8');
+assert.ok(rootIndex.includes("const target = './v4/'")&&rootIndex.includes('location.replace(target)'));
+assert.ok(readFileSync(resolve(repoRoot,'sw.js'),'utf8').includes('registration.unregister()'));
 console.log('DividendOS v0.12.0 static QA: PASS');
