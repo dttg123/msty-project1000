@@ -1,4 +1,4 @@
-import { isDate, n } from './utils.js?v=0.12.2-r59';
+import { isDate, n } from './utils.js?v=0.12.3-r60';
 
 export function historicalIncome(rows, mode, year, today) {
   const posted=rows.filter(r=>isDate(r.date)&&r.date<=today&&n(r.amountUSD)>0);

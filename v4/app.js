@@ -1,20 +1,20 @@
-import { monthActivity } from './modules/activity.js?v=0.12.2-r59';
-import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.2-r59';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.2-r59';
-import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.2-r59';
-import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.2-r59';
-import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.2-r59';
-import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.2-r59';
-import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.2-r59';
-import { createFormatters } from './modules/format.js?v=0.12.2-r59';
-import { createViews } from './modules/views.js?v=0.12.2-r59';
-import { buildMigrationAudit } from './modules/migration.js?v=0.12.2-r59';
-import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.2-r59';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.2-r59';
-import { validateLedger } from './modules/validation.js?v=0.12.2-r59';
-import { demoState } from './modules/demo.js?v=0.12.2-r59';
-import { FREQUENCIES } from './modules/income.js?v=0.12.2-r59';
-import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.2-r59';
+import { monthActivity } from './modules/activity.js?v=0.12.3-r60';
+import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.3-r60';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.3-r60';
+import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.3-r60';
+import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.3-r60';
+import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.3-r60';
+import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.3-r60';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.3-r60';
+import { createFormatters } from './modules/format.js?v=0.12.3-r60';
+import { createViews } from './modules/views.js?v=0.12.3-r60';
+import { buildMigrationAudit } from './modules/migration.js?v=0.12.3-r60';
+import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.3-r60';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.3-r60';
+import { validateLedger } from './modules/validation.js?v=0.12.3-r60';
+import { demoState } from './modules/demo.js?v=0.12.3-r60';
+import { FREQUENCIES } from './modules/income.js?v=0.12.3-r60';
+import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.3-r60';
 
 (() => {
   'use strict';
@@ -32,10 +32,10 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
   let historyFilter={},chartMonth='',chartYear='';
   let historyLimit=10, modalDirty=false, modalSaving=false, modalFocus=null, modalScroll=0;
   let cashflowMonthKey = '';
-  let portfolioCategory = 'all';
+  let portfolioGroup = 'highYield';
   const viewKey=`dividend-os-view-v2:${demoMode?'demo':'local'}`;
-  function rememberView(){try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioCategory,chartMode,chartMonth,chartYear,homeCashflowMode,homeYearRange}));}catch(_){}}
-  function restoreView(){try{const saved=JSON.parse(localStorage.getItem(viewKey)||'null');if(!saved)return;const project=activeProjects().find(p=>p.id===saved.selectedProjectId);if(project)selectedProjectId=project.id;if(['all',...PROJECT_CATEGORIES.map(([key])=>key)].includes(saved.portfolioCategory))portfolioCategory=saved.portfolioCategory;if(['home','projects','goal'].includes(saved.page))currentPage=saved.page;if(['week','month','year','monthWeeks'].includes(saved.chartMode))chartMode=saved.chartMode;if(['month','year'].includes(saved.homeCashflowMode))homeCashflowMode=saved.homeCashflowMode;if(['6','10','all'].includes(saved.homeYearRange))homeYearRange=saved.homeYearRange;if(/^\d{4}-\d{2}$/.test(saved.chartMonth||''))chartMonth=saved.chartMonth;if(/^\d{4}$/.test(saved.chartYear||''))chartYear=saved.chartYear;}catch(_){}}
+  function rememberView(){try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioGroup,chartMode,chartMonth,chartYear,homeCashflowMode,homeYearRange}));}catch(_){}}
+  function restoreView(){try{const saved=JSON.parse(localStorage.getItem(viewKey)||'null');if(!saved)return;const project=activeProjects().find(p=>p.id===saved.selectedProjectId);if(project)selectedProjectId=project.id;const savedGroup=saved.portfolioGroup||(saved.portfolioCategory==='highYield'?'highYield':saved.portfolioCategory?'dividend':'');if(['highYield','dividend'].includes(savedGroup))portfolioGroup=savedGroup;if(['home','projects','goal'].includes(saved.page))currentPage=saved.page;if(['week','month','year','monthWeeks'].includes(saved.chartMode))chartMode=saved.chartMode;if(['month','year'].includes(saved.homeCashflowMode))homeCashflowMode=saved.homeCashflowMode;if(['6','10','all'].includes(saved.homeYearRange))homeYearRange=saved.homeYearRange;if(/^\d{4}-\d{2}$/.test(saved.chartMonth||''))chartMonth=saved.chartMonth;if(/^\d{4}$/.test(saved.chartYear||''))chartYear=saved.chartYear;}catch(_){}}
   let currentUser = null;
   let cloudReady = false, pendingCloudState = null, cloudChoiceResolve = null;
   let cloudUnsubscribe = null;
@@ -87,7 +87,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getPortfolioCategory:() => portfolioCategory, setPortfolioCategory:value => { portfolioCategory=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
+    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getPortfolioGroup:() => portfolioGroup, setPortfolioGroup:value => { portfolioGroup=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
     getTossConnectionMode, getTossLocalConfig, getTossSetup:() => tossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
@@ -116,14 +116,14 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     const confirm=document.getElementById('confirmLegacyMigration');if(confirm)confirm.onclick=async()=>{await storageSet(SAFETY_KEY,clone(state));state=preview.candidate;selectedProjectId=state.projects[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('settings');toast('V3.2.1 데이터를 V4에 복사했습니다.');};
   }
   function renderAll(displayOnly=false) {
-    const opened=displayOnly?[...document.querySelectorAll('.goal-step-card[open]')].map(el=>el.dataset.goalProject):[],historyOpen=displayOnly&&document.querySelector('.transaction-history')?.open,scrollY=window.scrollY;
+    const opened=displayOnly?[...document.querySelectorAll('.goal-step-card[open]')].map(el=>el.dataset.goalProject):[],historyOpen=displayOnly&&document.querySelector('.record-center')?.open,scrollY=window.scrollY;
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');
     document.getElementById('krwBtn')?.classList.toggle('active',displayCurrency()==='KRW');
     document.getElementById('usdBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='USD'));
     document.getElementById('krwBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='KRW'));
     renderHome();renderProjects();renderGoals();if(!displayOnly)renderSettings();
-    if(displayOnly){document.querySelectorAll('.goal-step-card').forEach(el=>{el.open=opened.includes(el.dataset.goalProject);});const history=document.querySelector('.transaction-history');if(history)history.open=!!historyOpen;window.scrollTo(0,scrollY);}
+    if(displayOnly){document.querySelectorAll('.goal-step-card').forEach(el=>{el.open=opened.includes(el.dataset.goalProject);});const history=document.querySelector('.record-center');if(history)history.open=!!historyOpen;window.scrollTo(0,scrollY);}
   }
   function showPage(page) {
     if(!PAGES.includes(page))page='home'; currentPage=page;
@@ -187,7 +187,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category,colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:currentPrice?'manual':target.priceSource||'manual',priceUpdatedAt:currentPrice?new Date().toISOString():target.priceUpdatedAt||'',distributionFrequency:FREQUENCIES[form.get('distributionFrequency')]?form.get('distributionFrequency'):'monthly',projectStart:String(form.get('projectStart'))||todayISO()});
       if(edit&&oldSymbol!==symbol)for(const key of ['trades','dividends','splits','cashAdjustments'])state[key].filter(row=>row.projectId===target.id).forEach(row=>{row.symbol=symbol;});
       if(!edit){historyFilter={};state.projects.push(target);selectedProjectId=target.id;}
-      portfolioCategory=target.category;await saveState(true);closeModal();renderAll(true);showPage(edit?returnPage:'projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
+      portfolioGroup=target.category==='highYield'?'highYield':'dividend';await saveState(true);closeModal();renderAll(true);showPage(edit?returnPage:'projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
     };
     const archive=document.getElementById('archiveProject');if(archive)archive.onclick=()=>confirmAction('프로젝트 보관',`${project.symbol}은 전체 합산에서 숨겨집니다. 기록은 삭제하지 않습니다.`,async()=>{project.archived=true;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);renderAll();showPage('projects');toast('프로젝트를 보관했습니다.');},'보관');
   }
@@ -503,13 +503,13 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency;saveState();renderAll(true);return;}
     if(button.dataset.chartKey){chartSelection=button.dataset.chartKey;renderProjects();return;}
     if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'',button.dataset.incomeSymbol||'');return;}
-    if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector('.transaction-history').open=true;return;}
-    if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector('.transaction-history').open=true;return;}
+    if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector('.record-center').open=true;return;}
+    if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector('.record-center').open=true;return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;chartSelection='';renderProjects();return;}
     if(button.dataset.homeCashflowMode){homeCashflowMode=button.dataset.homeCashflowMode;cashflowMonthKey='';rememberView();renderHome();return;}
     if(button.dataset.homeYearRange){homeYearRange=button.dataset.homeYearRange;cashflowMonthKey='';rememberView();renderHome();return;}
     if(button.dataset.cashflowPeriod){cashflowMonthKey=button.dataset.cashflowPeriod;renderHome();return;}
-    if(button.dataset.portfolioCategory){historyFilter={};historyLimit=10;portfolioCategory=button.dataset.portfolioCategory;const first=portfolioCategory==='all'?activeProjects()[0]:activeProjects().find(project=>project.category===portfolioCategory);if(first)selectedProjectId=first.id;renderProjects();return;}
+    if(button.dataset.portfolioGroup){historyFilter={};historyLimit=10;portfolioGroup=button.dataset.portfolioGroup==='dividend'?'dividend':'highYield';const first=activeProjects().find(project=>(project.category==='highYield'?'highYield':'dividend')===portfolioGroup);if(first)selectedProjectId=first.id;renderProjects();return;}
     if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');const card=[...document.querySelectorAll('.goal-step-card')].find(el=>el.dataset.goalProject===selectedProjectId);if(card){card.open=true;card.scrollIntoView({block:'nearest'});}return;}
     if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
     if(button.dataset.openProject){selectedProjectId=button.dataset.openProject;renderProjects();showPage('projects');return;}
@@ -565,7 +565,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     },true);
     document.addEventListener('click',event=>{handleClick(event);rememberView();});
     window.addEventListener('pagehide',rememberView);
-    document.addEventListener('submit',event=>{if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=new FormData(event.target);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();document.querySelector('.transaction-history').open=true;});
+    document.addEventListener('submit',event=>{if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=new FormData(event.target);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();document.querySelector('.record-center').open=true;});
     document.addEventListener('change',event=>{if(event.target.matches('[data-project-select]')){selectedProjectId=event.target.value;renderProjects();rememberView();return;}if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();rememberView();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();rememberView();});
     document.getElementById('modal').addEventListener('input',()=>{modalDirty=true;});
     document.getElementById('modal').addEventListener('change',()=>{modalDirty=true;});
@@ -592,7 +592,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.2-r59').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.3-r60').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

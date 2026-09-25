@@ -170,6 +170,28 @@ body{background:var(--bg);background-image:none}
 .chart-filter-line .input{width:auto;max-width:65%;min-height:40px;padding:8px 12px;font-size:13px}
 .portfolio-section .column-chart.compact-chart{height:150px}
 
+/* Two durable portfolio groups; strategy remains an internal analysis detail. */
+.portfolio-group-tabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 12px}
+.portfolio-group-tabs button{display:flex;align-items:center;justify-content:space-between;min-height:54px;padding:0 16px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--muted);font:inherit;font-weight:750;cursor:pointer}
+.portfolio-group-tabs button.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.portfolio-group-tabs b{display:grid;place-items:center;min-width:27px;height:27px;padding:0 7px;border-radius:10px;background:var(--surface-strong);font-size:12px}
+.portfolio-group-tabs button.active b{background:color-mix(in srgb,var(--accent) 13%,var(--surface))}
+.performance-breakdown{margin-top:14px;border-top:1px solid var(--line)}
+.performance-breakdown>summary{display:flex;justify-content:space-between;align-items:center;min-height:46px;list-style:none;color:var(--muted);font-size:12px;cursor:pointer}
+.performance-breakdown>summary::-webkit-details-marker{display:none}
+.performance-breakdown[open]>summary b{transform:rotate(180deg)}
+.performance-breakdown .performance-rows{padding:2px 0 4px}
+.analysis-divider{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+.analysis-divider strong{font-size:14px}.analysis-divider span{font-size:11px;color:var(--muted)}
+.strategy-metrics.two{grid-template-columns:1fr 1fr}
+.metric-guide{margin-top:14px;border-top:1px solid var(--line)}
+.metric-guide summary{min-height:42px;display:flex;align-items:center;color:var(--muted);font-size:12px;cursor:pointer}
+.metric-guide p{margin:0 0 10px;color:var(--muted);font-size:11px;line-height:1.55}
+.portfolio-next-goal{display:flex;align-items:center;justify-content:space-between;gap:14px;cursor:pointer}
+.portfolio-next-goal div{display:grid;gap:4px}.portfolio-next-goal span,.portfolio-next-goal small{color:var(--muted);font-size:11px}.portfolio-next-goal strong{font-size:18px}.portfolio-next-goal>b{color:var(--accent);font-size:20px}
+.record-center{padding:0}.record-center>summary{list-style:none;min-height:72px;padding:15px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}.record-center>summary::-webkit-details-marker{display:none}.record-center>summary strong,.record-center>summary span{display:block}.record-center>summary strong{font-size:15px}.record-center>summary span{margin-top:4px;color:var(--muted);font-size:12px}.record-center[open]>summary>.chev{transform:rotate(180deg)}
+.embedded-tools{margin-top:14px;border-top:1px solid var(--line);background:transparent;box-shadow:none;border-radius:0}.embedded-tools>summary{padding:12px 0}.embedded-tools .manual-tools-body{padding:0 0 4px}.embedded-tools .support-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+
 /* Visible, compact comparison: history alone is collapsed in portfolio. */
 .income-evidence h3{font-size:13px;margin:0}
 .trend-comparison{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
