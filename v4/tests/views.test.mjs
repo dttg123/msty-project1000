@@ -85,7 +85,11 @@ assert.doesNotMatch(elements.get('page-projects').innerHTML,/월 예상 배당/)
 assert.match(elements.get('page-projects').innerHTML,/배당 분석/);
 assert.match(elements.get('page-projects').innerHTML,/portfolio-income-hero/);
 assert.match(elements.get('page-projects').innerHTML,/payment-spark/);
-assert.match(elements.get('page-projects').innerHTML,/26\.01/);
+assert.equal((elements.get('page-projects').innerHTML.match(/data-chart-key=/g)||[]).length,12,'monthly chart must show all 12 calendar months including zero months');
+assert.match(elements.get('page-projects').innerHTML,/달력 월별 실제 입금/);
+assert.match(elements.get('page-projects').innerHTML,/data-chart-year-shift="-1"/);
+assert.doesNotMatch(elements.get('page-projects').innerHTML,/<select[^>]+data-chart-year/,'long year dropdown must not return');
+assert.match(elements.get('page-projects').innerHTML,/2026년 01월 실제 입금/);
 assert.equal((elements.get('page-projects').innerHTML.match(/data-add-dividend>/g)||[]).length,1,'manual dividend fallback must remain available');
 assert.match(elements.get('page-projects').innerHTML,/class="manual-tools embedded-tools"/);
 assert.match(elements.get('page-projects').innerHTML,/토스 미연동·누락 기록만 보정/);
@@ -102,7 +106,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.3/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.4/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
 assert.match(elements.get('page-settings').innerHTML,/id="dividendSettingsForm"/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/<details class="card settings-section" open/);
@@ -130,4 +134,4 @@ state.trades.push({id:'goal',projectId:'p-msty',date:'2026-02-01',type:'buy',buy
 views.renderGoals();
 assert.match(elements.get('page-goal').innerHTML,/원금회수 시작/);
 assert.match(elements.get('page-goal').innerHTML,/data-goal-mode="p-msty:cashflow" class="active"/);
-console.log('DividendOS v0.12.3 view QA: PASS');
+console.log('DividendOS v0.12.4 view QA: PASS');

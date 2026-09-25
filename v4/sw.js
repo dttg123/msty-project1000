@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'dividend-os-' + new URL(self.registration.scope).pathname + '-';
-const CACHE = CACHE_PREFIX + 'dividend-os-v0.12.3-r60';
+const CACHE = CACHE_PREFIX + 'dividend-os-v0.12.4-r61';
 const ASSETS = [
   './', './index.html', './styles.css', './styles-refined.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js', './runtime-config.js', './toss-client.js',

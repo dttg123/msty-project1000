@@ -1,20 +1,20 @@
-import { monthActivity } from './modules/activity.js?v=0.12.3-r60';
-import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.3-r60';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.3-r60';
-import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.3-r60';
-import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.3-r60';
-import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.3-r60';
-import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.3-r60';
-import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.3-r60';
-import { createFormatters } from './modules/format.js?v=0.12.3-r60';
-import { createViews } from './modules/views.js?v=0.12.3-r60';
-import { buildMigrationAudit } from './modules/migration.js?v=0.12.3-r60';
-import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.3-r60';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.3-r60';
-import { validateLedger } from './modules/validation.js?v=0.12.3-r60';
-import { demoState } from './modules/demo.js?v=0.12.3-r60';
-import { FREQUENCIES } from './modules/income.js?v=0.12.3-r60';
-import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.3-r60';
+import { monthActivity } from './modules/activity.js?v=0.12.4-r61';
+import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.4-r61';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.4-r61';
+import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.4-r61';
+import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.4-r61';
+import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.4-r61';
+import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.4-r61';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.4-r61';
+import { createFormatters } from './modules/format.js?v=0.12.4-r61';
+import { createViews } from './modules/views.js?v=0.12.4-r61';
+import { buildMigrationAudit } from './modules/migration.js?v=0.12.4-r61';
+import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.4-r61';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.4-r61';
+import { validateLedger } from './modules/validation.js?v=0.12.4-r61';
+import { demoState } from './modules/demo.js?v=0.12.4-r61';
+import { FREQUENCIES } from './modules/income.js?v=0.12.4-r61';
+import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.4-r61';
 
 (() => {
   'use strict';
@@ -505,6 +505,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'',button.dataset.incomeSymbol||'');return;}
     if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector('.record-center').open=true;return;}
     if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector('.record-center').open=true;return;}
+    if(button.dataset.chartYearShift){const latest=computeProject(selectedProjectId).postedDividends.map(row=>String(row.date).slice(0,4)).filter(year=>/^\d{4}$/.test(year)).sort().at(-1)||todayISO().slice(0,4),base=/^\d{4}$/.test(chartYear)?Number(chartYear):Number(latest);chartYear=String(base+Number(button.dataset.chartYearShift));chartSelection='';renderProjects();return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;chartSelection='';renderProjects();return;}
     if(button.dataset.homeCashflowMode){homeCashflowMode=button.dataset.homeCashflowMode;cashflowMonthKey='';rememberView();renderHome();return;}
     if(button.dataset.homeYearRange){homeYearRange=button.dataset.homeYearRange;cashflowMonthKey='';rememberView();renderHome();return;}
@@ -592,7 +593,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.3-r60').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.4-r61').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

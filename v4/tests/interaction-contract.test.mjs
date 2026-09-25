@@ -40,6 +40,12 @@ for(const symbol of ['SCHD','KO']){
   assert.doesNotMatch(html,/data-project-select/);
   assert.match(html,/data-portfolio-group="dividend" class="active"/);
 }
+selectedProjectId='demo-schd';views.renderProjects();
+assert.match(elements.get('page-projects').innerHTML,/연도별 주당 세후 배당금/);
+assert.match(elements.get('page-projects').innerHTML,/한 주가 1년간 받은 금액/);
+assert.match(elements.get('page-projects').innerHTML,/배당금 연평균 증가율/);
+assert.match(elements.get('page-projects').innerHTML,/최근 3년/);
+assert.doesNotMatch(elements.get('page-projects').innerHTML,/10년 —/,'unavailable growth rates must stay hidden');
 portfolioGroup='highYield';selectedProjectId='demo-cony';
 for(const mode of ['week','month','year','monthWeeks']){
   chartMode=mode;chartSelection='';views.renderProjects();
@@ -51,7 +57,7 @@ assert.match(elements.get('page-goal').innerHTML,/demo-msty:cashflow|목표 · �
 assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
 
 const app=readFileSync(resolve(import.meta.dirname,'../app.js'),'utf8');
-const routed=['page','currency','chartKey','incomeMonth','historyReset','historyMore','chartMode','homeCashflowMode','homeYearRange','cashflowPeriod','portfolioGroup','goalDetail','settingsProject','openProject','selectProject','addProject','projectSettings','editPrice','addTrade','addDividend','addCash','addSplit','viewRecord','editRecord','deleteFromEdit','projectCheck','allCheck','goalMode','lockRecovery','editRecovery','restoreProject','backup','restore','csv','syncToss','reviewToss','closeModal'];
+const routed=['page','currency','chartKey','incomeMonth','historyReset','historyMore','chartYearShift','chartMode','homeCashflowMode','homeYearRange','cashflowPeriod','portfolioGroup','goalDetail','settingsProject','openProject','selectProject','addProject','projectSettings','editPrice','addTrade','addDividend','addCash','addSplit','viewRecord','editRecord','deleteFromEdit','projectCheck','allCheck','goalMode','lockRecovery','editRecovery','restoreProject','backup','restore','csv','syncToss','reviewToss','closeModal'];
 for(const action of routed)assert.ok(app.includes(`button.dataset.${action}`)||app.includes(`'${action}'in button.dataset`),`${action} must have a click route`);
 
 console.log(`Interaction contract PASS: ${routed.length} click routes, 4/2 portfolio groups, 4 chart modes`);

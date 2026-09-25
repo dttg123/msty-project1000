@@ -165,9 +165,15 @@ body{background:var(--bg);background-image:none}
 .portfolio-pace small{display:block;font-size:11px;margin-top:4px}
 .portfolio-pace strong{font-size:18px;font-variant-numeric:tabular-nums;text-align:right}
 .compact-income .income-evidence{margin-top:12px;padding-top:8px}
-.chart-filter-line{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
-.chart-filter-line label{color:var(--muted);font-size:12px}
-.chart-filter-line .input{width:auto;max-width:65%;min-height:40px;padding:8px 12px;font-size:13px}
+.portfolio-chart-stage{display:grid;grid-template-rows:48px 150px 72px;min-height:270px;margin-top:10px}
+.portfolio-chart-stage>#projectChart{min-width:0;height:150px}
+.portfolio-chart-stage .chart-selection-inline{min-height:72px;margin-top:0;align-self:stretch}
+.chart-context-line{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;color:var(--muted);font-size:12px}
+.chart-context-line>b{font-size:11px;font-weight:600}
+.year-stepper>div{display:flex;align-items:center;gap:6px}
+.year-stepper button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);border-radius:11px;background:var(--surface-strong);color:var(--text);font:inherit;font-size:20px}
+.year-stepper strong{min-width:62px;text-align:center;color:var(--text);font-size:13px}
+.month-stepper .input{width:145px;min-height:40px;padding:8px 10px;font-size:13px}
 .portfolio-section .column-chart.compact-chart{height:150px}
 
 /* Two durable portfolio groups; strategy remains an internal analysis detail. */
@@ -310,12 +316,17 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .metric-explain{display:grid;gap:7px;margin-top:14px;padding:12px 13px;border-radius:12px;background:var(--surface-strong)}
 .metric-explain p{margin:0;color:var(--muted);font-size:11px;line-height:1.5}
 .metric-explain b{color:var(--text);margin-right:4px}
-.annual-dps-chart{height:102px;display:flex;align-items:flex-end;gap:10px;margin-top:16px;padding:0 3px;border-bottom:1px solid var(--line)}
+.annual-chart-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:20px}
+.annual-chart-heading strong{font-size:13px}.annual-chart-heading span{color:var(--muted);font-size:10px;text-align:right}
+.annual-dps-chart{height:138px;display:flex;align-items:flex-end;gap:7px;margin-top:10px;padding:0 3px;border-bottom:1px solid var(--line)}
 .annual-dps-chart>div{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px}
 .annual-dps-chart b{width:min(28px,72%);border-radius:7px 7px 2px 2px;background:linear-gradient(180deg,var(--project-b,#9a84ff),var(--project-a,var(--accent)))}
-.annual-dps-chart span{font-size:10px;color:var(--muted)}
+.annual-dps-chart small{max-width:56px;color:var(--muted);font-size:8px;font-weight:700;white-space:nowrap}
+.annual-dps-chart span{font-size:9px;color:var(--muted);white-space:nowrap}
+.growth-rate-heading{margin-top:15px;color:var(--muted);font-size:11px}
 .growth-rate-row{display:flex;gap:7px;margin-top:12px}
-.growth-rate-row span{flex:1;padding:8px;border-radius:10px;background:var(--surface-strong);color:var(--muted);font-size:11px;text-align:center}
+.growth-rate-row span{display:grid;gap:5px;flex:1;padding:9px 6px;border-radius:10px;background:var(--surface-strong);text-align:center}
+.growth-rate-row b{color:var(--muted);font-size:9px;font-weight:600}.growth-rate-row strong{color:var(--text);font-size:13px}
 .strategy-warning{margin:12px 0 0;color:var(--red);font-size:12px;font-weight:800}
 .five-year-summary{display:flex;gap:8px;overflow-x:auto;margin-top:13px;padding:2px 0 5px;scrollbar-width:none}
 .five-year-summary::-webkit-scrollbar{display:none}

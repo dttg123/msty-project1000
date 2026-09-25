@@ -1,7 +1,7 @@
-import { blankRecovery } from './state.js?v=0.12.3-r60';
-import { clamp, isDate, n, todayISO } from './utils.js?v=0.12.3-r60';
-import { incomeEstimate } from './income.js?v=0.12.3-r60';
-import { buildDividendAnalytics } from './dividend-analytics.js?v=0.12.3-r60';
+import { blankRecovery } from './state.js?v=0.12.4-r61';
+import { clamp, isDate, n, todayISO } from './utils.js?v=0.12.4-r61';
+import { incomeEstimate } from './income.js?v=0.12.4-r61';
+import { buildDividendAnalytics } from './dividend-analytics.js?v=0.12.4-r61';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
