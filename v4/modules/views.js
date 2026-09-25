@@ -1,9 +1,8 @@
-import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.5-r62';
-import { APP_VERSION } from '../backup.js?v=0.12.5-r62';
-import { frequencyOf } from './income.js?v=0.12.5-r62';
-import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.5-r62';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.5-r62';
-import { PROJECT_CATEGORIES } from './constants.js?v=0.12.5-r62';
+import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.6-r63';
+import { APP_VERSION } from '../backup.js?v=0.12.6-r63';
+import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.6-r63';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.6-r63';
+import { PROJECT_CATEGORIES } from './constants.js?v=0.12.6-r63';
 
 export function createViews(context) {
   const {
@@ -16,7 +15,7 @@ export function createViews(context) {
   function sectionTitle(title,note='') { return `<div class="section-title-row"><h2 class="section-title">${esc(title)}</h2>${note?`<span class="section-note">${esc(note)}</span>`:''}</div>`; }
   function progress(value,color='') { return `<div class="progress-track"><div class="progress-fill" style="width:${clamp(value,0,100)}%;${color?`background:${color}`:''}"></div></div>`; }
   function pricedMoney(calc,value,digits=2) { return calc.priceAvailable?fmtMoney(value,digits):'—'; }
-  function estimateLabel(calc,short=false) { return calc.project.distributionFrequency==='weekly'?(short?'최근 4회 월환산':'최근 8회 월환산'):(short?'최근 1회':'최근 3회 평균'); }
+  function estimateLabel(calc,short=false) { return calc.income.spec.key==='weekly'?(short?'최근 4회 월환산':'최근 8회 월환산'):(short?'최근 1회':'최근 3회 평균'); }
   const categoryLabel=category=>category==='highYield'?'고배당주':'배당주';
   const projectGroup=project=>project?.category==='highYield'?'highYield':'dividend';
   const finitePct=value=>value===null||value===undefined||!Number.isFinite(value)?'—':fmtPct(value);
@@ -86,7 +85,8 @@ export function createViews(context) {
       }
       return `$${n(value).toLocaleString('en-US',{minimumFractionDigits:value&&Math.abs(value)<1000?2:0,maximumFractionDigits:Math.abs(value)<1000?2:0})}`;
     };
-    return `<div class="column-chart compact-chart ${getChartMode()==='year'||getChartMode()==='month'?'wide-chart':'fit-chart'}">${series.map(x=>`<button class="column-item ${selectedKey===x.key?'active':''}" type="button" data-chart-key="${esc(x.key)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value,2))}"><div class="column-value" title="${esc(fmtMoney(x.value,2))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${x.value>0?Math.max(7,x.value/max*100):0}%"></div></div><div class="column-label">${esc(getChartMode()==='month'?`${+x.key.slice(5)}월`:getChartMode()==='week'?x.label.slice(3):x.label)}</div></button>`).join('')}</div>`;
+    const modeClass=getChartMode()==='month'?'month-chart':getChartMode()==='year'?'year-chart wide-chart':'fit-chart';
+    return `<div class="column-chart compact-chart ${modeClass}">${series.map(x=>`<button class="column-item ${selectedKey===x.key?'active':''}" type="button" data-chart-key="${esc(x.key)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value,2))}"><div class="column-value" title="${esc(fmtMoney(x.value,2))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${x.value>0?Math.max(7,x.value/max*100):0}%"></div></div><div class="column-label">${esc(getChartMode()==='month'?`${+x.key.slice(5)}월`:getChartMode()==='week'?x.label.slice(3):x.label)}</div></button>`).join('')}</div>`;
   }
   function chartSelectionHTML(projectId) {
     const chartMonth=getChartMonth?.()||todayISO().slice(0,7),series=getChartMode()==='monthWeeks'?monthWeeks(projectRows('dividends',projectId).filter(r=>r.date<=todayISO()),chartMonth).map(r=>({...r,key:r.range})):chartSeries(projectId);
@@ -189,7 +189,7 @@ export function createViews(context) {
           <details class="performance-breakdown"><summary>총손익 구성 보기 <b>⌄</b></summary><div class="performance-rows"><div><span>평가손익</span><strong class="${calc.priceAvailable?signClass(calc.unrealized):''}">${pricedMoney(calc,calc.unrealized)}</strong></div><div><span>실현손익</span><strong class="${signClass(calc.realized)}">${fmtSignedMoney(calc.realized)}</strong></div><div><span>누적 세후배당</span><strong class="positive">${fmtMoney(calc.dividendsTotal)}</strong></div></div></details>
         </article>
         <article class="card portfolio-cashflow compact-income dividend-analysis-card">
-          <div class="overview-heading"><h3>배당 분석</h3><span>${frequencyOf(p).label} · 세후</span></div>
+          <div class="overview-heading"><h3>배당 분석</h3><span>${calc.income.spec.label}${calc.income.spec.automatic?' · 자동':''} · 세후</span></div>
           <div class="portfolio-income-hero"><span>이번 달 실제 배당</span><strong>${fmtMoney(calc.currentMonthDividends,2)}</strong></div>
           <div class="cashflow-secondary"><div><span>누적 세후배당</span><strong>${fmtMoney(calc.dividendsTotal,2)}</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div>${Math.abs(calc.dividendAvailable-calc.dividendsTotal)>.01?`<div><span>남은 배당금</span><strong>${fmtMoney(calc.dividendAvailable,2)}</strong></div>`:calc.reinvestAmount>0?`<div><span>재투자 사용</span><strong>${fmtMoney(calc.reinvestAmount,2)}</strong></div>`:''}</div>
           ${strategyInsightHTML(calc)}
@@ -213,7 +213,7 @@ export function createViews(context) {
     const rows=totals().rows;
     document.getElementById('page-goal').innerHTML=`${sectionTitle('다음 목표','가장 가까운 단계만')}
       <div class="stack">${rows.map(calc=>{const p=calc.project,colors=projectColors(p),milestone=nextMilestone(calc),rec=recoveryStats(calc),lifecycle=p.category==='highYield'&&rec.stage!=='accumulating',goalPct=milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,buyCost=calc.priceAvailable?milestone.remaining*calc.currentPrice:0,phaseLabel=rec.stage==='setup'?'목표 달성':rec.stage==='recovery'?'원금 회수 중':rec.stage==='profit'?'순수익 단계':'';return `<details class="card goal-step-card ${lifecycle?'lifecycle-goal':''}" data-goal-project="${esc(p.id)}" style="--project-a:${colors[0]};--project-b:${colors[1]}">
-        <summary><div><span class="goal-symbol">${esc(p.symbol)}</span><strong>${lifecycle?phaseLabel:`${fmtShares(milestone.shares)}주 목표`}</strong><small>${lifecycle?`목표 ${fmtShares(calc.currentTarget)}주 · 현재 ${fmtShares(calc.shares)}주`:`현재 ${fmtShares(calc.shares)}주${milestone.reached?' · 목표 달성':` · ${fmtShares(milestone.remaining)}주 남음`}`}</small></div><b>${lifecycle?(rec.stage==='setup'?'완료':rec.stage==='profit'?'수익':fmtPct(rec.pct)):(milestone.reached?'완료':fmtPct(goalPct))}</b></summary>
+        <summary><div><div class="goal-symbol-row"><span class="goal-symbol">${esc(p.symbol)}</span>${lifecycle?`<em class="goal-achieved-badge">✓ ${fmtShares(calc.currentTarget)}주 달성</em>`:''}</div><strong>${lifecycle?phaseLabel:`${fmtShares(milestone.shares)}주 목표`}</strong><small>${lifecycle?`현재 ${fmtShares(calc.shares)}주 · 달성일 ${fmtDate(rec.reachedDate)}`:`현재 ${fmtShares(calc.shares)}주${milestone.reached?' · 목표 달성':` · ${fmtShares(milestone.remaining)}주 남음`}`}</small></div><div class="goal-summary-status"><span>${lifecycle?(rec.stage==='setup'?'주수 목표':rec.stage==='profit'?'회수 후':'원금 회수'):'달성률'}</span><b>${lifecycle?(rec.stage==='setup'?'100%':rec.stage==='profit'?'완료':fmtPct(rec.pct)):(milestone.reached?'완료':fmtPct(goalPct))}</b></div></summary>
         ${lifecycle?`${rec.stage==='setup'?progress(100,`linear-gradient(90deg,${colors[0]},${colors[1]})`):progress(rec.pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body">${lifecycleContent(calc)}</div>`:`${progress(goalPct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body"><div class="goal-info-rows"><div><span>현재 보유</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>필요 매수금</span><strong>${calc.priceAvailable?fmtMoney(buyCost,2):'현재가 필요'}</strong></div><div><span>계획상 달성 시점</span><strong>${estimatedDate(calc,milestone.shares)}</strong></div></div><button class="btn soft small" data-settings-project="${esc(p.id)}">목표 · 월 매수계획 설정</button><p class="detail-note">달성 시점은 저장한 월 매수계획만 반영하며 배당금은 예측하지 않습니다.</p></div>`}
       </details>`}).join('')||'<article class="card empty">종목을 추가하면 설정한 다음 목표를 보여줍니다.</article>'}</div>`;
   }

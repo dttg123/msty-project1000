@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {incomeEstimate,frequencyOf,paymentDate} from '../modules/income.js';
+import {detectDistributionFrequency,incomeEstimate,frequencyOf,paymentDate} from '../modules/income.js';
 import {blankState} from '../modules/state.js';
 import {createPortfolioEngine} from '../modules/portfolio.js';
 import {buildHomeMetrics,nextMilestone} from '../modules/home-metrics.js';
@@ -21,6 +21,12 @@ const beforeSplit=[{date:'2026-09-04',amountUSD:40,sharesAtPayment:200},{date:'2
 const adjusted=incomeEstimate(weekly,beforeSplit,[{date:'2026-09-12',from:2,to:1}],100,now);
 assert.equal(adjusted.perShare,.4);assert.equal(adjusted.payout,40,'reverse split preserves income');
 const quarterly=frequencyOf({distributionFrequency:'quarterly'});
+assert.equal(detectDistributionFrequency(rows).key,'weekly');
+const monthlyRows=['2026-09-01','2026-08-01','2026-07-01'].map(date=>({date,amountUSD:10}));
+const quarterlyRows=['2026-09-01','2026-06-01','2026-03-01'].map(date=>({date,amountUSD:10}));
+assert.equal(detectDistributionFrequency(monthlyRows).key,'monthly');
+assert.equal(detectDistributionFrequency(quarterlyRows).key,'quarterly');
+assert.equal(frequencyOf({distributionFrequency:'weekly',distributionFrequencyMode:'manual'},monthlyRows).key,'weekly','manual override must win');
 assert.equal(incomeEstimate({distributionFrequency:'quarterly'},[rows[0]],[],200,now).monthly,40/3);
 assert.equal(paymentDate('2026-01-31',1,frequencyOf({distributionFrequency:'monthly'})).getDate(),28);
 assert.equal(paymentDate('2026-01-31',2,frequencyOf({distributionFrequency:'monthly'})).getDate(),31);

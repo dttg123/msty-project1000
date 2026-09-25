@@ -1,4 +1,4 @@
-import { isDate } from './utils.js?v=0.12.5-r62';
+import { isDate } from './utils.js?v=0.12.6-r63';
 
 export function validateLedger(raw) {
   const errors=[];

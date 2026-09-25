@@ -1,5 +1,5 @@
-import { PROJECT_COLORS } from './constants.js?v=0.12.5-r62';
-import { clone, n, todayISO, uid } from './utils.js?v=0.12.5-r62';
+import { PROJECT_COLORS } from './constants.js?v=0.12.6-r63';
+import { clone, n, todayISO, uid } from './utils.js?v=0.12.6-r63';
 
 export function blankRecovery() {
   return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'', method:'withdrawnOnly' };
@@ -19,7 +19,7 @@ export function blankProject(symbol = 'MSTY', name = 'YieldMax MSTR Option Incom
     id: `p-${symbol.toLowerCase()}-${Date.now()}`,
     symbol: symbol.toUpperCase(), name, tag: symbol === 'MSTY' ? 'PROJECT1000' : '배당 프로젝트',
     targetUnits: symbol === 'MSTY' ? 1000 : 500, monthlyPlanShares:0, projectStart:todayISO(),
-    currentPrice:0, priceSource:'manual', priceUpdatedAt:'', distributionFrequency:symbol === 'MSTY' ? 'weekly' : 'monthly',
+    currentPrice:0, priceSource:'manual', priceUpdatedAt:'', distributionFrequency:symbol === 'MSTY' ? 'weekly' : 'monthly', distributionFrequencyMode:'auto',
     initialDividendBalance:0, initialDividendBalanceDate:'', afterGoalMode:'cashflow',
     recovery:blankRecovery(), category:inferProjectCategory(symbol), brokerLinks:[], colorIndex:0, archived:false
   };
@@ -89,7 +89,7 @@ export function normalizeV4(raw) {
   result.projects = Array.isArray(raw.projects) ? raw.projects.map((project,index) => ({
     ...blankProject(project.symbol || `ASSET${index+1}`,project.name || project.symbol || '배당 종목'), ...project,
     id:project.id || uid('p'), symbol:String(project.symbol || `ASSET${index+1}`).toUpperCase(),
-    recovery:{...blankRecovery(), ...(project.recovery || {})}, category:['dividend','growth','highYield'].includes(project.category)?project.category:inferProjectCategory(project.symbol), brokerLinks:Array.isArray(project.brokerLinks)?project.brokerLinks.filter(link=>link&&link.provider&&link.assetKey):[], colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
+    recovery:{...blankRecovery(), ...(project.recovery || {})}, category:['dividend','growth','highYield'].includes(project.category)?project.category:inferProjectCategory(project.symbol), distributionFrequencyMode:project.distributionFrequencyMode==='manual'?'manual':'auto', brokerLinks:Array.isArray(project.brokerLinks)?project.brokerLinks.filter(link=>link&&link.provider&&link.assetKey):[], colorIndex:Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
   })) : base.projects;
   for (const key of ['trades','dividends','splits','cashAdjustments']) result[key] = Array.isArray(raw[key]) ? raw[key] : [];
   result.integrations = {toss:{...base.integrations.toss, ...(raw.integrations?.toss || {}),sourceLedger:{...base.integrations.toss.sourceLedger,...(raw.integrations?.toss?.sourceLedger||{})}}};

@@ -19,7 +19,8 @@ body{background:var(--bg);background-image:none}
 .portfolio-summary .tag-pill{display:none}
 .portfolio-heading .project-symbol{font-size:26px}
 .project-tabs:has(>button:only-child){display:none}
-.column-chart.compact-chart{height:180px;gap:5px;overflow-x:auto}
+.column-chart.compact-chart{height:180px;gap:5px;overflow-x:auto;scrollbar-width:none}
+.column-chart.compact-chart::-webkit-scrollbar{display:none}
 .column-item{min-width:46px;grid-template-rows:22px minmax(0,1fr) 22px;cursor:pointer}
 .column-track{min-height:0}
 .column-value,.column-label{font-size:11px!important;letter-spacing:-.03em}
@@ -58,6 +59,11 @@ body{background:var(--bg);background-image:none}
 .fit-chart .column-value{font-size:12px!important}
 .fit-chart .column-label{font-size:11px!important}
 .wide-chart .column-item{min-width:48px}
+.month-chart{gap:2px!important;overflow-x:hidden!important}
+.month-chart .column-item{min-width:0;flex:1 1 0}
+.month-chart .column-value{visibility:hidden}
+.month-chart .column-label{font-size:8px!important}
+.month-chart .column-fill{width:min(16px,76%)}
 .column-value{position:relative;z-index:1}
 
 .backup-download{display:flex;justify-content:center;text-decoration:none;min-height:48px;align-items:center}
@@ -101,8 +107,12 @@ body{background:var(--bg);background-image:none}
 .pace-card .metric{background:transparent!important;border:0;padding:4px 0;border-radius:0}
 .pace-card .metric+.metric{border-left:1px solid var(--line);padding-left:14px}
 .pace-card .metric-value{font-size:20px;font-variant-numeric:tabular-nums}
-.goal-step-card>summary>b::after{content:'상세 ⌄';display:block;margin-top:7px;font-size:11px;color:var(--muted);font-weight:500}
-.goal-step-card[open]>summary>b::after{content:'접기 ⌃'}
+.goal-summary-status{flex:0 0 auto;text-align:right}
+.goal-summary-status span,.goal-summary-status b{display:block}
+.goal-summary-status span{color:var(--muted);font-size:10px;font-weight:650}
+.goal-summary-status b{margin-top:4px;color:var(--accent);font-size:15px}
+.goal-summary-status::after{content:'상세 ⌄';display:block;margin-top:7px;font-size:11px;color:var(--muted);font-weight:500}
+.goal-step-card[open] .goal-summary-status::after{content:'접기 ⌃'}
 
 /* One decision per section: this month, cashflow, next goal. */
 .home-redesign{gap:16px}
@@ -184,6 +194,10 @@ body{background:var(--bg);background-image:none}
 .lifecycle-actions{display:grid;grid-template-columns:1.3fr 1fr;gap:8px;margin-top:14px}
 .lifecycle-action{width:100%;margin-top:12px}
 .lifecycle-goal .goal-detail-body{padding-top:4px}
+.lifecycle-goal{border-color:color-mix(in srgb,var(--positive) 42%,var(--line));background:linear-gradient(150deg,color-mix(in srgb,var(--positive) 8%,var(--surface)),var(--surface) 48%)!important}
+.goal-symbol-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.goal-achieved-badge{padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--positive) 14%,transparent);color:var(--positive);font-size:10px;font-style:normal;font-weight:850;white-space:nowrap}
+.lifecycle-goal .goal-summary-status b{color:#f0b45f}
 .text-link{padding:6px 0;border:0;background:none;color:var(--accent);font:inherit;font-size:11px;font-weight:700}
 .chart-context-line{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;color:var(--muted);font-size:12px}
 .chart-context-line>b{font-size:11px;font-weight:600}
@@ -241,6 +255,17 @@ body{background:var(--bg);background-image:none}
 .record-detail-grid strong{text-align:right;font-size:14px;font-variant-numeric:tabular-nums}
 .record-note{padding:13px 14px;border-radius:12px;background:var(--surface);color:var(--muted);font-size:13px}
 .record-source-note{margin:12px 0 0;color:var(--muted);font-size:12px;text-align:center}
+.record-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.record-detail-head span{display:block;margin-bottom:5px;color:var(--muted);font-size:12px}
+.record-source-badge{flex:0 0 auto;padding:7px 9px;border-radius:999px;font-size:10px}
+.record-source-badge.synced{color:var(--positive);background:color-mix(in srgb,var(--positive) 14%,transparent)}
+.record-source-badge.manual{color:var(--muted);background:var(--surface-strong)}
+.record-primary-value{padding:18px;margin-bottom:10px;border-radius:16px;background:color-mix(in srgb,var(--accent) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line))}
+.record-primary-value span,.record-primary-value strong{display:block}
+.record-primary-value span{color:var(--muted);font-size:12px}
+.record-primary-value strong{margin-top:6px;font-size:27px;letter-spacing:-.045em}
+.record-detail-grid.compact>div{padding:12px 14px}
+.record-edit-link{display:block;margin:13px auto 0;border:0;background:none;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:3px}
 .record-manage{margin-top:12px;border-top:1px solid var(--line)}
 .record-manage summary{padding:13px 2px 7px;color:var(--muted);font-size:12px;cursor:pointer}
 .record-manage>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 2px 3px}

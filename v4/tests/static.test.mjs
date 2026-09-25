@@ -12,8 +12,8 @@ const modules=['constants.js','utils.js','state.js','portfolio.js','format.js','
 for (const file of modules) assert.ok(existsSync(resolve(root,'modules',file)),`missing modules/${file}`);
 
 const index=readFileSync(resolve(root,'index.html'),'utf8');
-assert.ok(index.includes('<link rel="stylesheet" href="./styles.css?v=0.12.5-r62" />'));
-assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.5-r62"></script>'));
+assert.ok(index.includes('<link rel="stylesheet" href="./styles.css?v=0.12.6-r63" />'));
+assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.6-r63"></script>'));
 assert.ok(index.includes('data-local-mode'));
 assert.ok(!index.includes('<style>'));
 for (const id of ['page-home','page-projects','page-goal','page-settings','modalBackdrop','restoreInput']) assert.ok(index.includes(`id="${id}"`),`missing DOM id ${id}`);
@@ -25,6 +25,7 @@ assert.ok(index.includes('data-page="settings" aria-label="설정 열기"'));
 
 const app=readFileSync(resolve(root,'app.js'),'utf8');
 const viewsSource=readFileSync(resolve(root,'modules/views.js'),'utf8');
+const refined=readFileSync(resolve(root,'styles-refined.css'),'utf8');
 const imports=[...app.matchAll(/from ['"](.+?)['"]/g)].map(match=>match[1]).filter(path=>path.startsWith('.'));
 for (const path of imports) assert.ok(existsSync(resolve(root,path.split('?')[0])),`broken import ${path}`);
 
@@ -35,20 +36,20 @@ for (const file of ['styles.css',...modules.map(name=>`modules/${name}`)]) {
   assert.ok(sw.includes(`./${file}`),`service worker missing ${file}`);
   assert.ok(backup.includes(`'${file}'`),`portable backup missing ${file}`);
 }
-assert.ok(sw.includes("dividend-os-v0.12.5-r62"));
+assert.ok(sw.includes("dividend-os-v0.12.6-r63"));
 assert.ok(sw.includes("cache: \'no-store\'"));
-assert.ok(backup.includes("APP_VERSION = '0.12.5'"));
+assert.ok(backup.includes("APP_VERSION = '0.12.6'"));
 assert.ok(app.includes('name="amountUSD" type="number" min="0.01" step="0.01" required'));
 assert.ok(app.includes("form.dataset.submitting==='true'"));
-assert.ok(index.includes('app.js?v=0.12.5-r62'));
+assert.ok(index.includes('app.js?v=0.12.6-r63'));
 assert.ok(readFileSync(resolve(root,'modules/views.js'),'utf8').includes('tabindex="0" role="button"'));
 assert.ok(readFileSync(resolve(root,'modules/views.js'),'utf8').includes('name="thresholdKRW" type="number" min="0" step="10000"'));
 assert.ok(app.includes("prepareLegacyMigration"));
 assert.ok(app.includes("V3.2.1 데이터를 V4에 복사했습니다."));
-assert.ok(app.includes("storage.js?v=0.12.5-r62"));
+assert.ok(app.includes("storage.js?v=0.12.6-r63"));
 assert.ok(readFileSync(resolve(root,'storage.js'),'utf8').includes('indexedDB.open(LEGACY_DB_NAME)'));
 assert.ok(readFileSync(resolve(root,'storage.js'),'utf8').includes("storageMode='localstorage'"));
-assert.ok(app.includes("toss-client.js?v=0.12.5-r62"));
+assert.ok(app.includes("toss-client.js?v=0.12.6-r63"));
 assert.ok(app.includes("syncTossReadOnly"));
 assert.ok(!readFileSync(resolve(root,'runtime-config.js'),'utf8').includes('client_secret'));
 const tossBridge=readFileSync(resolve(root,'../toss-bridge/server.mjs'),'utf8');
@@ -71,6 +72,7 @@ assert.ok(app.includes('month-composition'));
 assert.ok(app.includes('agenda-row-button'));
 assert.ok(!app.includes('입금 확인'));
 assert.ok(!app.includes('기록 수정'));
+assert.ok(refined.includes('.month-chart')&&refined.includes('overflow-x:hidden!important'),'monthly chart must fit the mobile card without a horizontal scrollbar');
 assert.ok(app.includes('class="record-manage"'));
 assert.ok(app.includes('토스 원본 기록은 이 앱에서 수정하지 않습니다.'));
 assert.ok(app.includes('직접 입력값 고치기'));
@@ -89,4 +91,4 @@ assert.ok(!existsSync(resolve(root,'toss-bridge')),'Toss bridge must have one ca
 const rootIndex=readFileSync(resolve(repoRoot,'index.html'),'utf8');
 assert.ok(rootIndex.includes("const target = './v4/'")&&rootIndex.includes('location.replace(target)'));
 assert.ok(readFileSync(resolve(repoRoot,'sw.js'),'utf8').includes('registration.unregister()'));
-console.log('DividendOS v0.12.5 static QA: PASS');
+console.log('DividendOS v0.12.6 static QA: PASS');

@@ -1,20 +1,20 @@
-import { monthActivity } from './modules/activity.js?v=0.12.5-r62';
-import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.5-r62';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.5-r62';
-import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.5-r62';
-import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.5-r62';
-import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.5-r62';
-import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.5-r62';
-import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.5-r62';
-import { createFormatters } from './modules/format.js?v=0.12.5-r62';
-import { createViews } from './modules/views.js?v=0.12.5-r62';
-import { buildMigrationAudit } from './modules/migration.js?v=0.12.5-r62';
-import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.5-r62';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.5-r62';
-import { validateLedger } from './modules/validation.js?v=0.12.5-r62';
-import { demoState } from './modules/demo.js?v=0.12.5-r62';
-import { FREQUENCIES } from './modules/income.js?v=0.12.5-r62';
-import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.5-r62';
+import { monthActivity } from './modules/activity.js?v=0.12.6-r63';
+import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.6-r63';
+import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.6-r63';
+import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.6-r63';
+import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.6-r63';
+import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.6-r63';
+import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.6-r63';
+import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.6-r63';
+import { createFormatters } from './modules/format.js?v=0.12.6-r63';
+import { createViews } from './modules/views.js?v=0.12.6-r63';
+import { buildMigrationAudit } from './modules/migration.js?v=0.12.6-r63';
+import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.6-r63';
+import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.6-r63';
+import { validateLedger } from './modules/validation.js?v=0.12.6-r63';
+import { demoState } from './modules/demo.js?v=0.12.6-r63';
+import { FREQUENCIES } from './modules/income.js?v=0.12.6-r63';
+import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.6-r63';
 
 (() => {
   'use strict';
@@ -162,6 +162,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
 
   function openProjectForm(project=null) {
     const edit=!!project,returnPage=currentPage,defaultColor=edit?n(project.colorIndex):state.projects.length%PROJECT_COLORS.length;
+    const frequencyValue=project?.distributionFrequencyMode==='manual'?(project.distributionFrequency||'monthly'):'auto';
     openModal(`<h3 class="modal-title">${edit?'종목 설정':'종목 추가'}</h3><p class="modal-desc">기록 방식은 같고 종목 성격에 따라 핵심 분석만 달라집니다.</p><form id="projectForm" class="form-grid">
       <div><label class="input-label">티커</label><input class="input" name="symbol" maxlength="12" required value="${esc(project?.symbol||'')}"></div>
       <div class="form-grid two"><div><label class="input-label">운용 성격 <small>분석 화면만 변경</small></label><select class="input select" name="category">${PROJECT_CATEGORIES.map(([key,label])=>`<option value="${key}" ${key===(project?.category||'dividend')?'selected':''}>${label}</option>`).join('')}</select></div><div><label class="input-label">목표 주수</label><input class="input" name="targetUnits" type="number" min="0.0001" step="0.0001" required value="${n(project?.targetUnits)||500}"></div></div>
@@ -169,7 +170,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
         <div><label class="input-label">종목명</label><input class="input" name="name" value="${esc(project?.name||'')}"></div>
         <div><label class="input-label">프로젝트 이름</label><input class="input" name="tag" value="${esc(project?.tag||'배당 프로젝트')}"></div>
         <div><label class="input-label">월 매수계획 주수</label><input class="input" name="monthlyPlanShares" type="number" min="0" step="0.0001" value="${n(project?.monthlyPlanShares)}"></div>
-        <div class="form-grid two"><div><label class="input-label">현재가 USD</label><input class="input" name="currentPrice" type="number" min="0" step="0.0001" value="${n(project?.currentPrice)}"></div><div><label class="input-label">배당 주기</label><select class="input select" name="distributionFrequency">${Object.entries(FREQUENCIES).map(([key,spec])=>`<option value="${key}" ${key===(project?.distributionFrequency||'monthly')?'selected':''}>${spec.label}</option>`).join('')}</select></div></div>
+        <div class="form-grid two"><div><label class="input-label">현재가 USD</label><input class="input" name="currentPrice" type="number" min="0" step="0.0001" value="${n(project?.currentPrice)}"></div><div><label class="input-label">배당 주기</label><select class="input select" name="distributionFrequency"><option value="auto" ${frequencyValue==='auto'?'selected':''}>자동 감지</option>${Object.entries(FREQUENCIES).map(([key,spec])=>`<option value="${key}" ${key===frequencyValue?'selected':''}>${spec.label} 고정</option>`).join('')}</select></div></div>
         <div><label class="input-label">프로젝트 시작일</label><input class="input" name="projectStart" type="date" value="${project?.projectStart||todayISO()}"></div>
         <fieldset class="color-picker"><legend>그래프 식별 색상</legend>${PROJECT_COLORS.map((colors,index)=>`<label><input type="radio" name="colorIndex" value="${index}" ${defaultColor===index?'checked':''}><span class="color-swatch" style="--swatch-a:${colors[0]};--swatch-b:${colors[1]}"></span><b>${PROJECT_COLOR_NAMES[index]}</b></label>`).join('')}</fieldset>
       </div></details>
@@ -184,7 +185,8 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       const target=project||blankProject(symbol,String(form.get('name')).trim()||symbol);
       const oldSymbol=target.symbol,currentPrice=Math.max(0,n(form.get('currentPrice')));
       const category=PROJECT_CATEGORIES.some(([key])=>key===form.get('category'))?String(form.get('category')):'dividend';
-      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category,colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:currentPrice?'manual':target.priceSource||'manual',priceUpdatedAt:currentPrice?new Date().toISOString():target.priceUpdatedAt||'',distributionFrequency:FREQUENCIES[form.get('distributionFrequency')]?form.get('distributionFrequency'):'monthly',projectStart:String(form.get('projectStart'))||todayISO()});
+      const frequencyChoice=String(form.get('distributionFrequency'));
+      Object.assign(target,{symbol,name:String(form.get('name')).trim()||symbol,tag:String(form.get('tag')).trim()||'배당 프로젝트',category,colorIndex:Math.max(0,Math.min(PROJECT_COLORS.length-1,Math.floor(n(form.get('colorIndex'))))),targetUnits:Math.max(.0001,n(form.get('targetUnits'))),monthlyPlanShares:Math.max(0,n(form.get('monthlyPlanShares'))),currentPrice,priceSource:currentPrice?'manual':target.priceSource||'manual',priceUpdatedAt:currentPrice?new Date().toISOString():target.priceUpdatedAt||'',distributionFrequencyMode:frequencyChoice==='auto'?'auto':'manual',distributionFrequency:FREQUENCIES[frequencyChoice]?frequencyChoice:(target.distributionFrequency||'monthly'),projectStart:String(form.get('projectStart'))||todayISO()});
       if(edit&&oldSymbol!==symbol)for(const key of ['trades','dividends','splits','cashAdjustments'])state[key].filter(row=>row.projectId===target.id).forEach(row=>{row.symbol=symbol;});
       if(!edit){historyFilter={};state.projects.push(target);selectedProjectId=target.id;}
       portfolioGroup=target.category==='highYield'?'highYield':'dividend';await saveState(true);closeModal();renderAll(true);showPage(edit?returnPage:'projects');toast(edit?'프로젝트를 수정했습니다.':'프로젝트를 추가했습니다.');
@@ -289,17 +291,24 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
   function openRecordDetail(token) {
     const {kind,row}=recordByToken(token);if(!row)return;
     const project=projectById(row.projectId),withdrawal=kind==='cash'&&row.purpose==='recoveryWithdrawal',labels={trade:'거래 기록',dividend:'배당 기록',cash:withdrawal?'배당 인출 기록':'잔액 보정',split:'분할 기록'};
+    const fromToss=row.source?.provider==='toss';
+    if(kind==='dividend'){
+      const sourceLabel=fromToss?'토스 동기화 기록':'직접 입력 기록';
+      const note=row.note&&!/^더미\s/.test(String(row.note))?`<p class="record-note">${esc(row.note)}</p>`:'';
+      const action=fromToss?'<p class="record-source-note">동기화 원본은 앱에서 수정하지 않습니다.</p>':`<button class="record-edit-link" type="button" data-edit-record="${esc(token)}">직접 입력값 고치기</button>`;
+      openModal(`<div class="record-detail-head"><div><span>${esc(project?.symbol||row.symbol||'')} · 세후 배당</span><h3 class="modal-title">${fmtDate(row.date)} 입금</h3></div><b class="record-source-badge ${fromToss?'synced':'manual'}">${sourceLabel}</b></div><div class="record-primary-value"><span>실제 입금액</span><strong>${fmtMoney(row.amountUSD,2)}</strong></div><div class="record-detail-grid compact"><div><span>지급 기준 주수</span><strong>${n(row.sharesAtPayment)>0?fmtShares(row.sharesAtPayment)+'주':'기록 없음'}</strong></div></div>${note}${action}<button class="btn primary record-close" data-close-modal>닫기</button>`);
+      return;
+    }
     let details='';
     if(kind==='trade')details=`<div><span>거래</span><strong>${row.type==='sell'?'매도':'매수'} · ${fmtShares(row.shares)}주</strong></div><div><span>단가</span><strong>${fmtMoney(row.price)}</strong></div><div><span>거래금액</span><strong>${fmtMoney(n(row.shares)*n(row.price))}</strong></div>`;
     if(kind==='dividend')details=`<div><span>세후 배당</span><strong>${fmtMoney(row.amountUSD,2)}</strong></div><div><span>지급 기준 주수</span><strong>${n(row.sharesAtPayment)>0?fmtShares(row.sharesAtPayment)+'주':'기록 없음'}</strong></div>`;
     if(kind==='cash')details=withdrawal?`<div><span>실제 인출액</span><strong>${fmtMoney(Math.abs(n(row.amountUSD)),2)}</strong></div><div><span>원금회수 반영</span><strong>포함</strong></div>`:`<div><span>보정액</span><strong>${fmtSignedMoney(row.amountUSD)}</strong></div><div><span>사유</span><strong>${esc(row.label||'잔액 보정')}</strong></div>`;
     if(kind==='split')details=`<div><span>변경 비율</span><strong>${n(row.from)} → ${n(row.to)}</strong></div>`;
-    const fromToss=row.source?.provider==='toss';
     const management=fromToss?'<p class="record-source-note">토스 원본 기록은 이 앱에서 수정하지 않습니다.</p>':`<details class="record-manage"><summary>기록 관리</summary><div><p>직접 입력한 값이 잘못된 경우에만 고치세요.</p><button class="btn soft small" data-edit-record="${esc(token)}">직접 입력값 고치기</button></div></details>`;
     openModal(`<h3 class="modal-title">${esc(project?.symbol||row.symbol||'')} ${labels[kind]||'기록'}</h3><p class="modal-desc">${fmtDate(row.date)}${fromToss?' · 토스에서 가져온 기록':''}</p><div class="record-detail-grid">${details}</div>${row.note?`<p class="record-note">${esc(row.note)}</p>`:''}${management}<button class="btn primary record-close" data-close-modal>닫기</button>`);
   }
-  function editRecord(token) { const {kind,row}=recordByToken(token);if(!row)return;if(kind==='trade')openTradeForm(row);if(kind==='dividend')openDividendForm(row);if(kind==='cash'&&row.purpose==='recoveryWithdrawal')openWithdrawalForm(row.projectId,row);else if(kind==='cash')openCashForm(row);if(kind==='split')openSplitForm(row); }
-  function deleteRecord(token) { const {key,row}=recordByToken(token);if(!row)return;confirmAction('기록 삭제',`${fmtDate(row.date)} 기록을 삭제합니다.`,async()=>{await storageSet(SAFETY_KEY,clone(state));const previous=state[key];state[key]=state[key].filter(x=>x.id!==row.id);if((key==='trades'||key==='splits')&&computeProject(row.projectId).oversells.length){state[key]=previous;toast('이 기록을 삭제하면 이후 매도가 보유주수를 초과하므로 삭제하지 않았습니다.');return;}await saveState(true);renderAll();showPage('projects');toast('기록을 삭제했습니다.');},'삭제'); }
+  function editRecord(token) { const {kind,row}=recordByToken(token);if(!row)return;if(row.source?.provider==='toss'){toast('토스 동기화 원본은 수정할 수 없습니다.');return;}if(kind==='trade')openTradeForm(row);if(kind==='dividend')openDividendForm(row);if(kind==='cash'&&row.purpose==='recoveryWithdrawal')openWithdrawalForm(row.projectId,row);else if(kind==='cash')openCashForm(row);if(kind==='split')openSplitForm(row); }
+  function deleteRecord(token) { const {key,row}=recordByToken(token);if(!row)return;if(row.source?.provider==='toss'){toast('토스 동기화 원본은 삭제할 수 없습니다.');return;}confirmAction('기록 삭제',`${fmtDate(row.date)} 기록을 삭제합니다.`,async()=>{await storageSet(SAFETY_KEY,clone(state));const previous=state[key];state[key]=state[key].filter(x=>x.id!==row.id);if((key==='trades'||key==='splits')&&computeProject(row.projectId).oversells.length){state[key]=previous;toast('이 기록을 삭제하면 이후 매도가 보유주수를 초과하므로 삭제하지 않았습니다.');return;}await saveState(true);renderAll();showPage('projects');toast('기록을 삭제했습니다.');},'삭제'); }
 
   function projectIssues(projectId=null) {
     const projects=projectId?[projectById(projectId)]:state.projects, issues=[];
@@ -601,7 +610,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
-      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.5-r62').catch(console.warn);
+      if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js?v=0.12.6-r63').catch(console.warn);
     }catch(error){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 

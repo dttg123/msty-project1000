@@ -1,4 +1,4 @@
-import { isDate, n } from './utils.js?v=0.12.5-r62';
+import { isDate, n } from './utils.js?v=0.12.6-r63';
 
 export const FREQUENCIES = {
   weekly: {label:'주배당',year:52,months:0,stable:8,short:4,maxAge:45,maxGap:21},
@@ -7,12 +7,31 @@ export const FREQUENCIES = {
   semiannual: {label:'반기배당',year:2,months:6,stable:2,short:1,maxAge:240,maxGap:240},
   annual: {label:'연배당',year:1,months:12,stable:2,short:1,maxAge:430,maxGap:430}
 };
-export const frequencyOf = project => FREQUENCIES[project.distributionFrequency] || FREQUENCIES.monthly;
+const validFrequency = value => FREQUENCIES[value] ? value : 'monthly';
+
+export function detectDistributionFrequency(dividends=[],fallback='monthly') {
+  const dates=[...new Set((Array.isArray(dividends)?dividends:[]).filter(row=>isDate(row?.date)&&n(row?.amountUSD)>0).map(row=>row.date))]
+    .sort((a,b)=>b.localeCompare(a)).slice(0,13);
+  const gaps=dates.slice(0,-1).map((date,index)=>(new Date(`${date}T12:00:00Z`)-new Date(`${dates[index+1]}T12:00:00Z`))/86400000)
+    .filter(gap=>Number.isFinite(gap)&&gap>=3&&gap<=430).sort((a,b)=>a-b);
+  if(gaps.length<2)return {key:validFrequency(fallback),detected:false,medianGap:null,sampleSize:gaps.length};
+  const medianGap=gaps[Math.floor(gaps.length/2)];
+  const key=medianGap<=15?'weekly':medianGap<=50?'monthly':medianGap<=130?'quarterly':medianGap<=250?'semiannual':'annual';
+  return {key,detected:true,medianGap,sampleSize:gaps.length};
+}
+
+export function frequencyOf(project={},dividends=[]) {
+  const fallback=validFrequency(project.distributionFrequency);
+  const automatic=project.distributionFrequencyMode!=='manual';
+  const result=automatic?detectDistributionFrequency(dividends,fallback):{key:fallback,detected:false,medianGap:null,sampleSize:0};
+  return {...FREQUENCIES[result.key],key:result.key,automatic,detected:result.detected,medianGap:result.medianGap,sampleSize:result.sampleSize};
+}
 
 // Historical cash remains untouched. Only per-share comparisons are split-adjusted.
 export function incomeEstimate(project, dividends, splits, shares, now=new Date()) {
-  const spec=frequencyOf(project), today=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const today=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
   const rows=dividends.filter(row=>isDate(row.date)&&row.date<=today&&n(row.amountUSD)>0).sort((a,b)=>b.date.localeCompare(a.date));
+  const spec=frequencyOf(project,rows);
   const grouped=new Map();
   for(const row of rows){
     const factor=splits.filter(s=>isDate(s.date)&&s.date>row.date&&s.date<=today&&n(s.from)>0&&n(s.to)>0).reduce((a,s)=>a*n(s.to)/n(s.from),1);

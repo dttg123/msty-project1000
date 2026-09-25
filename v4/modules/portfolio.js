@@ -1,7 +1,7 @@
-import { blankRecovery } from './state.js?v=0.12.5-r62';
-import { clamp, isDate, n, todayISO } from './utils.js?v=0.12.5-r62';
-import { incomeEstimate } from './income.js?v=0.12.5-r62';
-import { buildDividendAnalytics } from './dividend-analytics.js?v=0.12.5-r62';
+import { blankRecovery } from './state.js?v=0.12.6-r63';
+import { clamp, isDate, n, todayISO } from './utils.js?v=0.12.6-r63';
+import { incomeEstimate } from './income.js?v=0.12.6-r63';
+import { buildDividendAnalytics } from './dividend-analytics.js?v=0.12.6-r63';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
@@ -96,12 +96,12 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     const yearDividends=postedDividends.filter(row=>String(row.date).startsWith(currentYear)).reduce((sum,row)=>sum+n(row.amountUSD),0);
     const recentDividend=[...postedDividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
     const sortedDividends=[...postedDividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-    const stableCount=project.distributionFrequency==='weekly'?8:3, shortCount=project.distributionFrequency==='weekly'?4:1;
+    const income=incomeEstimate(project,postedDividends,projectRows('splits',project.id),shares);
+    const stableCount=income.spec.stable, shortCount=income.spec.short;
     const stableRecent=sortedDividends.slice(0,stableCount),shortRecent=sortedDividends.slice(0,shortCount);
-    const monthlyFactor=project.distributionFrequency==='weekly'?4.33:1;
+    const monthlyFactor=income.spec.year/12;
     const rawMonthlyEstimate=stableRecent.length ? stableRecent.reduce((sum,row)=>sum+n(row.amountUSD),0)/stableRecent.length*monthlyFactor : 0;
     const rawShortMonthlyEstimate=shortRecent.length ? shortRecent.reduce((sum,row)=>sum+n(row.amountUSD),0)/shortRecent.length*monthlyFactor : 0;
-    const income=incomeEstimate(project,postedDividends,projectRows('splits',project.id),shares);
     const perShareRows=income.payments.filter(row=>row.known);
     const stablePerShareRows=perShareRows.slice(0,stableCount),shortPerShareRows=perShareRows.slice(0,shortCount);
     const stablePerShare=stablePerShareRows.length?stablePerShareRows.reduce((sum,row)=>sum+row.perShare,0)/stablePerShareRows.length:0;

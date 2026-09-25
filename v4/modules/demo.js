@@ -1,4 +1,4 @@
-import { blankState, blankProject } from './state.js?v=0.12.5-r62';
+import { blankState, blankProject } from './state.js?v=0.12.6-r63';
 
 // Synthetic UI test data only. Values are deliberately fictional and never imply a forecast.
 export function demoState(now=new Date()) {
