@@ -1,8 +1,8 @@
-import { PROJECT_COLORS } from './constants.js?v=0.12.4-r61';
-import { clone, n, todayISO, uid } from './utils.js?v=0.12.4-r61';
+import { PROJECT_COLORS } from './constants.js?v=0.12.5-r62';
+import { clone, n, todayISO, uid } from './utils.js?v=0.12.5-r62';
 
 export function blankRecovery() {
-  return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'' };
+  return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'', method:'withdrawnOnly' };
 }
 
 const HIGH_YIELD_SYMBOLS = new Set(['MSTY','CONY','NVDY','TSLY','ULTY','YMAX','YMAG','AMZY','APLY','GOOY','NFLY','OARK']);

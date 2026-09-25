@@ -74,13 +74,17 @@ function testSplitSellAndRecovery() {
   nearly(calc.reinvestShares,38.333333333333336);
   assert.equal(calc.oversells.length,0);
   project.recovery={locked:true,basis:500,startDate:'2026-05-01'};
-  const recovery=engineFor(state).recoveryStats(calc);
+  state.cashAdjustments.push(
+    {id:'w1',projectId:project.id,date:'2026-05-10',amountUSD:-300,purpose:'recoveryWithdrawal'},
+    {id:'w2',projectId:project.id,date:'2026-06-10',amountUSD:-80,purpose:'recoveryWithdrawal'}
+  );
+  const recovery=engineFor(state).recoveryStats(engineFor(state).computeProject(project));
   nearly(recovery.total,380);
   nearly(recovery.remaining,120);
   nearly(recovery.pct,76);
-  assert.equal(recovery.milestoneDates[25],'2026-05-01');
-  assert.equal(recovery.milestoneDates[50],'2026-05-01');
-  assert.equal(recovery.milestoneDates[75],'2026-06-01');
+  assert.equal(recovery.milestoneDates[25],'2026-05-10');
+  assert.equal(recovery.milestoneDates[50],'2026-05-10');
+  assert.equal(recovery.milestoneDates[75],'2026-06-10');
   assert.equal(recovery.milestoneDates[100],'');
 }
 
@@ -155,8 +159,11 @@ function testOversellGuard() {
   assert.equal(calc.costBasis,0);
   assert.equal(calc.oversells.length,1);
   project.recovery={locked:true,basis:100,startDate:'2026-01-01'};
+  state.cashAdjustments.push({id:'w',projectId:project.id,date:'2026-01-03',amountUSD:-55,purpose:'recoveryWithdrawal'});
   const recovery=engineFor(state).recoveryStats(calc);
-  nearly(recovery.sellRecovery,55);
+  nearly(recovery.total,0);
+  const updatedRecovery=engineFor(state).recoveryStats(engineFor(state).computeProject(project));
+  nearly(updatedRecovery.withdrawalRecovery,55);
 }
 
 function testReverseSplitPreservesEconomicGoal() {
@@ -260,9 +267,29 @@ function testTenYearGoalAndCashflowRecovery() {
   nearly(calc.targetBasisSuggestion,12475);
   project.recovery={locked:true,basis:calc.targetBasisSuggestion,startDate:calc.targetReachedDate};
   state.trades.push({id:'goal-sell',projectId:project.id,date:'2026-08-01',type:'sell',shares:100,price:21,createdAt:'sell'});
+  state.cashAdjustments.push({id:'goal-withdraw',projectId:project.id,date:'2026-08-02',amountUSD:-500,purpose:'recoveryWithdrawal'});
   const afterSell=engineFor(state).computeProject(project),recovery=engineFor(state).recoveryStats(afterSell);
-  nearly(afterSell.shares,1100);nearly(recovery.sellRecovery,2100);nearly(recovery.dividendRecovery,525);
-  nearly(recovery.total,2625);assert.ok(recovery.remaining>0&&recovery.pct>0&&recovery.pct<100);
+  nearly(afterSell.shares,1100);nearly(recovery.withdrawalRecovery,500);
+  nearly(recovery.total,500);assert.ok(recovery.remaining>0&&recovery.pct>0&&recovery.pct<100);
+}
+
+function testWithdrawnOnlyRecoveryAndProfitStage() {
+  const state=blankState(),project=state.projects[0];
+  project.id='p-stage';project.category='highYield';project.targetUnits=500;
+  state.trades.push({id:'buy',projectId:project.id,date:'2024-01-01',type:'buy',buyType:'direct',shares:500,price:10});
+  state.dividends.push({id:'div',projectId:project.id,date:'2025-01-01',amountUSD:6000});
+  state.cashAdjustments.push({id:'plain',projectId:project.id,date:'2025-01-02',amountUSD:-100,label:'일반 보정'});
+  let calc=engineFor(state).computeProject(project),rec=engineFor(state).recoveryStats(calc);
+  assert.equal(rec.stage,'setup');
+  project.recovery={locked:true,basis:5000,startDate:'2024-01-01',targetReachedDate:'2024-01-01',method:'withdrawnOnly'};
+  calc=engineFor(state).computeProject(project);rec=engineFor(state).recoveryStats(calc);
+  assert.equal(rec.total,0,'dividends and ordinary cash corrections must not count as recovered principal');
+  state.cashAdjustments.push({id:'withdraw',projectId:project.id,date:'2025-02-01',amountUSD:-5200,purpose:'recoveryWithdrawal'});
+  calc=engineFor(state).computeProject(project);rec=engineFor(state).recoveryStats(calc);
+  assert.equal(rec.stage,'profit');nearly(rec.total,5200);nearly(rec.profit,200);nearly(rec.remaining,0);
+  state.trades.push({id:'sell',projectId:project.id,date:'2025-03-01',type:'sell',shares:300,price:12});
+  calc=engineFor(state).computeProject(project);rec=engineFor(state).recoveryStats(calc);
+  assert.equal(rec.stage,'profit','selling below the share target must not erase the locked lifecycle stage');
 }
 
 testLegacyRepairAndMigration();
@@ -278,5 +305,5 @@ testFutureActualRecordsAreExcluded();
 testFullSellRebuyAndCashReconciliation();
 testMixedBuyUsesDividendOnce();
 testTenYearGoalAndCashflowRecovery();
+testWithdrawnOnlyRecoveryAndProfitStage();
 console.log('DividendOS v0.9.4 domain QA: PASS');
-

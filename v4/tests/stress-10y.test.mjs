@@ -38,7 +38,8 @@ state.splits.push(
 );
 state.cashAdjustments.push(
   {id:'cash-plus',projectId:msty.id,date:'2022-07-01',amountUSD:25,label:'입금 보정'},
-  {id:'cash-minus',projectId:msty.id,date:'2023-07-01',amountUSD:-10,label:'출금 보정'}
+  {id:'cash-minus',projectId:msty.id,date:'2023-07-01',amountUSD:-10,label:'출금 보정'},
+  {id:'recovery-withdrawal',projectId:msty.id,date:'2026-09-02',amountUSD:-400,purpose:'recoveryWithdrawal',label:'배당금 인출'}
 );
 state.trades.push({id:'target-finish',projectId:msty.id,symbol:'MSTY',date:'2026-09-01',type:'buy',buyType:'direct',shares:1000,price:15,createdAt:createdAt()});
 msty.recovery={locked:true,basis:25000,startDate:'2025-01-01',targetReachedDate:'2026-09-01',calculatedBasisAtLock:25000,confirmedAt:'2026-09-01T00:00:00.000Z'};
@@ -84,6 +85,6 @@ assert.match(elements.get('page-home').innerHTML,/날짜별 입금 상세/);
 assert.match(elements.get('page-projects').innerHTML,/class="card record-center"/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/class="card record-center" open/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card goal-step-card"[^>]* open/);
-assert.match(elements.get('page-goal').innerHTML,/원금회수/);
+assert.match(elements.get('page-goal').innerHTML,/원금 회수/);
 assert.ok(elements.get('page-projects').innerHTML.length<250000,'portfolio HTML grew unexpectedly large');
 console.log(`DividendOS v0.11.3 10-year stress QA: PASS (${restored.trades.length} trades, ${restored.dividends.length} dividends)`);

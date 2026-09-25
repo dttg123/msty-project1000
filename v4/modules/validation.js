@@ -1,4 +1,4 @@
-import { isDate } from './utils.js?v=0.12.4-r61';
+import { isDate } from './utils.js?v=0.12.5-r62';
 
 export function validateLedger(raw) {
   const errors=[];
@@ -15,6 +15,7 @@ export function validateLedger(raw) {
     if(!finite(p.targetUnits,.000001)||!finite(p.currentPrice)||!finite(p.monthlyPlanShares)||!finite(p.initialDividendBalance))errors.push('종목 목표·가격·초기 잔액을 확인해 주세요.');
     if(p.recovery?.locked&&(!finite(p.recovery.basis,.000001)||!isDate(p.recovery.startDate)))errors.push('원금회수 기준을 확인해 주세요.');
   }
+  const projects=new Map(raw.projects.filter(Boolean).map(project=>[project.id,project]));
   for(const key of ['trades','dividends','splits','cashAdjustments']){
     if(!Array.isArray(raw[key])){errors.push(`${key} 원장이 없습니다.`);continue;}
     const rowIds=new Set();
@@ -28,6 +29,10 @@ export function validateLedger(raw) {
       if(key==='dividends'&&row.rocPercent!==null&&row.rocPercent!==undefined&&!finite(row.rocPercent,0,100))errors.push('ROC 비율은 0~100%여야 합니다.');
       if(key==='splits'&&(!valid('from',.00000001)||!valid('to',.00000001)))errors.push('분할 비율이 올바르지 않습니다.');
       if(key==='cashAdjustments'&&!Number.isFinite(Number(row.amountUSD)))errors.push('잔액 보정액이 올바르지 않습니다.');
+      if(key==='cashAdjustments'&&row.purpose==='recoveryWithdrawal'){
+        const recovery=projects.get(row.projectId)?.recovery;
+        if(Number(row.amountUSD)>=0||!recovery?.locked||row.date<recovery.startDate)errors.push('배당 인출 기록과 원금회수 시작일을 확인해 주세요.');
+      }
     }
   }
   return [...new Set(errors)];

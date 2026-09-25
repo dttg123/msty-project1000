@@ -1,4 +1,4 @@
-import { isDate, n } from './utils.js?v=0.12.4-r61';
+import { isDate, n } from './utils.js?v=0.12.5-r62';
 
 const iso = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 const monthKey = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;

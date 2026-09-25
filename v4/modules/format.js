@@ -1,5 +1,5 @@
-import { PROJECT_COLORS } from './constants.js?v=0.12.4-r61';
-import { n } from './utils.js?v=0.12.4-r61';
+import { PROJECT_COLORS } from './constants.js?v=0.12.5-r62';
+import { n } from './utils.js?v=0.12.5-r62';
 
 export function createFormatters(getState) {
   function displayCurrency() {

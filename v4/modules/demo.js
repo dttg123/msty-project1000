@@ -1,4 +1,4 @@
-import { blankState, blankProject } from './state.js?v=0.12.4-r61';
+import { blankState, blankProject } from './state.js?v=0.12.5-r62';
 
 // Synthetic UI test data only. Values are deliberately fictional and never imply a forecast.
 export function demoState(now=new Date()) {
@@ -7,7 +7,7 @@ export function demoState(now=new Date()) {
     ['MSTY','YieldMax MSTR Option Income','highYield','weekly',238,14.57,0],
     ['CONY','YieldMax COIN Option Income','highYield','weekly',160,10.22,1],
     ['NVDY','YieldMax NVDA Option Income','highYield','weekly',120,16.48,2],
-    ['YMAX','YieldMax Universe Fund','highYield','weekly',190,12.31,3],
+    ['YMAX','YieldMax Universe Fund','highYield','weekly',520,12.31,3],
     ['SCHD','Schwab US Dividend Equity','growth','quarterly',150,28.40,4],
     ['KO','Coca-Cola','dividend','quarterly',60,67.20,5]
   ];
@@ -16,6 +16,13 @@ export function demoState(now=new Date()) {
     return Object.assign(project,{id:`demo-${symbol.toLowerCase()}`,symbol,name,category,distributionFrequency:frequency,currentPrice:price,targetUnits:category==='highYield'?1000:500,monthlyPlanShares:category==='highYield'?10:3,colorIndex});
   });
   state.trades=state.projects.map((project,index)=>({id:`demo-open-${project.symbol.toLowerCase()}`,projectId:project.id,symbol:project.symbol,date:'2019-01-02',type:'buy',buyType:'direct',shares:specs[index][4],price:specs[index][5]*1.08}));
+  const achieved=state.projects.find(project=>project.symbol==='YMAX');
+  achieved.targetUnits=500;
+  achieved.recovery={locked:true,basis:Number((520*12.31*1.08).toFixed(2)),startDate:'2025-01-01',targetReachedDate:'2019-01-02',calculatedBasisAtLock:Number((520*12.31*1.08).toFixed(2)),confirmedAt:'2025-01-01T00:00:00.000Z',method:'withdrawnOnly'};
+  state.cashAdjustments.push(
+    {id:'demo-withdraw-ymax-1',projectId:achieved.id,symbol:'YMAX',date:'2025-06-30',amountUSD:-620,purpose:'recoveryWithdrawal',label:'배당금 인출',note:'더미 원금회수'},
+    {id:'demo-withdraw-ymax-2',projectId:achieved.id,symbol:'YMAX',date:'2026-06-30',amountUSD:-780,purpose:'recoveryWithdrawal',label:'배당금 인출',note:'더미 원금회수'}
+  );
   const iso=(y,m,d)=>`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   let id=0;
   for(let y=Math.max(2019,year-7);y<=year;y++){

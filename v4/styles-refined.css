@@ -168,6 +168,23 @@ body{background:var(--bg);background-image:none}
 .portfolio-chart-stage{display:grid;grid-template-rows:48px 150px 72px;min-height:270px;margin-top:10px}
 .portfolio-chart-stage>#projectChart{min-width:0;height:150px}
 .portfolio-chart-stage .chart-selection-inline{min-height:72px;margin-top:0;align-self:stretch}
+.lifecycle-card{border-color:color-mix(in srgb,var(--project-a) 32%,var(--line));background:linear-gradient(155deg,color-mix(in srgb,var(--project-a) 10%,var(--surface)),var(--surface) 46%)}
+.lifecycle-head{display:grid;gap:7px;margin:14px 0}
+.lifecycle-head>strong{font-size:24px;letter-spacing:-.04em}
+.lifecycle-head>small{color:var(--muted);font-size:12px}
+.phase-pill{justify-self:start;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800}
+.phase-pill.achieved{color:var(--project-a);background:color-mix(in srgb,var(--project-a) 14%,transparent)}
+.phase-pill.recovery{color:#f0b45f;background:rgba(240,180,95,.12)}
+.phase-pill.profit{color:var(--positive);background:color-mix(in srgb,var(--positive) 12%,transparent)}
+.lifecycle-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:14px;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--line)}
+.lifecycle-metrics>div{min-width:0;padding:12px 10px;background:var(--surface-strong)}
+.lifecycle-metrics span,.lifecycle-metrics strong{display:block}
+.lifecycle-metrics span{min-height:30px;color:var(--muted);font-size:10px;line-height:1.35}
+.lifecycle-metrics strong{margin-top:5px;font-size:14px;letter-spacing:-.03em;overflow-wrap:anywhere}
+.lifecycle-actions{display:grid;grid-template-columns:1.3fr 1fr;gap:8px;margin-top:14px}
+.lifecycle-action{width:100%;margin-top:12px}
+.lifecycle-goal .goal-detail-body{padding-top:4px}
+.text-link{padding:6px 0;border:0;background:none;color:var(--accent);font:inherit;font-size:11px;font-weight:700}
 .chart-context-line{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;color:var(--muted);font-size:12px}
 .chart-context-line>b{font-size:11px;font-weight:600}
 .year-stepper>div{display:flex;align-items:center;gap:6px}

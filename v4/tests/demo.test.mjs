@@ -7,6 +7,10 @@ assert.equal(state.projects.filter(project=>project.category==='highYield').leng
 assert.equal(state.projects.filter(project=>project.category==='growth').length,1);
 assert.equal(state.projects.filter(project=>project.category==='dividend').length,1);
 assert.deepEqual(state.projects.map(project=>project.symbol),['MSTY','CONY','NVDY','YMAX','SCHD','KO']);
+const achieved=state.projects.find(project=>project.symbol==='YMAX');
+assert.equal(achieved.targetUnits,500);
+assert.equal(achieved.recovery.locked,true);
+assert.equal(state.cashAdjustments.filter(row=>row.projectId===achieved.id&&row.purpose==='recoveryWithdrawal').length,2);
 assert.ok(state.projects.every(project=>state.dividends.some(row=>row.projectId===project.id&&row.date.startsWith('2026-09'))),'all six symbols must exercise current-month composition');
 assert.ok(state.dividends.every(row=>row.date<='2026-09-21'),'demo must not manufacture future deposits');
 console.log('DividendOS v0.11.3 six-symbol demo QA: PASS');

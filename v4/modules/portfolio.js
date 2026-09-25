@@ -1,7 +1,7 @@
-import { blankRecovery } from './state.js?v=0.12.4-r61';
-import { clamp, isDate, n, todayISO } from './utils.js?v=0.12.4-r61';
-import { incomeEstimate } from './income.js?v=0.12.4-r61';
-import { buildDividendAnalytics } from './dividend-analytics.js?v=0.12.4-r61';
+import { blankRecovery } from './state.js?v=0.12.5-r62';
+import { clamp, isDate, n, todayISO } from './utils.js?v=0.12.5-r62';
+import { incomeEstimate } from './income.js?v=0.12.5-r62';
+import { buildDividendAnalytics } from './dividend-analytics.js?v=0.12.5-r62';
 
 export function createPortfolioEngine(getState, getSelectedProjectId) {
   function activeProjects() {
@@ -146,17 +146,17 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
 
   function recoveryStats(calc) {
     const recovery=calc.project.recovery || blankRecovery();
-    if (!recovery.locked) return {dividendRecovery:0,sellRecovery:0,total:0,remaining:0,pct:0,milestoneDates:{25:'',50:'',75:'',100:''}};
-    const dividendRecovery=calc.postedDividends.filter(row=>row.date>=recovery.startDate).reduce((sum,row)=>sum+n(row.amountUSD),0);
-    const sellRecovery=calc.effectiveSells.filter(row=>row.date>=recovery.startDate).reduce((sum,row)=>sum+n(row.effectiveProceeds),0);
-    const total=dividendRecovery+sellRecovery, basis=Math.max(0,n(recovery.basis));
-    const events=[
-      ...calc.postedDividends.filter(row=>row.date>=recovery.startDate).map(row=>({date:row.date,amount:n(row.amountUSD),order:0})),
-      ...calc.effectiveSells.filter(row=>row.date>=recovery.startDate).map(row=>({date:row.date,amount:n(row.effectiveProceeds),order:1}))
-    ].sort((a,b)=>String(a.date).localeCompare(String(b.date))||a.order-b.order);
+    const reachedDate=recovery.targetReachedDate||calc.targetReachedDate||'';
+    const empty={withdrawalRecovery:0,total:0,remaining:0,pct:0,profit:0,milestoneDates:{25:'',50:'',75:'',100:''},stage:reachedDate?'setup':'accumulating',reachedDate};
+    if (!recovery.locked) return empty;
+    const withdrawals=calc.postedAdjustments.filter(row=>row.date>=recovery.startDate&&row.purpose==='recoveryWithdrawal'&&n(row.amountUSD)<0);
+    const withdrawalRecovery=withdrawals.reduce((sum,row)=>sum+Math.abs(n(row.amountUSD)),0);
+    const total=withdrawalRecovery, basis=Math.max(0,n(recovery.basis));
+    const events=withdrawals.map(row=>({date:row.date,amount:Math.abs(n(row.amountUSD))})).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const milestoneDates={25:'',50:'',75:'',100:''};let running=0;
     for(const event of events){running+=event.amount;for(const level of [25,50,75,100])if(!milestoneDates[level]&&basis>0&&running+1e-8>=basis*level/100)milestoneDates[level]=event.date;}
-    return {dividendRecovery,sellRecovery,total,remaining:Math.max(0,basis-total),pct:basis>0?total/basis*100:0,milestoneDates};
+    const pct=basis>0?total/basis*100:0,profit=Math.max(0,total-basis);
+    return {withdrawalRecovery,total,remaining:Math.max(0,basis-total),pct,profit,milestoneDates,stage:pct>=100?'profit':'recovery',reachedDate};
   }
 
   function totals() {
