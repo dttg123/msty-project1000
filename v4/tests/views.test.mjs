@@ -106,7 +106,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.6/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.7/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
 assert.match(elements.get('page-settings').innerHTML,/id="dividendSettingsForm"/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/<details class="card settings-section" open/);
@@ -146,4 +146,4 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v0.12.6 view QA: PASS');
+console.log('DividendOS v0.12.7 view QA: PASS');

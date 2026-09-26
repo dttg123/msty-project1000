@@ -205,7 +205,7 @@ body{background:var(--bg);background-image:none}
 .year-stepper button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);border-radius:11px;background:var(--surface-strong);color:var(--text);font:inherit;font-size:20px}
 .year-stepper strong{min-width:62px;text-align:center;color:var(--text);font-size:13px}
 .month-stepper .input{width:145px;min-height:40px;padding:8px 10px;font-size:13px}
-.portfolio-section .column-chart.compact-chart{height:150px}
+.portfolio-section .column-chart.compact-chart{height:150px;margin-top:0}
 
 /* Two durable portfolio groups; strategy remains an internal analysis detail. */
 .portfolio-group-tabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 12px}

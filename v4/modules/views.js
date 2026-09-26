@@ -1,8 +1,8 @@
-import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.6-r63';
-import { APP_VERSION } from '../backup.js?v=0.12.6-r63';
-import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.6-r63';
-import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.6-r63';
-import { PROJECT_CATEGORIES } from './constants.js?v=0.12.6-r63';
+import { selectRecords, monthWeeks, historicalIncome } from './activity.js?v=0.12.7-r64';
+import { APP_VERSION } from '../backup.js?v=0.12.7-r64';
+import { clamp, esc, isDate, n, todayISO } from './utils.js?v=0.12.7-r64';
+import { buildHomeMetrics, nextMilestone } from './home-metrics.js?v=0.12.7-r64';
+import { PROJECT_CATEGORIES } from './constants.js?v=0.12.7-r64';
 
 export function createViews(context) {
   const {

@@ -1,4 +1,4 @@
-import { isDate, n } from './utils.js?v=0.12.6-r63';
+import { isDate, n } from './utils.js?v=0.12.7-r64';
 
 export const FREQUENCIES = {
   weekly: {label:'주배당',year:52,months:0,stable:8,short:4,maxAge:45,maxGap:21},
