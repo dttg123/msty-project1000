@@ -6,7 +6,7 @@ Deploy it behind a fixed outbound IP registered in Toss Securities WTS Open API 
 
 `ALLOWED_ORIGIN` accepts one to five comma-separated exact HTTPS origins. Keep it limited to the production GitHub Pages origin and an explicitly controlled preview origin when needed.
 
-The snapshot route reads accounts, holdings, supported closed orders, and current prices. It never creates, modifies, or cancels an order.
+The snapshot route reads accounts, holdings, supported closed orders, and current prices. It validates and minimizes the upstream response before returning it, reports per-account partial failures, and never creates, modifies, or cancels an order. The current official API does not expose dividend deposits, so the response declares `capabilities.dividends=false` and DividendOS keeps manual dividend records.
 
 Official references:
 

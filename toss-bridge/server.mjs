@@ -1,6 +1,7 @@
 import express from 'express';
-import { createPublicKey, verify } from 'node:crypto';
+import { createHash, createPublicKey, verify } from 'node:crypto';
 import { authorizeOwnerClaims, bearerToken, isAllowedReadPath, parseAllowedOrigins, safeBridgeError, validateEnvironment } from './security.mjs';
+import { parseAccounts, parseHoldings, parseOrders, parsePrices, summarizeAccountReads } from './toss-contract.mjs';
 
 validateEnvironment(process.env);
 
@@ -91,6 +92,8 @@ function validSymbols(value){
   return String(value||'').split(',').map(item=>item.trim().toUpperCase()).filter(symbol=>/^[A-Z0-9.-]{1,16}$/.test(symbol)&&!seen.has(symbol)&&seen.add(symbol)).slice(0,200);
 }
 function maskAccount(value){const text=String(value||'');return text?`토스증권 •${text.slice(-4)}`:'토스증권 계좌';}
+function accountScopeId(accounts){return createHash('sha256').update(accounts.map(row=>`${row.accountSeq}:${row.accountNo}`).sort().join('|')).digest('hex').slice(0,24);}
+function todayKST(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 async function closedOrders(accountSeq,from,to){
@@ -99,7 +102,8 @@ async function closedOrders(accountSeq,from,to){
   for(let page=0;page<100;page++){
     const query=new URLSearchParams({status:'CLOSED',from,to,limit:'100'});if(cursor)query.set('cursor',cursor);
     const result=await tossGet(`/api/v1/orders?${query}`,accountSeq);
-    orders.push(...(Array.isArray(result?.orders)?result.orders:[]));
+    if(!result||!Array.isArray(result.orders))throw Object.assign(new Error('Invalid order page'),{status:502,code:'upstream-schema'});
+    orders.push(...result.orders);
     if(!result?.hasNext||!result?.nextCursor)break;
     if(page===99){truncated=true;break;}
     cursor=result.nextCursor;await wait(220);
@@ -110,21 +114,29 @@ async function closedOrders(accountSeq,from,to){
 app.get('/health',(_req,res)=>res.json({ok:true,mode:'read-only',ordersEnabled:false}));
 app.get('/v1/toss/snapshot',authorize,async(req,res)=>{
   try{
-    const today=new Date().toISOString().slice(0,10);
+    const today=todayKST();
     const requestedFrom=validDate(req.query.from,process.env.TOSS_DEFAULT_FROM||'2020-01-01'),from=requestedFrom>today?today:requestedFrom;
-    const accounts=await tossGet('/api/v1/accounts');
+    const accounts=parseAccounts(await tossGet('/api/v1/accounts'));
     const configured=process.env.TOSS_ACCOUNT_SEQ;
-    const account=accounts.find(row=>configured&&String(row.accountSeq)===String(configured))||accounts.find(row=>row.accountType==='BROKERAGE')||accounts[0];
-    if(!account)return res.status(404).json({code:'no-account',message:'조회 가능한 토스증권 종합매매 계좌가 없습니다.'});
+    const selected=(configured?accounts.filter(row=>String(row.accountSeq)===String(configured)):accounts.filter(row=>row.accountType==='BROKERAGE')).slice(0,5);
+    if(!selected.length)return res.status(404).json({code:'no-account',message:'조회 가능한 토스증권 종합매매 계좌가 없습니다.'});
+    const scoped=selected.map(account=>({...account,accountLabel:maskAccount(account.accountNo)}));
     const symbols=validSymbols(req.query.symbols);
-    const [holdingResult,orderResult,priceResult]=await Promise.all([
-      tossGet('/api/v1/holdings',account.accountSeq),
-      closedOrders(account.accountSeq,from,today),
-      symbols.length?tossGet(`/api/v1/prices?${new URLSearchParams({symbols:symbols.join(',')})}`):Promise.resolve([])
+    const [accountSettlements,[priceSettlement]]=await Promise.all([
+      Promise.allSettled(scoped.map(async account=>{
+        const [holdingResult,orderResult]=await Promise.all([tossGet('/api/v1/holdings',account.accountSeq),closedOrders(account.accountSeq,from,today)]);
+        return {account,holdings:parseHoldings(holdingResult,account),orders:parseOrders({orders:orderResult.orders},account),truncated:orderResult.truncated};
+      })),
+      Promise.allSettled([symbols.length?tossGet(`/api/v1/prices?${new URLSearchParams({symbols:symbols.join(',')})}`).then(value=>parsePrices(value)):Promise.resolve([])])
     ]);
+    const {successes,failedAccountCount:failedCount,priceFailed,syncStatus}=summarizeAccountReads(accountSettlements,priceSettlement);
+    if(!successes.length)throw Object.assign(new Error('All account reads failed'),{status:502,code:'all-accounts-failed'});
     res.json({
-      accountLabel:maskAccount(account.accountNo),fetchedAt:new Date().toISOString(),from,
-      holdings:Array.isArray(holdingResult?.items)?holdingResult.items:[],prices:Array.isArray(priceResult)?priceResult:[],orders:orderResult.orders,historyTruncated:orderResult.truncated
+      accountLabel:scoped.length===1?scoped[0].accountLabel:`토스증권 ${scoped.length}계좌`,accountScopeId:accountScopeId(scoped),fetchedAt:new Date().toISOString(),from,
+      syncStatus,syncCursor:{ordersThrough:today},capabilities:{orders:true,holdings:true,prices:!priceFailed,dividends:false},
+      accountResults:accountSettlements.map((row,index)=>row.status==='fulfilled'?{accountId:String(row.value.account.accountSeq),accountLabel:row.value.account.accountLabel,status:'ok',holdingsCount:row.value.holdings.length,ordersCount:row.value.orders.length}:{accountId:String(scoped[index].accountSeq),accountLabel:scoped[index].accountLabel,status:'error'}),
+      holdings:successes.flatMap(row=>row.holdings),prices:priceFailed?[]:priceSettlement.value,orders:successes.flatMap(row=>row.orders),dividends:[],
+      failedAccountCount:failedCount,historyTruncated:successes.some(row=>row.truncated)
     });
   }catch(error){
     const safe=safeBridgeError(error);

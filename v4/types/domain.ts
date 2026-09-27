@@ -8,8 +8,13 @@ export interface SourceRef {
   provider: ImportProvider;
   externalId?: string;
   rawExternalId?: string;
+  sourceIdKind?: 'source' | 'fingerprint';
+  sourceFingerprint?: string;
+  status?: string;
   accountId?: string;
   assetKey?: string;
+  market?: string;
+  securityId?: string;
   importedAt?: string;
 }
 

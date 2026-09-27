@@ -29,6 +29,15 @@ function cleanSymbols(values=[]) {
   return [...new Set(values.map(value=>String(value||'').trim().toUpperCase()).filter(value=>/^[A-Z0-9.-]{1,16}$/.test(value)))].slice(0,200);
 }
 
+function object(value){return value&&typeof value==='object'&&!Array.isArray(value);}
+export function validateTossSnapshotPayload(value) {
+  if(!object(value))throw Object.assign(new Error('토스 중계 서버 응답 형식이 올바르지 않습니다.'),{code:'invalid-bridge-response'});
+  const limits={holdings:25000,prices:200,orders:50000,dividends:25000,accountResults:5};
+  for(const [key,limit] of Object.entries(limits))if(!Array.isArray(value[key])||value[key].length>limit||value[key].some(row=>!object(row)))throw Object.assign(new Error('토스 중계 서버 응답 형식이 올바르지 않습니다.'),{code:'invalid-bridge-response'});
+  if(!/^[a-f0-9]{24}$/.test(String(value.accountScopeId||''))||!['complete','partial'].includes(value.syncStatus)||!object(value.syncCursor)||!object(value.capabilities))throw Object.assign(new Error('토스 중계 서버 응답 형식이 올바르지 않습니다.'),{code:'invalid-bridge-response'});
+  return value;
+}
+
 function publicBridgeError(status,body={}) {
   if(status===401)return Object.assign(new Error('Google 로그인이 만료되었습니다. 다시 로그인해 주세요.'),{code:'invalid-login'});
   if(status===403)return Object.assign(new Error('이 계정은 토스 연동 사용 권한이 없습니다.'),{code:'owner-only'});
@@ -57,7 +66,7 @@ export async function fetchTossSnapshot({from=TOSS_SYNC_FROM,symbols=[]}={}) {
     const response=await fetch(url,{headers:{Authorization:`Bearer ${idToken}`,Accept:'application/json'},signal:controller.signal,cache:'no-store',credentials:'omit',referrerPolicy:'no-referrer'});
     const body=await response.json().catch(()=>({}));
     if(!response.ok)throw publicBridgeError(response.status,body);
-    return body;
+    return validateTossSnapshotPayload(body);
   }catch(error){
     if(error?.name==='AbortError')throw Object.assign(new Error('토스 조회 시간이 초과되었습니다.'),{code:'timeout'});
     if(error instanceof TypeError)throw Object.assign(new Error('토스 중계 서버에 연결하지 못했습니다.'),{code:'bridge-unavailable'});
