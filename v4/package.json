@@ -3,7 +3,17 @@
   "private": true,
   "version": "0.12.7",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
-    "test": "node tests/activity.test.mjs && node tests/domain.test.mjs && node tests/toss.test.mjs && node tests/home-metrics.test.mjs && node tests/demo.test.mjs && node tests/views.test.mjs && node tests/interaction-contract.test.mjs && node tests/stress-10y.test.mjs && node tests/lifetime-30y.test.mjs && node tests/static.test.mjs && node tests/replacement.test.mjs && TZ=Asia/Seoul node tests/hardening.test.mjs"
+    "test": "node tests/activity.test.mjs && node tests/domain.test.mjs && node tests/toss.test.mjs && node tests/home-metrics.test.mjs && node tests/demo.test.mjs && node tests/views.test.mjs && node tests/interaction-contract.test.mjs && node tests/stress-10y.test.mjs && node tests/lifetime-30y.test.mjs && node tests/static.test.mjs && node tests/replacement.test.mjs && node tests/golden-contract.test.mjs && node tests/tooling-gates.test.mjs && TZ=Asia/Seoul node tests/hardening.test.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.checkjs.json",
+    "security": "node scripts/security-check.mjs ..",
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/verify-node-version.mjs && npm run typecheck && npm test && npm run security && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
   }
 }

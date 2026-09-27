@@ -1,0 +1,38 @@
+name: DividendOS quality gate
+
+on:
+  push:
+    branches: [main, "hardening/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            v4/package-lock.json
+            toss-bridge/package-lock.json
+      - name: Install DividendOS tooling
+        working-directory: v4
+        run: npm ci
+      - name: Verify live source
+        working-directory: v4
+        run: npm run verify
+      - name: Install Toss bridge dependencies
+        working-directory: toss-bridge
+        run: npm ci
+      - name: Verify Toss bridge
+        working-directory: toss-bridge
+        run: npm run verify
+      - name: Audit production dependencies
+        working-directory: toss-bridge
+        run: npm audit --omit=dev --audit-level=high
