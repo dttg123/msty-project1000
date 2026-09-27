@@ -7,7 +7,6 @@ import { PROJECT_CATEGORIES } from './constants.js?v=0.12.7-r64';
 export function createViews(context) {
   const {
     getState, getSelectedProjectId, setSelectedProjectId, getPortfolioGroup, setPortfolioGroup, getChartMode, getChartSelection, getHomeCashflowMode, getHomeYearRange, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getCurrentUser, isTossBridgeConfigured,
-    getTossConnectionMode, getTossLocalConfig, getTossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   } = context;
@@ -220,11 +219,10 @@ export function createViews(context) {
 
   function renderSettings() {
     const toss=state.integrations.toss;
-    const tossMode=getTossConnectionMode?.()||'none',directConfig=getTossLocalConfig?.()||{clientId:'',hasSecret:false},setup=getTossSetup?.()||{ip:'',busy:'',message:''};
-    const tossReady=isTossBridgeConfigured(),tossUser=!!getCurrentUser(),tossBusy=toss.status==='syncing',canSync=tossReady&&(tossMode==='direct'||tossUser);
-    const tossStatus=tossBusy?'조회 중':toss.status==='connected'?'연결됨':toss.status==='error'?'확인 필요':tossReady?'연결 시험':'설정 필요';
+    const tossReady=isTossBridgeConfigured(),tossUser=!!getCurrentUser(),tossBusy=toss.status==='syncing',canSync=tossReady&&tossUser;
+    const tossStatus=tossBusy?'조회 중':toss.status==='connected'?'연결됨':toss.status==='error'?'확인 필요':!tossReady?'서버 설정 필요':!tossUser?'로그인 필요':'조회 준비';
     const tossComparisons=(toss.comparisons||[]).slice(0,6);
-    const tossDescription=toss.status==='error'?(toss.lastError||'토스 연결 상태를 다시 확인해 주세요.'):tossMode==='direct'?'현재 휴대폰 IP로 토스에 직접 연결합니다. 조회한 원본 기록은 기기에 보존하고 주문은 하지 않습니다.':tossMode==='bridge'&&!tossUser?'Google 로그인 후 토스 계좌 조회를 시작할 수 있습니다.':tossMode==='bridge'?'읽기 전용 중계 서버로 연결합니다. 조회 기록은 기기에 보존하고 앱 원장 반영은 직접 승인합니다.':'Client ID와 Secret을 이 기기에 저장한 뒤 현재 IP를 등록하세요.';
+    const tossDescription=toss.status==='error'?(toss.lastError||'토스 연결 상태를 다시 확인해 주세요.'):!tossReady?'읽기 전용 중계 서버 주소를 배포 설정에 연결해야 합니다. 브라우저에는 Client ID나 Secret을 입력하지 않습니다.':!tossUser?'Google 로그인 후 본인 전용 중계 서버를 사용할 수 있습니다.':'서버가 토스 인증정보를 보관하고 읽기 전용 조회만 수행합니다. 가져온 기록은 직접 확인한 뒤 원장에 반영합니다.';
     const migration=state.meta.migrationAudit,migrationAvailable=!!state.meta.legacyMigrationAvailable,archivedProjects=state.projects.filter(project=>project.archived);
     document.getElementById('page-settings').innerHTML=`${sectionTitle('내 Dividend OS','설정')}
       <div class="stack">
@@ -243,21 +241,7 @@ export function createViews(context) {
         <details class="card settings-section" name="settings"><summary><div><div class="card-title">토스증권 읽기 전용</div><div class="sub-number">보유주식 · 현재가 · 체결 대조</div></div><span class="status-pill ${toss.status==='connected'?'positive':''}">${tossStatus}</span><b class="chev">⌄</b></summary><div class="settings-section-body">
           <p class="tiny muted">${esc(tossDescription)}</p>
           <p class="tiny muted toss-capability-note">현재 공개 API 연동 범위는 보유주식·현재가·체결입니다. 배당 입금은 API 응답에 포함될 때만 승인 후보로 받고, 그 전에는 수동 보정 기록을 V4에 영구 보존합니다.</p>
-          ${tossMode!=='bridge'?`<div class="toss-setup">
-            <div class="setup-step"><span>1</span><div><strong>연결정보 저장</strong><small>클라우드에 올리지 않고 이 휴대폰에만 저장</small></div></div>
-            <form id="tossDirectForm" class="form-grid compact-form">
-              <div><label class="input-label">Client ID</label><input class="input" name="clientId" autocomplete="off" autocapitalize="none" spellcheck="false" required value="${esc(directConfig.clientId)}" placeholder="tsck_live_..."></div>
-              <div><label class="input-label">Client Secret</label><input class="input" name="clientSecret" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false" ${directConfig.hasSecret?'':'required'} placeholder="${directConfig.hasSecret?'저장됨 · 변경할 때만 다시 입력':'tssk_live_...'}"></div>
-              <button class="btn secondary" type="submit">${directConfig.hasSecret?'연결정보 다시 저장':'이 기기에 저장'}</button>
-            </form>
-            <div class="setup-step"><span>2</span><div><strong>현재 IP 등록</strong><small>IP가 바뀌었을 때만 다시 하면 됩니다</small></div></div>
-            <div class="ip-box"><div><small>현재 공인 IP</small><strong>${setup.ip?esc(setup.ip):'확인 전'}</strong></div><button class="mini-icon" type="button" data-copy-toss-ip ${setup.ip?'':'disabled'}>복사</button></div>
-            <div class="action-row"><button class="btn soft" type="button" data-check-toss-ip ${setup.busy?'disabled':''}>${setup.busy==='ip'?'확인 중…':'현재 IP 확인'}</button><button class="btn soft" type="button" data-open-toss-settings>토스 설정 열기</button></div>
-            <div class="setup-step"><span>3</span><div><strong>연결 확인</strong><small>성공하면 바로 전체 조회를 사용할 수 있습니다</small></div></div>
-            <button class="btn primary" style="width:100%" type="button" data-test-toss-direct ${directConfig.hasSecret&&!setup.busy?'':'disabled'}>${setup.busy==='test'?'연결 확인 중…':'토스 연결 시험'}</button>
-            ${setup.message?`<p class="tiny ${/성공|저장/.test(setup.message)?'positive':'muted'} toss-setup-message">${esc(setup.message)}</p>`:''}
-            ${directConfig.hasSecret?'<button class="text-button danger-text" type="button" data-clear-toss-direct>이 기기의 연결정보 삭제</button>':''}
-          </div>`:''}
+          ${!tossReady?'<div class="toss-setup"><div class="setup-step"><span>!</span><div><strong>서버 연결 대기</strong><small>서버 Secret 설정과 고정 IP 확인 후 공개 HTTPS 주소만 앱에 연결합니다.</small></div></div></div>':''}
           ${toss.accountLabel?`<div class="row-sub">${esc(toss.accountLabel)}${toss.lastSyncAt?` · ${fmtDate(toss.lastSyncAt.slice(0,10))} 조회`:''}</div>`:''}
           ${tossComparisons.length?`<div class="list" style="margin-top:12px">${tossComparisons.map(row=>`<div class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${fmtShares(row.shares)}주</div><div class="row-sub">${row.accounts?.length>1?`${row.accounts.length}계좌 합산 · `:''}앱 ${fmtShares(row.appShares)}주${row.supported?'':' · 원화 종목은 대조만'}</div></div><div class="row-value ${Math.abs(n(row.difference))<.0001?'positive':''}">${Math.abs(n(row.difference))<.0001?'일치':`${n(row.difference)>0?'+':''}${fmtShares(row.difference)}주`}</div></div>`).join('')}</div>`:''}
           ${toss.unsupportedCurrencyCount?`<p class="tiny muted">원화 체결 ${toss.unsupportedCurrencyCount}건은 USD 원장에 섞지 않고 제외했습니다.</p>`:''}

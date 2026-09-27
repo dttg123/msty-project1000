@@ -17,7 +17,6 @@ const views=createViews({
   getHistoryLimit:()=>10,getHistoryFilter:()=>({}),getChartMonth:()=>'2026-09',getChartYear:()=>'',getCashflowMonthKey:()=>cashflowMonthKey,
   getPortfolioGroup:()=>portfolioGroup,setPortfolioGroup:value=>portfolioGroup=value,
   getCurrentUser:()=>null,isTossBridgeConfigured:()=>false,
-  getTossConnectionMode:()=>'none',getTossLocalConfig:()=>({clientId:'',hasSecret:false}),getTossSetup:()=>({ip:'',busy:'',message:''}),
   ...portfolio,...formatters
 });
 

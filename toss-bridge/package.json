@@ -6,7 +6,7 @@
   "engines": { "node": "24.x" },
   "scripts": {
     "start": "node server.mjs",
-    "verify": "node --check server.mjs"
+    "verify": "node --check server.mjs && node --test tests/*.test.mjs"
   },
   "dependencies": {
     "express": "^5.1.0"

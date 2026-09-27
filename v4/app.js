@@ -10,7 +10,7 @@ import { createFormatters } from './modules/format.js?v=0.12.7-r64';
 import { createViews } from './modules/views.js?v=0.12.7-r64';
 import { buildMigrationAudit } from './modules/migration.js?v=0.12.7-r64';
 import { buildTossSync, mergeTossCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend } from './modules/toss.js?v=0.12.7-r64';
-import { clearTossLocalConfig, fetchCurrentPublicIp, fetchTossSnapshot, getTossConnectionMode, getTossLocalConfig, getTossSettingsUrl, isTossBridgeConfigured, saveTossLocalConfig, testTossDirectConnection } from './toss-client.js?v=0.12.7-r64';
+import { fetchTossSnapshot, isTossBridgeConfigured, removeLegacyTossBrowserCredentials } from './toss-client.js?v=0.12.7-r64';
 import { validateLedger } from './modules/validation.js?v=0.12.7-r64';
 import { demoState } from './modules/demo.js?v=0.12.7-r64';
 import { FREQUENCIES } from './modules/income.js?v=0.12.7-r64';
@@ -45,7 +45,6 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
   let toastTimer = null;
   let legacyMigrationSource = null;
   let tossSyncRunning = false;
-  let tossSetup = { ip:'', busy:'', message:'' };
   let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
 
   const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
@@ -88,7 +87,6 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
     getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getPortfolioGroup:() => portfolioGroup, setPortfolioGroup:value => { portfolioGroup=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
-    getTossConnectionMode, getTossLocalConfig, getTossSetup:() => tossSetup,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -427,36 +425,6 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     return project||null;
   }
 
-  async function showCurrentTossIp() {
-    if(tossSetup.busy)return;
-    tossSetup={...tossSetup,busy:'ip',message:''};renderSettings();showPage('settings');
-    try{tossSetup={ip:await fetchCurrentPublicIp(),busy:'',message:'이 IP를 토스 허용 IP에 등록해 주세요.'};}
-    catch(error){tossSetup={...tossSetup,busy:'',message:error?.message||'현재 IP 확인에 실패했습니다.'};}
-    renderSettings();showPage('settings');
-  }
-
-  async function copyTossIp() {
-    if(!tossSetup.ip){await showCurrentTossIp();if(!tossSetup.ip)return;}
-    try{await navigator.clipboard.writeText(tossSetup.ip);toast('현재 IP를 복사했습니다.');}
-    catch(_){openModal(`<h3 class="modal-title">현재 IP</h3><p class="modal-desc">길게 눌러 복사한 뒤 토스 허용 IP에 붙여넣으세요.</p><input class="input" readonly value="${esc(tossSetup.ip)}" onclick="this.select()"><button class="btn primary" style="width:100%;margin-top:12px" data-close-modal>확인</button>`);}
-  }
-
-  async function testTossBrowser() {
-    if(tossSetup.busy)return;
-    tossSetup={...tossSetup,busy:'test',message:'토스 브라우저 연결을 확인하고 있습니다.'};renderSettings();showPage('settings');
-    try{
-      const result=await testTossDirectConnection();
-      tossSetup={...tossSetup,busy:'',message:`직접 연결 성공 · 계좌 ${result.accountCount}개 확인`};
-      state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';
-      toast('토스 직접 연결에 성공했습니다.');
-    }catch(error){
-      tossSetup={...tossSetup,busy:'',message:error?.message||'토스 연결 시험에 실패했습니다.'};
-      state.integrations.toss.status='error';state.integrations.toss.lastError=tossSetup.message;
-      toast(tossSetup.message);
-    }
-    renderSettings();showPage('settings');
-  }
-
   async function syncTossReadOnly() {
     if(tossSyncRunning)return;
     tossSyncRunning=true;
@@ -557,11 +525,6 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
     if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
     if('csv'in button.dataset){exportCSV();return;}
-    if('checkTossIp'in button.dataset){showCurrentTossIp();return;}
-    if('copyTossIp'in button.dataset){copyTossIp();return;}
-    if('openTossSettings'in button.dataset){window.open(getTossSettingsUrl(),'_blank','noopener,noreferrer');return;}
-    if('testTossDirect'in button.dataset){testTossBrowser();return;}
-    if('clearTossDirect'in button.dataset){confirmAction('토스 연결정보 삭제','이 기기에 저장된 Client ID와 Secret만 삭제합니다.',async()=>{clearTossLocalConfig();tossSetup={ip:tossSetup.ip,busy:'',message:'이 기기의 토스 연결정보를 삭제했습니다.'};state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';renderSettings();showPage('settings');toast('토스 연결정보를 삭제했습니다.');},'삭제');return;}
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('migrateV3'in button.dataset){previewLegacyMigration();return;}
@@ -591,13 +554,13 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     document.addEventListener('keydown',event=>{const card=event.target.closest?.('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('restoreInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.addEventListener('submit',event=>{const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=new FormData(event.target);let next={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);});});
-    document.addEventListener('submit',event=>{if(event.target.id!=='tossDirectForm')return;event.preventDefault();try{const form=new FormData(event.target);saveTossLocalConfig({clientId:form.get('clientId'),clientSecret:form.get('clientSecret')});tossSetup={...tossSetup,message:'이 기기에만 저장했습니다. 현재 IP 등록 후 연결 시험을 눌러 주세요.'};state.integrations.toss.status='not_connected';state.integrations.toss.lastError='';renderSettings();showPage('settings');toast('토스 연결정보를 기기에 저장했습니다.');}catch(error){toast(error?.message||'토스 연결정보를 저장하지 못했습니다.');}});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
   }
 
   async function init() {
     try{
+      removeLegacyTossBrowserCredentials();
       await openStorage();
       const existing=await storageGet(STATE_KEY);
       legacyMigrationSource=demoMode?null:await readLegacyState();
