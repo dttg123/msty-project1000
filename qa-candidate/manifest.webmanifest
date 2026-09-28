@@ -1,0 +1,14 @@
+{
+  "name": "DividendOS",
+  "short_name": "DividendOS",
+  "description": "배당 포트폴리오와 실제 입금, 목표 및 원금회수를 관리하는 클라우드 PWA",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f9",
+  "theme_color": "#645bff",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
