@@ -8,7 +8,7 @@ const files=[
   'index.html','styles.css','styles-refined.css','manifest.webmanifest','icon-192.png','icon-512.png',
   'app.js','firebase.js','auth.js','storage.js','cloud.js','runtime-config.js','toss-client.js','backup.js','sw.js',
   'modules/activity.js','modules/constants.js','modules/utils.js','modules/state.js','modules/income.js',
-  'modules/dividend-analytics.js','modules/cloud-api.js','modules/validation.js','modules/demo.js',
+  'modules/dividend-analytics.js','modules/cloud-api.js','modules/cloud-contract.js','modules/backup-history.js','modules/validation.js','modules/demo.js',
   'modules/portfolio.js','modules/format.js','modules/views.js','modules/home-metrics.js','modules/migration.js','modules/toss.js'
 ];
 

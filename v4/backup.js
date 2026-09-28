@@ -1,12 +1,14 @@
 export const APP_VERSION = '0.12.7';
 export const DATA_SCHEMA_VERSION = 4;
 
+import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
+
 const APP_FILES = [
   'index.html', 'styles.css', 'styles-refined.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js',
   'backup.js', 'sw.js',
   'modules/activity.js', 'modules/constants.js', 'modules/utils.js', 'modules/state.js',
-  'modules/income.js', 'modules/dividend-analytics.js', 'modules/cloud-api.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
+  'modules/income.js', 'modules/dividend-analytics.js', 'modules/cloud-api.js', 'modules/cloud-contract.js', 'modules/backup-history.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
 ];
 
 const encoder = new TextEncoder();
@@ -89,45 +91,67 @@ async function fetchAppFiles() {
 
 export async function buildPortableBackup(state) {
   const exportedAt=new Date().toISOString();
+  const serialized=canonicalStringify(state),counts=stateCounts(state),integrityHash=await sha256Hex(serialized);
   const info={
     product:'DividendOS',
     appVersion:APP_VERSION,
     dataSchemaVersion:DATA_SCHEMA_VERSION,
     exportedAt,
-    format:'portable-app-backup-v1',
+    format:'portable-app-backup-v2',
     dataFile:'data/state.json',
-    launchFile:'app/index.html'
+    launchFile:'app/index.html',
+    counts,
+    integrity:{algorithm:'SHA-256',hash:integrityHash}
   };
   return createStoreZip([
     {name:'backup-info.json',data:JSON.stringify(info,null,2)},
-    {name:'data/state.json',data:JSON.stringify({...state,exportedAt,appVersion:APP_VERSION},null,2)},
+    {name:'data/state.json',data:serialized},
+    ...buildCsvExports(state).map(entry=>({name:`data/csv/${entry.name}`,data:entry.data})),
     ...(await fetchAppFiles())
   ]);
+}
+
+function csvCell(value){const text=String(value??'');return /[",\n]/.test(text)?`"${text.replaceAll('"','""')}"`:text;}
+function csv(name,headers,rows){return {name,data:'\ufeff'+[headers,...rows].map(row=>row.map(csvCell).join(',')).join('\n')};}
+
+export function buildCsvExports(state={}) {
+  const projects=Array.isArray(state.projects)?state.projects:[],byId=new Map(projects.map(project=>[project.id,project]));
+  const source=row=>[row.importSource||row.source?.provider||'manual',row.sourceId||row.source?.sourceId||'',row.currency||'USD'];
+  return [
+    csv('securities.csv',['securityId','ticker','name','category','currency','archived'],projects.map(project=>[project.id,project.symbol,project.name,project.category,project.currency||'USD',!!project.archived])),
+    csv('trades.csv',['id','securityId','ticker','date','type','buyType','shares','priceUSD','feeUSD','taxUSD','currency','provider','sourceId','note'],(state.trades||[]).map(row=>{const project=byId.get(row.projectId);const [provider,sourceId,currency]=source(row);return [row.id,row.projectId,project?.symbol||row.symbol||'',row.date,row.type,row.buyType||'',row.shares,row.price,row.feeUSD||0,row.taxUSD||0,currency,provider,sourceId,row.note||''];})),
+    csv('dividends.csv',['id','securityId','ticker','date','grossUSD','taxUSD','feeUSD','netUSD','status','currency','provider','sourceId','note'],(state.dividends||[]).map(row=>{const project=byId.get(row.projectId);const [provider,sourceId,currency]=source(row);const gross=Number(row.grossAmountUSD??row.amountUSD??0),tax=Number(row.taxUSD||0),fee=Number(row.feeUSD||0);return [row.id,row.projectId,project?.symbol||row.symbol||'',row.date,gross,tax,fee,Number(row.amountUSD??gross-tax-fee),row.status||'actual',currency,provider,sourceId,row.note||''];})),
+    csv('goals.csv',['securityId','ticker','targetUnits','monthlyPlanShares','projectStart','afterGoalMode','recoveryLocked','recoveryBasis','recoveryStartDate'],projects.map(project=>[project.id,project.symbol,project.targetUnits,project.monthlyPlanShares,project.projectStart,project.afterGoalMode,!!project.recovery?.locked,project.recovery?.basis||0,project.recovery?.startDate||'']))
+  ];
+}
+
+export function buildCsvExportZip(state) { return createStoreZip(buildCsvExports(state)); }
+
+function readStoreZip(bytes) {
+  const entries=new Map();let offset=0;
+  while(offset+30<=bytes.length){
+    const view=new DataView(bytes.buffer,bytes.byteOffset+offset);if(view.getUint32(0,true)!==0x04034b50)break;
+    const flags=view.getUint16(6,true),method=view.getUint16(8,true),size=view.getUint32(18,true),nameLen=view.getUint16(26,true),extraLen=view.getUint16(28,true);
+    if(flags&0x0008)throw new Error('지원하지 않는 ZIP 형식입니다.');if(method!==0)throw new Error('압축된 ZIP은 지원하지 않습니다. 이 앱에서 만든 ZIP을 사용하세요.');
+    const name=decoder.decode(bytes.slice(offset+30,offset+30+nameLen)),start=offset+30+nameLen+extraLen;if(start+size>bytes.length)throw new Error('백업 파일 일부가 손상되었습니다.');
+    const data=bytes.slice(start,start+size);if(crc32(data)!==view.getUint32(14,true))throw new Error('백업 데이터 검증에 실패했습니다.');entries.set(name,data);offset=start+size;
+  }
+  return entries;
 }
 
 export async function readStateFromBackupFile(file) {
   const lower=file.name.toLowerCase();
   if(!lower.endsWith('.zip')) throw new Error('이 앱에서 만든 ZIP 백업만 지원합니다.');
   const bytes=new Uint8Array(await file.arrayBuffer());
-  let offset=0;
-  while(offset+30<=bytes.length) {
-    const view=new DataView(bytes.buffer,bytes.byteOffset+offset);
-    if(view.getUint32(0,true)!==0x04034b50) break;
-    const flags=view.getUint16(6,true), method=view.getUint16(8,true);
-    const size=view.getUint32(18,true), nameLen=view.getUint16(26,true), extraLen=view.getUint16(28,true);
-    if(flags&0x0008) throw new Error('지원하지 않는 ZIP 형식입니다.');
-    if(method!==0) throw new Error('압축된 ZIP은 지원하지 않습니다. 이 앱에서 만든 ZIP을 사용하세요.');
-    const name=decoder.decode(bytes.slice(offset+30,offset+30+nameLen));
-    const start=offset+30+nameLen+extraLen;
-    if(start+size>bytes.length)throw new Error('백업 파일 일부가 손상되었습니다.');
-    if(name==='data/state.json') {
-      const data=bytes.slice(start,start+size);
-      if(crc32(data)!==view.getUint32(14,true))throw new Error('백업 데이터 검증에 실패했습니다.');
-      const parsed=JSON.parse(decoder.decode(data));
-      if(!parsed||!Array.isArray(parsed.trades)||!Array.isArray(parsed.dividends))throw new Error('원장 데이터가 없습니다.');
-      return parsed;
-    }
-    offset=start+size;
+  const entries=readStoreZip(bytes),data=entries.get('data/state.json');
+  if(!data)throw new Error('ZIP 안에 data/state.json이 없습니다.');
+  const text=decoder.decode(data),parsed=JSON.parse(text);
+  if(!parsed||!Array.isArray(parsed.trades)||!Array.isArray(parsed.dividends))throw new Error('원장 데이터가 없습니다.');
+  const infoBytes=entries.get('backup-info.json');
+  if(infoBytes){
+    const info=JSON.parse(decoder.decode(infoBytes)),expected=info?.integrity?.hash;
+    if(expected&&await sha256Hex(canonicalStringify(parsed))!==expected)throw new Error('백업 전체 무결성 검증에 실패했습니다.');
+    if(info?.counts&&canonicalStringify(info.counts)!==canonicalStringify(stateCounts(parsed)))throw new Error('백업 데이터 건수 검증에 실패했습니다.');
   }
-  throw new Error('ZIP 안에 data/state.json이 없습니다.');
+  return parsed;
 }

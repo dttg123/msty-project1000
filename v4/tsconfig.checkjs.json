@@ -13,6 +13,8 @@
   "files": [
     "modules/constants.js",
     "modules/utils.js",
+    "modules/cloud-contract.js",
+    "modules/backup-history.js",
     "backup.js"
   ]
 }

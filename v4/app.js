@@ -2,7 +2,7 @@ import { monthActivity } from './modules/activity.js?v=0.12.7-r64';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js?v=0.12.7-r64';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js?v=0.12.7-r64';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js?v=0.12.7-r64';
-import { APP_VERSION, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.7-r64';
+import { APP_VERSION, buildCsvExportZip, buildPortableBackup, readStateFromBackupFile } from './backup.js?v=0.12.7-r64';
 import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js?v=0.12.7-r64';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js?v=0.12.7-r64';
 import { createPortfolioEngine } from './modules/portfolio.js?v=0.12.7-r64';
@@ -15,6 +15,7 @@ import { validateLedger } from './modules/validation.js?v=0.12.7-r64';
 import { demoState } from './modules/demo.js?v=0.12.7-r64';
 import { FREQUENCIES } from './modules/income.js?v=0.12.7-r64';
 import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?v=0.12.7-r64';
+import { listAutoBackups, readAutoBackup, rotateAutoBackups } from './modules/backup-history.js?v=0.12.7-r64';
 
 (() => {
   'use strict';
@@ -42,10 +43,13 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
   let applyingCloudState = false;
   let saveTimer = null;
   let cloudTimer = null;
+  let cloudRevision = 0;
+  let cloudWritePending = false;
   let toastTimer = null;
   let legacyMigrationSource = null;
   let tossSyncRunning = false;
   let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
+  let autoBackupStatus={count:0,lastAt:'',error:''},autoBackupPromise=null;
 
   const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
   const { activeProjects, projectById, projectRows, sharesAtDate, computeProject, recoveryStats, totals } = portfolio;
@@ -68,25 +72,40 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
   function setSaveStatus(text,kind='') { const el=document.getElementById('saveStatus'); if(el){el.textContent=text;el.className=`save-pill ${kind}`;} }
   function hasMeaningfulData(value=state) { return !!(value&&(value.trades?.length||value.dividends?.length||value.splits?.length||value.cashAdjustments?.length||value.projects?.some(p=>n(p.currentPrice)||n(p.monthlyPlanShares)||n(p.initialDividendBalance)))); }
 
+  const backupStorage={get:storageGet,set:storageSet,remove:storageDelete};
+  async function refreshAutoBackupStatus(){const entries=await listAutoBackups(backupStorage);autoBackupStatus={count:entries.length,lastAt:entries[0]?.createdAt||'',error:''};return entries;}
+  async function autoBackup(reason='automatic'){
+    if(demoMode||!hasMeaningfulData())return;
+    if(autoBackupPromise)return autoBackupPromise;
+    autoBackupPromise=rotateAutoBackups(backupStorage,clone(state),{reason}).then(result=>{autoBackupStatus={count:result.entries.length,lastAt:result.entries[0]?.createdAt||'',error:''};return result;}).catch(error=>{console.error(error);autoBackupStatus={...autoBackupStatus,error:'자동 백업 실패'};return null;}).finally(()=>{autoBackupPromise=null;});
+    return autoBackupPromise;
+  }
+
   async function pushCloudState() {
     if(demoMode||!currentUser||!cloudReady||applyingCloudState)return;
     if(!navigator.onLine){setSaveStatus('오프라인','cloud-error');return;}
     try {
       setSaveStatus('동기화 중','cloud-busy');
-      const now=new Date().toISOString(); state.meta.lastCloudSaveAt=now;
-      await saveCloudDocument(currentUser.uid,{state:clone(state),clientUpdatedAt:state.meta.updatedAt,appVersion:APP_VERSION});
-      await storageSet(STATE_KEY,state); setSaveStatus('','cloud-ok');
-    } catch(error) { console.error(error); setSaveStatus('클라우드 오류','cloud-error'); toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true}); }
+      const now=new Date().toISOString(); state.meta.lastCloudSaveAt=now;cloudWritePending=true;
+      const saved=await saveCloudDocument(currentUser.uid,clone(state),{expectedRevision:cloudRevision,appVersion:APP_VERSION});cloudRevision=saved.revision;
+      cloudWritePending=false;await storageSet(STATE_KEY,state); setSaveStatus('','cloud-ok');
+    } catch(error) {
+      cloudWritePending=false;console.error(error);
+      if(error?.code==='cloud-conflict'){
+        const latest=await getCloudDocument(currentUser.uid).catch(()=>null);pendingCloudState=latest?.state?migrate(latest.state):null;cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
+      }
+      setSaveStatus('클라우드 오류','cloud-error');toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true});
+    }
   }
   async function saveState(immediate=false) {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
-    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{await storageSet(STATE_KEY,state);}catch(error){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
+    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch(error){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
     if(immediate)await run();else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:value => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getPortfolioGroup:() => portfolioGroup, setPortfolioGroup:value => { portfolioGroup=value; }, getCurrentUser:() => currentUser, isTossBridgeConfigured,
+    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getPortfolioGroup:() => portfolioGroup, setPortfolioGroup:value => { portfolioGroup=value; }, getCurrentUser:() => currentUser, getAutoBackupStatus:()=>autoBackupStatus, isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -369,8 +388,12 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       const previousProjectId=selectedProjectId;await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects().some(project=>project.id===previousProjectId)?previousProjectId:(activeProjects()[0]?.id||'');await saveState(true);renderAll();showPage('home');toast('직전 안전 사본으로 복원했습니다.');
     },'되돌리기');
   }
-  function csvCell(value){const text=String(value??'');return /[",\n]/.test(text)?`"${text.replaceAll('"','""')}"`:text;}
-  function exportCSV(){const rows=[['프로젝트','티커','구분','ID','날짜','유형','세부유형','주수','단가USD','금액USD','메모']];for(const p of state.projects){projectRows('trades',p.id).forEach(x=>rows.push([p.id,p.symbol,'거래',x.id,x.date,x.type,x.buyType,x.shares,x.price,n(x.shares)*n(x.price),x.note]));projectRows('dividends',p.id).forEach(x=>rows.push([p.id,p.symbol,'배당',x.id,x.date,'dividend','','','',x.amountUSD,x.note]));projectRows('splits',p.id).forEach(x=>rows.push([p.id,p.symbol,'분할',x.id,x.date,x.type,'',x.from,x.to,'','']));projectRows('cashAdjustments',p.id).forEach(x=>rows.push([p.id,p.symbol,x.purpose==='recoveryWithdrawal'?'배당인출':'잔액보정',x.id,x.date,'cash',x.purpose||'','','',x.amountUSD,x.note||x.label]));}downloadFile(`DividendOS_${todayISO().replaceAll('-','')}.csv`,'\ufeff'+rows.map(row=>row.map(csvCell).join(',')).join('\n'),'text/csv;charset=utf-8');toast('CSV를 저장했습니다.');}
+  async function restoreLatestAutoBackup(){
+    const entries=await refreshAutoBackupStatus();if(!entries.length){toast('자동 백업이 없습니다.');return;}
+    const backup=await readAutoBackup(backupStorage,entries[0].id),restored=migrate(backup?.state),issues=validateLedger(restored);if(!backup||issues.length){toast('자동 백업을 확인할 수 없습니다.');return;}
+    confirmAction('최근 자동 백업 복원',`${entries[0].createdAt.slice(0,16).replace('T',' ')} 기록으로 되돌립니다. 현재 기록도 먼저 안전 복사합니다.`,async()=>{await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);renderAll();showPage('home');toast('최근 자동 백업을 복원했습니다.');},'복원');
+  }
+  function exportCSV(){downloadFile(`DividendOS_CSV_${todayISO().replaceAll('-','')}.zip`,buildCsvExportZip(state));toast('종목·거래·배당·목표 CSV 4개를 저장했습니다.');}
 
   async function chooseInitialSync(cloudState) {
     const localHas=hasMeaningfulData(state),cloudHas=hasMeaningfulData(cloudState);
@@ -388,24 +411,23 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
   async function connectCloudForUser(user) {
     currentUser=user;cloudReady=false;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('동기화 확인','cloud-busy');
     try{
-      let cloudData=await getCloudDocument(user.uid),cloudState=cloudData?.state?migrate(cloudData.state):null,usingLegacyCloud=false;
+      let cloudData=await getCloudDocument(user.uid),cloudState=cloudData?.state?migrate(cloudData.state):null,usingLegacyCloud=false,usingSingleDocument=!!cloudData?.legacySingleDocument;cloudRevision=Math.max(0,n(cloudData?.revision));
       if(!cloudState){const legacy=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;cloudState=prepareLegacyMigration(legacy.state).candidate;usingLegacyCloud=true;}}
       else if(!cloudState.meta?.migrationAudit){const legacy=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;const audit=auditLegacyAgainstState(legacy.state,cloudState);if(audit?.passed)cloudState.meta.migrationAudit=audit;else cloudState.meta.legacyMigrationAvailable=true;}}
       const choice=await chooseInitialSync(cloudState);
       if(choice==='cancel'){pendingCloudState=cloudState;setSaveStatus('동기화 보류','cloud-error');return;}
       if(cloudState){const issues=validateLedger(cloudState);if(issues.length)throw new Error(issues.join(' '));}
       pendingCloudState=null;
-      if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudReady=true;if(usingLegacyCloud)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
+      if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudReady=true;if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
       cloudUnsubscribe=await subscribeCloudDocument(user.uid,data=>{
-        if(!data?.state||applyingCloudState)return;
-        const remote=migrate(data.state),remoteTime=new Date(remote.meta?.updatedAt||0).getTime(),localTime=new Date(state.meta?.updatedAt||0).getTime();
-        if(remoteTime>localTime+1000){pendingCloudState=remote;cloudReady=false;clearTimeout(cloudTimer);setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');}
+        if(!data?.state||applyingCloudState||cloudWritePending||n(data.revision)<=cloudRevision)return;
+        const remote=migrate(data.state);pendingCloudState=remote;cloudRevision=n(data.revision);cloudReady=false;clearTimeout(cloudTimer);autoBackup('remote-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');renderAll();
       },error=>{console.error(error);cloudReady=false;setSaveStatus('동기화 오류','cloud-error');});
       setSaveStatus('','cloud-ok');
     }catch(error){cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
-  async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:message=>toast(message,{haptic:true})});}
+  async function initAuth(){await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudRevision=0;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:message=>toast(message,{haptic:true})});}
 
   function refreshTossComparisons() {
     const toss=state.integrations.toss;
@@ -527,6 +549,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
     if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
+    if('restoreAuto'in button.dataset){restoreLatestAutoBackup().catch(()=>toast('자동 백업을 읽지 못했습니다.'));return;}
     if('csv'in button.dataset){exportCSV();return;}
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
@@ -574,7 +597,7 @@ import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js?
       else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
-      restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
+      await refreshAutoBackupStatus().catch(()=>{});restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));

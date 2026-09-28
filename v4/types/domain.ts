@@ -64,6 +64,8 @@ export interface BackupEnvelope<TState> {
   appVersion: string;
   dataSchemaVersion: number;
   exportedAt: string;
-  format: 'portable-app-backup-v1';
+  format: 'portable-app-backup-v1' | 'portable-app-backup-v2';
+  counts?: { securities: number; trades: number; dividends: number; splits: number; cashAdjustments: number };
+  integrity?: { algorithm: 'SHA-256'; hash: string };
   state: TState;
 }
