@@ -8,7 +8,7 @@ import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
-import { APP_VERSION, buildCsvExportZip, buildPortableBackup, readStateFromBackupFile } from './backup.js';
+import { APP_VERSION, DATA_SCHEMA_VERSION, buildCsvExportZip, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrate, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
@@ -360,7 +360,26 @@ import { tickerChange } from './modules/corporate-actions.js';
   }
 
   function downloadFile(filename: any,content: any,type: any ='application/octet-stream'): any { const blob: any=content instanceof Blob?content:new Blob([content],{type});const url: any=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
-  let backupRunning: any=false,backupObjectUrl='';
+  let backupRunning: any=false,backupObjectUrl='',preparedBackup: any=null,preparedBackupFilename='';
+  async function saveBackupToChosenLocation(): Promise<any> {
+    if(!preparedBackup||!preparedBackupFilename){toast('백업을 다시 준비해 주세요.');return;}
+    try{
+      const picker: any=(window as any).showSaveFilePicker;
+      if(typeof picker==='function'){
+        const handle: any=await picker({suggestedName:preparedBackupFilename,types:[{description:'DividendOS ZIP 백업',accept:{'application/zip':['.zip']}}]});
+        const writable: any=await handle.createWritable();await writable.write(preparedBackup);await writable.close();
+        closeModal();toast('선택한 위치에 ZIP 백업을 저장했습니다.');return;
+      }
+      const file: any=new File([preparedBackup],preparedBackupFilename,{type:'application/zip'}),nav: any=navigator;
+      if(typeof nav.share==='function'&&typeof nav.canShare==='function'&&nav.canShare({files:[file]})){
+        await nav.share({files:[file],title:'DividendOS 백업'});closeModal();toast('선택한 앱으로 ZIP 백업을 전달했습니다.');return;
+      }
+      downloadFile(preparedBackupFilename,preparedBackup,'application/zip');closeModal();toast('다운로드 폴더에 ZIP 백업을 저장했습니다.');
+    }catch(error: any){
+      if(error?.name==='AbortError')return;
+      console.error(error);toast('위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
+    }
+  }
   async function downloadBackup(): Promise<any> {
     if(backupRunning)return;backupRunning=true;
     openModal('<h3 class="modal-title">백업 준비</h3><p class="modal-desc" role="status">앱과 기록을 ZIP으로 묶고 있습니다.</p>');
@@ -369,7 +388,8 @@ import { tickerChange } from './modules/corporate-actions.js';
       if(backupObjectUrl)URL.revokeObjectURL(backupObjectUrl);
       backupObjectUrl=URL.createObjectURL(zip);
       const stamp: any=new Date().toISOString().replace(/[-:]/g,'').replace(/\\.\\d{3}Z$/,'Z').replace('T','_'),filename=`DividendOS_v${APP_VERSION}_${stamp}.zip`;
-      openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>아래 버튼을 눌러 ZIP 파일을 저장해 주세요.</p><a class="btn primary backup-download" href="${backupObjectUrl}" download="${filename}">ZIP 다운로드</a><p class="detail-note">완료 여부는 휴대폰의 다운로드 목록에서 확인할 수 있습니다.</p>`);
+      preparedBackup=zip;preparedBackupFilename=filename;
+      openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 직접 선택하거나 다운로드 폴더에 바로 저장할 수 있습니다.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><a class="btn soft backup-download" href="${backupObjectUrl}" download="${filename}">다운로드 폴더에 저장</a></div><p class="detail-note">기기에서 위치 선택을 지원하지 않으면 공유 화면 또는 기본 다운로드로 안전하게 전환됩니다.</p>`);
       state.meta.lastBackupAt=new Date().toISOString();await saveState(true);
     }catch (error: any){console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
     finally{backupRunning=false;}
@@ -377,7 +397,7 @@ import { tickerChange } from './modules/corporate-actions.js';
   async function restoreFromFile(file: any): Promise<any> {
     try {
       const parsed: any=await readStateFromBackupFile(file);
-      if(parsed.version===4){const rawIssues: any=validateLedger(parsed);if(rawIssues.length)throw new Error(rawIssues.join(' '));}
+      if(Number(parsed.schemaVersion)>=DATA_SCHEMA_VERSION){const rawIssues: any=validateLedger(parsed);if(rawIssues.length)throw new Error(rawIssues.join(' '));}
       const restored: any=migrate(parsed),issues=validateLedger(restored);
       if(issues.length)throw new Error(issues.join(' '));
       const engine: any=createPortfolioEngine(()=>restored,()=>restored.projects[0].id);
@@ -553,6 +573,7 @@ import { tickerChange } from './modules/corporate-actions.js';
     if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
     if('showLogin'in button.dataset){if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
+    if('backupSave'in button.dataset){saveBackupToChosenLocation();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
     if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
