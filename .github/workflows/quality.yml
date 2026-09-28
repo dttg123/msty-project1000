@@ -53,6 +53,26 @@ jobs:
       - name: Verify Toss bridge
         working-directory: toss-bridge
         run: npm run verify
+      - name: Build and smoke-test Toss bridge container
+        working-directory: toss-bridge
+        run: |
+          docker build -t dividend-os-toss-bridge:qa .
+          docker run --rm -d --name dividend-os-toss-bridge-qa \
+            -p 127.0.0.1:18080:8080 \
+            -e TOSS_CLIENT_ID=qa-client \
+            -e TOSS_CLIENT_SECRET=qa-secret \
+            -e FIREBASE_PROJECT_ID=qa-project \
+            -e ALLOWED_FIREBASE_UID=qa_owner \
+            -e ALLOWED_ORIGIN=https://dttg123.github.io \
+            dividend-os-toss-bridge:qa
+          trap 'docker logs dividend-os-toss-bridge-qa; docker stop dividend-os-toss-bridge-qa' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:18080/health | grep --quiet '"mode":"read-only"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
       - name: Audit production dependencies
         working-directory: toss-bridge
         run: npm audit --omit=dev --audit-level=high
