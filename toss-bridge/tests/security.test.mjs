@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
 import {authorizeOwnerClaims,bearerToken,isAllowedReadPath,parseAllowedOrigins,safeBridgeError,validateEnvironment} from '../security.mjs';
 
 const env={TOSS_CLIENT_ID:'client',TOSS_CLIENT_SECRET:'secret',FIREBASE_PROJECT_ID:'project-1',ALLOWED_FIREBASE_UID:'owner_uid'};
@@ -26,4 +27,14 @@ test('only required read paths and safe public errors',()=>{
   for(const path of ['/api/v1/orders/new','/api/v1/orders/cancel','/oauth2/token'])assert.equal(isAllowedReadPath(path),false);
   assert.deepEqual(safeBridgeError({status:401,message:'upstream secret detail'}),{status:502,code:'bridge-not-configured',message:'토스 중계 서버 인증 설정을 확인해야 합니다.'});
   assert.equal(JSON.stringify(safeBridgeError({status:500,message:'sensitive'})).includes('sensitive'),false);
+});
+
+test('production container includes the complete read-only runtime',()=>{
+  const dockerfile=readFileSync(new URL('../Dockerfile',import.meta.url),'utf8');
+  assert.match(dockerfile,/FROM node:24-alpine/);
+  assert.match(dockerfile,/npm ci --omit=dev/);
+  assert.match(dockerfile,/COPY[^\n]+server\.mjs security\.mjs toss-contract\.mjs/);
+  assert.match(dockerfile,/USER node/);
+  assert.match(dockerfile,/HEALTHCHECK[^\n]*\\/);
+  assert.doesNotMatch(dockerfile,/COPY\s+\.\s+\./);
 });
