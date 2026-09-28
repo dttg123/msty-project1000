@@ -14,3 +14,7 @@ Official references:
 - https://openapi.tossinvest.com/openapi-docs/latest/openapi.json
 
 Reviewed against the official OpenAPI 1.2.17 document on 2026-09-28. The bridge caches the client-credentials token until shortly before expiry and retries one read once after an upstream 401; it never exposes the token response to the browser.
+
+## Container verification
+
+The production image runs on Node 24 as an unprivileged user and contains only the runtime package files plus `server.mjs`, `security.mjs`, and `toss-contract.mjs`. CI builds the same image, starts it with non-secret QA placeholders, and requires `/health` to report `mode: read-only` before a release can pass.
