@@ -1,13 +1,14 @@
 import express from 'express';
-import { createPublicKey, verify } from 'node:crypto';
+import { createHash, createPublicKey, verify } from 'node:crypto';
+import { authorizeOwnerClaims, bearerToken, isAllowedReadPath, parseAllowedOrigins, safeBridgeError, validateEnvironment } from './security.mjs';
+import { parseAccounts, parseHoldings, parseOrders, parsePrices, summarizeAccountReads } from './toss-contract.mjs';
 
-const required=['TOSS_CLIENT_ID','TOSS_CLIENT_SECRET','FIREBASE_PROJECT_ID','ALLOWED_FIREBASE_UID'];
-for(const key of required)if(!process.env[key])throw new Error(`Missing server environment: ${key}`);
+validateEnvironment(process.env);
 
 const app=express();
 app.disable('x-powered-by');
 const port=Number(process.env.PORT)||8080;
-const allowedOrigin=process.env.ALLOWED_ORIGIN||'https://dttg123.github.io';
+const allowedOrigins=parseAllowedOrigins(process.env.ALLOWED_ORIGIN);
 const apiBase='https://openapi.tossinvest.com';
 let tokenCache={value:'',expiresAt:0};
 let firebaseCertCache={certs:{},expiresAt:0};
@@ -15,14 +16,16 @@ const lastRequestByUser=new Map();
 
 function cors(req,res,next){
   const origin=req.get('origin');
-  if(origin===allowedOrigin)res.set({'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'GET, OPTIONS'});
-  if(req.method==='OPTIONS')return origin===allowedOrigin?res.sendStatus(204):res.sendStatus(403);
+  const allowed=!origin||allowedOrigins.has(origin);
+  if(origin&&allowed)res.set({'Access-Control-Allow-Origin':origin,'Vary':'Origin','Access-Control-Allow-Headers':'Authorization','Access-Control-Allow-Methods':'GET, OPTIONS','Access-Control-Max-Age':'600'});
+  if(req.method==='OPTIONS')return allowed?res.sendStatus(204):res.sendStatus(403);
+  if(!allowed)return res.status(403).json({code:'origin-not-allowed',message:'허용되지 않은 앱 주소입니다.'});
   next();
 }
 app.use(cors);
+app.use((_req,res,next)=>{res.set({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY'});next();});
 
 function decodePart(value){return JSON.parse(Buffer.from(value,'base64url').toString('utf8'));}
-function number(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0;}
 async function firebaseCerts(){
   if(Date.now()<firebaseCertCache.expiresAt&&Object.keys(firebaseCertCache.certs).length)return firebaseCertCache.certs;
   const response=await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com',{signal:AbortSignal.timeout(10000)});
@@ -37,16 +40,16 @@ async function verifyFirebaseIdToken(token){
   if(header.alg!=='RS256'||!header.kid)throw new Error('invalid algorithm');
   const cert=(await firebaseCerts())[header.kid];if(!cert)throw new Error('unknown key');
   const valid=verify('RSA-SHA256',Buffer.from(`${encodedHeader}.${encodedPayload}`),createPublicKey(cert),Buffer.from(encodedSignature,'base64url'));
-  const now=Math.floor(Date.now()/1000),projectId=process.env.FIREBASE_PROJECT_ID;
-  if(!valid||payload.aud!==projectId||payload.iss!==`https://securetoken.google.com/${projectId}`||typeof payload.sub!=='string'||!payload.sub||payload.sub.length>128||number(payload.exp)<=now||number(payload.iat)>now+300||number(payload.auth_time)>now+300)throw new Error('invalid claims');
+  if(!valid)throw new Error('invalid signature');
   return payload;
 }
 async function authorize(req,res,next){
   try{
-    const match=String(req.get('authorization')||'').match(/^Bearer (.+)$/);
-    if(!match)return res.status(401).json({code:'login-required',message:'Google 로그인이 필요합니다.'});
-    req.user=await verifyFirebaseIdToken(match[1]);
-    if(req.user.sub!==process.env.ALLOWED_FIREBASE_UID)return res.status(403).json({code:'owner-only',message:'이 계정은 토스 연동 사용 권한이 없습니다.'});
+    const token=bearerToken(req.get('authorization'));
+    if(!token)return res.status(401).json({code:'login-required',message:'Google 로그인이 필요합니다.'});
+    req.user=await verifyFirebaseIdToken(token);
+    const decision=authorizeOwnerClaims(req.user,process.env);
+    if(!decision.ok)return res.status(decision.status).json({code:decision.code,message:decision.status===403?'이 계정은 토스 연동 사용 권한이 없습니다.':'로그인 확인이 만료되었습니다. 다시 로그인해 주세요.'});
     const last=lastRequestByUser.get(req.user.sub)||0,now=Date.now();
     if(now-last<2000)return res.status(429).json({code:'too-many-requests',message:'잠시 후 다시 조회해 주세요.'});
     lastRequestByUser.set(req.user.sub,now);
@@ -60,20 +63,22 @@ async function tossToken(){
   const body=new URLSearchParams({grant_type:'client_credentials',client_id:process.env.TOSS_CLIENT_ID,client_secret:process.env.TOSS_CLIENT_SECRET});
   const response=await fetch(`${apiBase}/oauth2/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body,signal:AbortSignal.timeout(15000)});
   const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw Object.assign(new Error(data.error_description||'토스 인증에 실패했습니다.'),{status:response.status,code:data.error||'toss-auth'});
+  if(!response.ok)throw Object.assign(new Error('Toss token request failed'),{status:response.status,code:'toss-auth'});
+  if(typeof data.access_token!=='string'||!data.access_token||!Number.isFinite(Number(data.expires_in)))throw Object.assign(new Error('Invalid Toss token response'),{status:502,code:'toss-auth-response'});
   tokenCache={value:data.access_token,expiresAt:Date.now()+Number(data.expires_in||0)*1000};
   return tokenCache.value;
 }
 
-async function tossGet(path,accountSeq){
+async function tossGet(path,accountSeq,retry=true){
+  if(!isAllowedReadPath(path))throw Object.assign(new Error('Blocked Toss path'),{status:500,code:'blocked-path'});
   const token=await tossToken();
   const headers={Authorization:`Bearer ${token}`,Accept:'application/json'};
   if(accountSeq!==undefined&&accountSeq!==null)headers['X-Tossinvest-Account']=String(accountSeq);
   const response=await fetch(`${apiBase}${path}`,{headers,signal:AbortSignal.timeout(20000)});
   const data=await response.json().catch(()=>({}));
   if(!response.ok){
-    if(response.status===401)tokenCache={value:'',expiresAt:0};
-    throw Object.assign(new Error(data?.error?.message||data?.message||'토스 조회에 실패했습니다.'),{status:response.status,code:data?.error?.code||`toss-${response.status}`});
+    if(response.status===401&&retry){tokenCache={value:'',expiresAt:0};return tossGet(path,accountSeq,false);}
+    throw Object.assign(new Error('Toss read failed'),{status:response.status,code:`toss-${response.status}`});
   }
   return data.result;
 }
@@ -87,6 +92,8 @@ function validSymbols(value){
   return String(value||'').split(',').map(item=>item.trim().toUpperCase()).filter(symbol=>/^[A-Z0-9.-]{1,16}$/.test(symbol)&&!seen.has(symbol)&&seen.add(symbol)).slice(0,200);
 }
 function maskAccount(value){const text=String(value||'');return text?`토스증권 •${text.slice(-4)}`:'토스증권 계좌';}
+function accountScopeId(accounts){return createHash('sha256').update(accounts.map(row=>`${row.accountSeq}:${row.accountNo}`).sort().join('|')).digest('hex').slice(0,24);}
+function todayKST(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 async function closedOrders(accountSeq,from,to){
@@ -95,7 +102,8 @@ async function closedOrders(accountSeq,from,to){
   for(let page=0;page<100;page++){
     const query=new URLSearchParams({status:'CLOSED',from,to,limit:'100'});if(cursor)query.set('cursor',cursor);
     const result=await tossGet(`/api/v1/orders?${query}`,accountSeq);
-    orders.push(...(Array.isArray(result?.orders)?result.orders:[]));
+    if(!result||!Array.isArray(result.orders))throw Object.assign(new Error('Invalid order page'),{status:502,code:'upstream-schema'});
+    orders.push(...result.orders);
     if(!result?.hasNext||!result?.nextCursor)break;
     if(page===99){truncated=true;break;}
     cursor=result.nextCursor;await wait(220);
@@ -106,28 +114,36 @@ async function closedOrders(accountSeq,from,to){
 app.get('/health',(_req,res)=>res.json({ok:true,mode:'read-only',ordersEnabled:false}));
 app.get('/v1/toss/snapshot',authorize,async(req,res)=>{
   try{
-    const today=new Date().toISOString().slice(0,10);
+    const today=todayKST();
     const requestedFrom=validDate(req.query.from,process.env.TOSS_DEFAULT_FROM||'2020-01-01'),from=requestedFrom>today?today:requestedFrom;
-    const accounts=await tossGet('/api/v1/accounts');
+    const accounts=parseAccounts(await tossGet('/api/v1/accounts'));
     const configured=process.env.TOSS_ACCOUNT_SEQ;
-    const account=accounts.find(row=>configured&&String(row.accountSeq)===String(configured))||accounts.find(row=>row.accountType==='BROKERAGE')||accounts[0];
-    if(!account)return res.status(404).json({code:'no-account',message:'조회 가능한 토스증권 종합매매 계좌가 없습니다.'});
+    const selected=(configured?accounts.filter(row=>String(row.accountSeq)===String(configured)):accounts.filter(row=>row.accountType==='BROKERAGE')).slice(0,5);
+    if(!selected.length)return res.status(404).json({code:'no-account',message:'조회 가능한 토스증권 종합매매 계좌가 없습니다.'});
+    const scoped=selected.map(account=>({...account,accountLabel:maskAccount(account.accountNo)}));
     const symbols=validSymbols(req.query.symbols);
-    const [holdingResult,orderResult,priceResult]=await Promise.all([
-      tossGet('/api/v1/holdings',account.accountSeq),
-      closedOrders(account.accountSeq,from,today),
-      symbols.length?tossGet(`/api/v1/prices?${new URLSearchParams({symbols:symbols.join(',')})}`):Promise.resolve([])
+    const [accountSettlements,[priceSettlement]]=await Promise.all([
+      Promise.allSettled(scoped.map(async account=>{
+        const [holdingResult,orderResult]=await Promise.all([tossGet('/api/v1/holdings',account.accountSeq),closedOrders(account.accountSeq,from,today)]);
+        return {account,holdings:parseHoldings(holdingResult,account),orders:parseOrders({orders:orderResult.orders},account),truncated:orderResult.truncated};
+      })),
+      Promise.allSettled([symbols.length?tossGet(`/api/v1/prices?${new URLSearchParams({symbols:symbols.join(',')})}`).then(value=>parsePrices(value)):Promise.resolve([])])
     ]);
-    res.set('Cache-Control','no-store').json({
-      accountLabel:maskAccount(account.accountNo),fetchedAt:new Date().toISOString(),from,
-      holdings:Array.isArray(holdingResult?.items)?holdingResult.items:[],prices:Array.isArray(priceResult)?priceResult:[],orders:orderResult.orders,historyTruncated:orderResult.truncated
+    const {successes,failedAccountCount:failedCount,priceFailed,syncStatus}=summarizeAccountReads(accountSettlements,priceSettlement);
+    if(!successes.length)throw Object.assign(new Error('All account reads failed'),{status:502,code:'all-accounts-failed'});
+    res.json({
+      accountLabel:scoped.length===1?scoped[0].accountLabel:`토스증권 ${scoped.length}계좌`,accountScopeId:accountScopeId(scoped),fetchedAt:new Date().toISOString(),from,
+      syncStatus,syncCursor:{ordersThrough:today},capabilities:{orders:true,holdings:true,prices:!priceFailed,dividends:false},
+      accountResults:accountSettlements.map((row,index)=>row.status==='fulfilled'?{accountId:String(row.value.account.accountSeq),accountLabel:row.value.account.accountLabel,status:'ok',holdingsCount:row.value.holdings.length,ordersCount:row.value.orders.length}:{accountId:String(scoped[index].accountSeq),accountLabel:scoped[index].accountLabel,status:'error'}),
+      holdings:successes.flatMap(row=>row.holdings),prices:priceFailed?[]:priceSettlement.value,orders:successes.flatMap(row=>row.orders),dividends:[],
+      failedAccountCount:failedCount,historyTruncated:successes.some(row=>row.truncated)
     });
   }catch(error){
-    console.error('Toss read-only sync failed',{code:error.code,status:error.status,message:error.message});
-    res.status(Number(error.status)||502).json({code:error.code||'toss-bridge',message:error.message||'토스 조회에 실패했습니다.'});
+    const safe=safeBridgeError(error);
+    console.error('Toss read-only sync failed',{code:safe.code,status:safe.status});
+    res.status(safe.status).json({code:safe.code,message:safe.message});
   }
 });
 
 app.use((_req,res)=>res.status(404).json({code:'not-found',message:'지원하지 않는 경로입니다.'}));
 app.listen(port,()=>console.log(`DividendOS Toss read-only bridge listening on ${port}`));
-

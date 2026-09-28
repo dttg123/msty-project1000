@@ -1,0 +1,7 @@
+node_modules/
+v4/dist/
+v4/test-results/
+*.log
+.env
+.env.*
+!.env.example

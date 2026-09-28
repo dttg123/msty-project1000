@@ -1,0 +1,8 @@
+{
+  "cases": [
+    {"id":"missing-ledger","state":{"version":4,"trades":[]},"error":"원장 데이터가 없습니다"},
+    {"id":"wrong-integrity","mutate":"integrity","error":"전체 무결성"},
+    {"id":"wrong-counts","mutate":"counts","error":"데이터 건수"},
+    {"id":"missing-state-file","mutate":"missing-state","error":"data/state.json"}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "generator":"lifetime-ledger-v1",
+  "profiles":{
+    "1y":{"seed":1001,"years":1,"summary":{"schemaVersion":4,"projects":3,"trades":36,"dividends":66,"splits":1,"corporateActions":1,"grossDividendUSD":115.609592,"netDividendUSD":98.228151},"hash":"8d74c84229b018b46746a2f8864ed88566fe28f8e2366406c35b80b27faa211a"},
+    "5y":{"seed":5005,"years":5,"summary":{"schemaVersion":4,"projects":3,"trades":192,"dividends":322,"splits":1,"corporateActions":1,"grossDividendUSD":2486.308455,"netDividendUSD":2113.172188},"hash":"a5f54f747fc234ae468766f02bdc3ac764e7f945d79f650fc72ef6e80c2bbd47"},
+    "10y":{"seed":1010,"years":10,"summary":{"schemaVersion":4,"projects":3,"trades":387,"dividends":642,"splits":1,"corporateActions":1,"grossDividendUSD":10240.726059,"netDividendUSD":8704.237157},"hash":"7b55def0f62b2996ba5bcbfa8cfbd2d4632b9a2c18da0f8138d645e9459ee05d"},
+    "30y":{"seed":3030,"years":30,"summary":{"schemaVersion":4,"projects":3,"trades":1167,"dividends":1922,"splits":1,"corporateActions":1,"grossDividendUSD":54705.027046,"netDividendUSD":46498.143007},"hash":"21ad652d6e5c92a273dddd5555f14876b0a16ef6fe252e44a1b19982b1a8c351"},
+    "35y":{"seed":3535,"years":35,"summary":{"schemaVersion":4,"projects":3,"trades":1362,"dividends":2242,"splits":1,"corporateActions":1,"grossDividendUSD":68088.092046,"netDividendUSD":57873.55826},"hash":"b09d37b6537d1602342c579823fa4d42cfb21e2dfa8affbf7b707fcd79347379"}
+  }
+}

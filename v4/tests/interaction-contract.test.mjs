@@ -17,7 +17,6 @@ const views=createViews({
   getHistoryLimit:()=>10,getHistoryFilter:()=>({}),getChartMonth:()=>'2026-09',getChartYear:()=>'',getCashflowMonthKey:()=>cashflowMonthKey,
   getPortfolioGroup:()=>portfolioGroup,setPortfolioGroup:value=>portfolioGroup=value,
   getCurrentUser:()=>null,isTossBridgeConfigured:()=>false,
-  getTossConnectionMode:()=>'none',getTossLocalConfig:()=>({clientId:'',hasSecret:false}),getTossSetup:()=>({ip:'',busy:'',message:''}),
   ...portfolio,...formatters
 });
 
@@ -61,8 +60,8 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/목표 · 월 매수계획 설정/);
 assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
 
-const app=readFileSync(resolve(import.meta.dirname,'../app.js'),'utf8');
-const routed=['page','currency','chartKey','incomeMonth','historyReset','historyMore','chartYearShift','chartMode','homeCashflowMode','homeYearRange','cashflowPeriod','portfolioGroup','goalDetail','settingsProject','openProject','selectProject','addProject','projectSettings','editPrice','addTrade','addDividend','addCash','addWithdrawal','addSplit','viewRecord','editRecord','deleteFromEdit','projectCheck','allCheck','goalMode','lockRecovery','editRecovery','restoreProject','backup','restore','csv','syncToss','reviewToss','closeModal'];
+const app=readFileSync(resolve(import.meta.dirname,'../app.ts'),'utf8');
+const routed=['page','currency','chartKey','incomeMonth','historyReset','historyMore','chartYearShift','chartMode','homeCashflowMode','homeYearRange','cashflowPeriod','portfolioGroup','goalDetail','settingsProject','openProject','selectProject','addProject','projectSettings','editPrice','addTrade','addDividend','addCash','addWithdrawal','addSplit','viewRecord','editRecord','deleteFromEdit','projectCheck','allCheck','goalMode','lockRecovery','editRecovery','restoreProject','backup','restore','restoreAuto','csv','syncToss','reviewToss','clearTossCorrections','disconnectToss','closeModal'];
 for(const action of routed)assert.ok(app.includes(`button.dataset.${action}`)||app.includes(`'${action}'in button.dataset`),`${action} must have a click route`);
 
 console.log(`Interaction contract PASS: ${routed.length} click routes, 4/2 portfolio groups, 4 chart modes`);

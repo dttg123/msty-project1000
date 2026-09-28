@@ -1,7 +1,7 @@
 {
-  "name": "MSTY PROJECT 1000",
-  "short_name": "MSTY 1000",
-  "description": "MSTY 1000주 목표와 배당 원금회수를 관리하는 클라우드 PWA",
+  "name": "DividendOS",
+  "short_name": "DividendOS",
+  "description": "배당 포트폴리오와 실제 입금, 목표 및 원금회수를 관리하는 클라우드 PWA",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -12,4 +12,3 @@
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
-
