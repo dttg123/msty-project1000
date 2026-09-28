@@ -1,0 +1,27 @@
+{
+  "policyVersion": 1,
+  "cases": [
+    {"id":"buy-basic","operation":"trade","input":{"type":"buy","shares":10,"price":10},"expected":{"executionAmountUSD":100,"feeUSD":0,"taxUSD":0,"grossBuyCostUSD":100,"netSellProceedsUSD":0}},
+    {"id":"buy-fee-tax","operation":"trade","input":{"type":"buy","shares":10,"price":10,"feeUSD":2,"taxUSD":1},"expected":{"executionAmountUSD":100,"feeUSD":2,"taxUSD":1,"grossBuyCostUSD":103,"netSellProceedsUSD":0}},
+    {"id":"buy-fractional","operation":"trade","input":{"type":"buy","shares":0.125,"price":80,"feeUSD":0.1},"expected":{"executionAmountUSD":10,"feeUSD":0.1,"taxUSD":0,"grossBuyCostUSD":10.1,"netSellProceedsUSD":0}},
+    {"id":"buy-negative-input-clamped","operation":"trade","input":{"type":"buy","shares":-2,"price":10,"feeUSD":-1,"taxUSD":-1},"expected":{"executionAmountUSD":0,"feeUSD":0,"taxUSD":0,"grossBuyCostUSD":0,"netSellProceedsUSD":0}},
+    {"id":"sell-basic","operation":"trade","input":{"type":"sell","shares":5,"price":12},"expected":{"executionAmountUSD":60,"feeUSD":0,"taxUSD":0,"grossBuyCostUSD":0,"netSellProceedsUSD":60}},
+    {"id":"sell-fee-tax","operation":"trade","input":{"type":"sell","shares":5,"price":12,"feeUSD":1,"taxUSD":0.5},"expected":{"executionAmountUSD":60,"feeUSD":1,"taxUSD":0.5,"grossBuyCostUSD":0,"netSellProceedsUSD":58.5}},
+    {"id":"sell-costs-over-proceeds","operation":"trade","input":{"type":"sell","shares":1,"price":1,"feeUSD":2,"taxUSD":1},"expected":{"executionAmountUSD":1,"feeUSD":2,"taxUSD":1,"grossBuyCostUSD":0,"netSellProceedsUSD":0}},
+    {"id":"dividend-legacy-net","operation":"dividend","input":{"amountUSD":10},"expected":{"grossUSD":10,"withholdingTaxUSD":0,"feeUSD":0,"netUSD":10,"rocUSD":0,"incomeUSD":10,"status":"actual"}},
+    {"id":"dividend-gross-tax-fee","operation":"dividend","input":{"amountUSD":8.5,"grossAmountUSD":10,"withholdingTaxUSD":1,"feeUSD":0.5},"expected":{"grossUSD":10,"withholdingTaxUSD":1,"feeUSD":0.5,"netUSD":8.5,"rocUSD":0,"incomeUSD":8.5,"status":"actual"}},
+    {"id":"dividend-explicit-net","operation":"dividend","input":{"netAmountUSD":8.5,"withholdingTaxUSD":1,"feeUSD":0.5},"expected":{"grossUSD":10,"withholdingTaxUSD":1,"feeUSD":0.5,"netUSD":8.5,"rocUSD":0,"incomeUSD":8.5,"status":"actual"}},
+    {"id":"dividend-roc-percent","operation":"dividend","input":{"amountUSD":10,"rocPercent":40},"expected":{"grossUSD":10,"withholdingTaxUSD":0,"feeUSD":0,"netUSD":10,"rocUSD":4,"incomeUSD":6,"status":"actual"}},
+    {"id":"dividend-roc-amount","operation":"dividend","input":{"amountUSD":10,"rocAmountUSD":3},"expected":{"grossUSD":10,"withholdingTaxUSD":0,"feeUSD":0,"netUSD":10,"rocUSD":3,"incomeUSD":7,"status":"actual"}},
+    {"id":"dividend-roc-clamped","operation":"dividend","input":{"amountUSD":10,"rocAmountUSD":30},"expected":{"grossUSD":10,"withholdingTaxUSD":0,"feeUSD":0,"netUSD":10,"rocUSD":10,"incomeUSD":0,"status":"actual"}},
+    {"id":"dividend-confirmed","operation":"dividend","input":{"status":"confirmed","amountUSD":10},"expected":{"grossUSD":10,"withholdingTaxUSD":0,"feeUSD":0,"netUSD":10,"rocUSD":0,"incomeUSD":10,"status":"confirmed"}},
+    {"id":"dividend-estimated","operation":"dividend","input":{"status":"estimated","amountUSD":10},"expected":{"grossUSD":10,"withholdingTaxUSD":0,"feeUSD":0,"netUSD":10,"rocUSD":0,"incomeUSD":10,"status":"estimated"}},
+    {"id":"roc-within-basis","operation":"roc","input":{"costBasisUSD":100,"rocUSD":40},"expected":{"costBasisUSD":60,"basisReductionUSD":40,"excessRocUSD":0}},
+    {"id":"roc-over-basis","operation":"roc","input":{"costBasisUSD":3,"rocUSD":5},"expected":{"costBasisUSD":0,"basisReductionUSD":3,"excessRocUSD":2}},
+    {"id":"roc-negative-clamped","operation":"roc","input":{"costBasisUSD":100,"rocUSD":-1},"expected":{"costBasisUSD":100,"basisReductionUSD":0,"excessRocUSD":0}},
+    {"id":"return-positive","operation":"return","input":{"marketValueUSD":55,"buyCashOutUSD":103,"sellCashInUSD":58.5,"dividendCashInUSD":8.5},"expected":19},
+    {"id":"return-loss","operation":"return","input":{"marketValueUSD":40,"buyCashOutUSD":100,"sellCashInUSD":0,"dividendCashInUSD":5},"expected":-55},
+    {"id":"return-after-liquidation","operation":"return","input":{"marketValueUSD":0,"buyCashOutUSD":100,"sellCashInUSD":95,"dividendCashInUSD":12},"expected":7},
+    {"id":"return-invalid-negative-cash-clamped","operation":"return","input":{"marketValueUSD":-1,"buyCashOutUSD":100,"sellCashInUSD":-1,"dividendCashInUSD":-1},"expected":-100}
+  ]
+}

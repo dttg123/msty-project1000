@@ -30,13 +30,13 @@ function testLegacyRepairAndMigration() {
   };
   const migrated = migrateLegacy(legacy);
   assert.equal(migrated.version, 4);
-  assert.equal(migrated.meta.migratedFrom, 'MSTY PROJECT1000 V3.2.1');
+  assert.equal(migrated.meta.migratedFrom, 'legacy-v3.2.1');
   assert.equal(migrated.projects[0].initialDividendBalance, 10.78);
   assert.deepEqual(migrated.trades.map(row => row.date), ['2026-07-28','2026-08-07','2026-08-17']);
   assert.ok(migrated.trades.every(row => row.projectId === 'p-msty' && row.symbol === 'MSTY'));
   assert.ok(migrated.dividends.every(row => row.projectId === 'p-msty' && row.symbol === 'MSTY'));
   const viaGeneric = migrate(legacy);
-  assert.equal(viaGeneric.meta.migratedFrom, 'MSTY PROJECT1000 V3.2.1');
+  assert.equal(viaGeneric.meta.migratedFrom, 'legacy-v3.2.1');
   assert.equal(migrated.settings.displayCurrency, 'KRW');
   const calc=engineFor(migrated).computeProject(migrated.projects[0]);
   const audit=buildMigrationAudit(legacy,migrated,calc);

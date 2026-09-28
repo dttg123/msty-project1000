@@ -1,0 +1,14 @@
+{
+  "version": 3,
+  "settings": {"targetUnits":1000,"monthlyPlanShares":10,"projectStart":"2025-01-01","currentPrice":12,"exchangeRate":1370,"showKRW":true},
+  "trades": [
+    {"id":"legacy-buy","date":"2025-01-02","type":"buy","buyType":"direct","shares":100,"price":10}
+  ],
+  "dividends": [
+    {"id":"legacy-dividend","date":"2025-01-09","amountUSD":25,"sharesAtPayment":100}
+  ],
+  "splits": [
+    {"id":"legacy-split","date":"2025-06-01","from":1,"to":2,"type":"forward"}
+  ],
+  "meta": {"fixture":"legacy-v3"}
+}

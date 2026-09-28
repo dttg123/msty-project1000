@@ -1,0 +1,114 @@
+name: DividendOS quality gate
+
+on:
+  push:
+    branches: [main, "hardening/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            v4/package-lock.json
+            toss-bridge/package-lock.json
+      - name: Install DividendOS tooling
+        working-directory: v4
+        run: npm ci
+      - name: Run FAST quality gate
+        working-directory: v4
+        run: npm run qa:fast
+
+  core:
+    needs: fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            v4/package-lock.json
+            toss-bridge/package-lock.json
+      - name: Install DividendOS tooling
+        working-directory: v4
+        run: npm ci
+      - name: Run CORE quality gate
+        working-directory: v4
+        run: npm run qa:core
+      - name: Install Toss bridge dependencies
+        working-directory: toss-bridge
+        run: npm ci
+      - name: Verify Toss bridge
+        working-directory: toss-bridge
+        run: npm run verify
+      - name: Audit production dependencies
+        working-directory: toss-bridge
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit DividendOS dependencies
+        working-directory: v4
+        run: npm audit --audit-level=high
+
+  e2e:
+    needs: core
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: v4/package-lock.json
+      - name: Install DividendOS tooling
+        working-directory: v4
+        run: npm ci
+      - name: Install Chromium
+        working-directory: v4
+        run: npx playwright install --with-deps chromium
+      - name: Run mobile and desktop browser QA
+        working-directory: v4
+        run: npm run qa:e2e
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-evidence
+          path: v4/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [core, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: v4/package-lock.json
+      - name: Install DividendOS tooling
+        working-directory: v4
+        run: npm ci
+      - name: Run RELEASE quality gate
+        working-directory: v4
+        run: npm run qa:release
+      - name: Verify Q3 device, restore, rollback, and cleanup evidence
+        working-directory: v4
+        env:
+          QA_RELEASE_EVIDENCE_JSON: ${{ vars.QA_RELEASE_EVIDENCE_JSON }}
+        run: npm run qa:release:evidence

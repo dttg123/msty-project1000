@@ -1,0 +1,16 @@
+{
+  "success": {
+    "accountScopeId":"0123456789abcdef01234567","syncStatus":"complete","syncCursor":{"ordersThrough":"2026-09-28"},
+    "capabilities":{"orders":true,"holdings":true,"prices":true,"dividends":true},"holdings":[],"prices":[],"orders":[],"dividends":[],"accountResults":[]
+  },
+  "partial": {
+    "accountScopeId":"fedcba987654321001234567","syncStatus":"partial","syncCursor":{"ordersThrough":"2026-09-01"},
+    "capabilities":{"orders":true,"holdings":false,"prices":true,"dividends":true},"holdings":[],"prices":[],"orders":[],"dividends":[],"accountResults":[{"status":"failed","code":"upstream-timeout"}]
+  },
+  "httpErrors":[
+    {"status":401,"publicCode":"login-required"},
+    {"status":429,"publicCode":"rate-limited"},
+    {"status":500,"publicCode":"bridge-error"},
+    {"status":504,"publicCode":"upstream-timeout"}
+  ]
+}
