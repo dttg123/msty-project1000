@@ -38,6 +38,8 @@ test('거래 입력이 원장과 보유주수에 즉시 반영된다',async({pag
 
 test('배당 입력은 실제 입금액만 저장하고 예상값으로 부풀리지 않는다',async({page})=>{
   const errors=await openDemo(page);
+  await page.locator('#usdBtn').click();
+  await expect(page.locator('#usdBtn')).toHaveAttribute('aria-pressed','true');
   await page.locator('[data-page="projects"]').first().click();
   await page.locator('.record-center > summary').click();
   await page.locator('.manual-tools > summary').click();
