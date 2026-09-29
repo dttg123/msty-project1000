@@ -320,6 +320,18 @@ export function automaticTossImportPlan(toss: any ={}): any{
   return {eligible:true,reason:'',candidates,dividendCandidates};
 }
 
+export function refreshTossCandidateConflicts(toss: any ={},existingTrades: any[]=[],existingDividends: any[]=[]): any{
+  const manualTradeIds: any=new Set(existingTrades.filter((row: any)=>row?.source?.provider!=='toss').map((row: any)=>String(row?.id||'')).filter(Boolean));
+  const manualDividendIds: any=new Set(existingDividends.filter((row: any)=>row?.source?.provider!=='toss').map((row: any)=>String(row?.id||'')).filter(Boolean));
+  const refresh: any=(rows: any,ids: any)=>(Array.isArray(rows)?rows:[]).map((row: any)=>{
+    const matches: any=(Array.isArray(row?.manualMatchIds)?row.manualMatchIds:[]).map(String).filter((id: any)=>ids.has(id));
+    return {...row,possibleManualDuplicate:matches.length>0,manualMatchIds:matches};
+  });
+  toss.candidates=refresh(toss.candidates,manualTradeIds);
+  toss.dividendCandidates=refresh(toss.dividendCandidates,manualDividendIds);
+  return toss;
+}
+
 export function automaticTossDividendAdoptions(candidates: any=[]): any{
   const used: any=new Set(),adoptions=[];
   for(const row of Array.isArray(candidates)?candidates:[]){

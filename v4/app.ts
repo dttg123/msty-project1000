@@ -15,7 +15,7 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, refreshTossCandidateConflicts, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
@@ -484,8 +484,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   async function tryAutomaticTossImport(): Promise<any>{
+    refreshTossCandidateConflicts(state.integrations.toss,state.trades,state.dividends);
     const plan: any=automaticTossImportPlan(state.integrations.toss);
-    if(!plan.eligible)return {imported:0,reason:plan.reason};
+    if(!plan.eligible){state.integrations.toss.lastAutoImportReason=plan.reason;return {imported:0,reason:plan.reason};}
     const before: any=clone(state),importedTradeIds=new Set(),importedDividendIds=new Set(),affectedProjectIds=new Set();
     let buys: any=0,sells: any=0,dividends: any=0;
     try{
@@ -514,8 +515,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const imported: any=buys+sells+dividends;if(!imported)throw new Error('empty-import');
       state.integrations.toss.candidates=plan.candidates.filter((row: any)=>!importedTradeIds.has(String(row?.externalId||'')));
       state.integrations.toss.dividendCandidates=plan.dividendCandidates.filter((row: any)=>!importedDividendIds.has(String(row?.externalId||'')));
+      state.integrations.toss.lastAutoImportReason='';
       return {imported,buys,sells,dividends,reason:''};
-    }catch(error: any){state=before;return {imported:0,reason:error?.message||'validation'};}
+    }catch(error: any){state=before;state.integrations.toss.lastAutoImportReason=error?.message||'validation';return {imported:0,reason:error?.message||'validation'};}
   }
 
   async function refreshNativeTossStatus(): Promise<any>{

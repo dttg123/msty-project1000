@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
+import {accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,refreshTossCandidateConflicts,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
 const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
 assert.equal(normalizeTossOrder(row).shares,2);
 for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
@@ -15,6 +15,12 @@ assert.equal(manualConflict.candidates.length,1,'similar manual rows require use
 assert.equal(manualConflict.candidates[0].possibleManualDuplicate,true);
 assert.equal(automaticTossImportPlan(manualConflict).reason,'duplicate');
 assert.deepEqual(manualConflict.candidates[0].manualMatchIds,['manual-1']);
+const restoredStaleConflict={...manualConflict,candidates:manualConflict.candidates.map(item=>({...item}))};
+refreshTossCandidateConflicts(restoredStaleConflict,[],[]);
+assert.equal(automaticTossImportPlan(restoredStaleConflict).eligible,true,'restored candidates must not keep deleted manual-duplicate flags');
+const restoredRealConflict={...manualConflict,candidates:manualConflict.candidates.map(item=>({...item}))};
+refreshTossCandidateConflicts(restoredRealConflict,[{id:'manual-1'}],[]);
+assert.equal(automaticTossImportPlan(restoredRealConflict).reason,'duplicate','a live manual match must remain review-only');
 const ledger1=mergeTossSourceLedger({}, {orders:[row],dividends:[{id:'div-1',symbol:'MSTY',date:'2026-01-08',netAmount:12.34,currency:'USD'}]},'2026-01-09T00:00:00Z');
 assert.equal(ledger1.orders.length,1);
 assert.equal(ledger1.dividends.length,1);
