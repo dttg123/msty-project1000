@@ -59,7 +59,7 @@ public class HotUpdatePlugin extends Plugin {
                 JSObject result = new JSObject();
                 result.put("available", true);result.put("currentVersion", current);result.put("latestVersion", update.version);
                 result.put("updateAvailable", compareVersions(update.version, current) > 0);
-                result.put("nativeUpdateRequired", compareVersions(update.minNativeVersion, BuildConfig.VERSION_NAME) > 0);
+                result.put("nativeUpdateRequired", compareVersions(update.minNativeVersion, binaryVersion()) > 0);
                 result.put("failedVersion", preferences().getString("failedVersion", ""));call.resolve(result);
             } catch (Exception error) {call.reject("업데이트 정보를 확인하지 못했습니다.", "update-check-failed");}
         });
@@ -70,7 +70,7 @@ public class HotUpdatePlugin extends Plugin {
         executor.execute(() -> {
             try {
                 Update update = fetchVerifiedManifest();
-                if (compareVersions(update.minNativeVersion, BuildConfig.VERSION_NAME) > 0) {call.reject("Android 보안 모듈 업데이트가 필요합니다.", "native-update-required");return;}
+                if (compareVersions(update.minNativeVersion, binaryVersion()) > 0) {call.reject("Android 보안 모듈 업데이트가 필요합니다.", "native-update-required");return;}
                 if (compareVersions(update.version, currentVersion()) <= 0) {call.reject("이미 최신 버전입니다.", "already-current");return;}
                 byte[] zip = download(update.bundleUrl, MAX_BUNDLE_BYTES);
                 if (!hex(MessageDigest.getInstance("SHA-256").digest(zip)).equalsIgnoreCase(update.sha256)) throw new Exception("bundle hash mismatch");
@@ -93,7 +93,7 @@ public class HotUpdatePlugin extends Plugin {
     @PluginMethod
     public void confirmReady(PluginCall call) {
         SharedPreferences prefs = preferences();
-        if (prefs.getBoolean("pending", false)) prefs.edit().putString("activeVersion", prefs.getString("pendingVersion", BuildConfig.VERSION_NAME)).putBoolean("pending", false).remove("pendingVersion").remove("failedVersion").apply();
+        if (prefs.getBoolean("pending", false)) prefs.edit().putString("activeVersion", prefs.getString("pendingVersion", binaryVersion())).putBoolean("pending", false).remove("pendingVersion").remove("failedVersion").apply();
         call.resolve();
     }
 
@@ -128,7 +128,8 @@ public class HotUpdatePlugin extends Plugin {
     }
     private void deleteTree(File file) {if(file==null||!file.exists())return;if(file.isDirectory()){File[] children=file.listFiles();if(children!=null)for(File child:children)deleteTree(child);}file.delete();}
     private SharedPreferences preferences(){return getContext().getSharedPreferences(PREFS,Context.MODE_PRIVATE);}
-    private String currentVersion(){String active=preferences().getString("activeVersion","");return !active.isEmpty()&&compareVersions(active,BuildConfig.VERSION_NAME)>0?active:BuildConfig.VERSION_NAME;}
+    private String currentVersion(){String binary=binaryVersion(),active=preferences().getString("activeVersion","");return !active.isEmpty()&&compareVersions(active,binary)>0?active:binary;}
+    private String binaryVersion(){try{String value=getContext().getPackageManager().getPackageInfo(getContext().getPackageName(),0).versionName;return cleanVersion(value).isEmpty()?"0.0.0":cleanVersion(value);}catch(Exception ignored){return "0.0.0";}}
     private static String cleanVersion(String value){String result=value==null?"":value.trim();return result.matches("^[0-9]+\\.[0-9]+\\.[0-9]+$")?result:"";}
     private static int compareVersions(String left,String right){for(int i=0;i<3;i++){int a=part(left,i),b=part(right,i);if(a!=b)return Integer.compare(a,b);}return 0;}
     private static int part(String value,int index){String[] pieces=value.split("\\.");try{return index<pieces.length?Integer.parseInt(pieces[index]):0;}catch(Exception ignored){return 0;}}
