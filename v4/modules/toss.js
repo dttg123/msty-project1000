@@ -357,6 +357,17 @@ export function automaticTossImportPlan(toss = {}) {
         return { eligible: false, reason: 'duplicate', candidates, dividendCandidates };
     return { eligible: true, reason: '', candidates, dividendCandidates };
 }
+export function refreshTossCandidateConflicts(toss = {}, existingTrades = [], existingDividends = []) {
+    const manualTradeIds = new Set(existingTrades.filter((row) => row?.source?.provider !== 'toss').map((row) => String(row?.id || '')).filter(Boolean));
+    const manualDividendIds = new Set(existingDividends.filter((row) => row?.source?.provider !== 'toss').map((row) => String(row?.id || '')).filter(Boolean));
+    const refresh = (rows, ids) => (Array.isArray(rows) ? rows : []).map((row) => {
+        const matches = (Array.isArray(row?.manualMatchIds) ? row.manualMatchIds : []).map(String).filter((id) => ids.has(id));
+        return { ...row, possibleManualDuplicate: matches.length > 0, manualMatchIds: matches };
+    });
+    toss.candidates = refresh(toss.candidates, manualTradeIds);
+    toss.dividendCandidates = refresh(toss.dividendCandidates, manualDividendIds);
+    return toss;
+}
 export function automaticTossDividendAdoptions(candidates = []) {
     const used = new Set(), adoptions = [];
     for (const row of Array.isArray(candidates) ? candidates : []) {
