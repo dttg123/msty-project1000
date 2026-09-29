@@ -23,6 +23,7 @@ assert.match(native,/raw\.githubusercontent\.com\/dttg123\/msty-project1000\/mai
 assert.doesNotMatch(native,/call\.getString\("(?:url|bundleUrl)"/);
 const manifest=JSON.parse(readFileSync(resolve(import.meta.dirname,'../../updates/latest.json'),'utf8'));
 const bundle=readFileSync(resolve(import.meta.dirname,`../../updates/DividendOS-web-${manifest.version}.zip`));
+assert.equal(bundle.subarray(0,4).toString('hex'),'504b0304','published hot-update bundle must be a ZIP archive');
 assert.equal(createHash('sha256').update(bundle).digest('hex'),manifest.sha256,'published hot-update bundle hash must match');
 const publicDer=native.match(/private static final String PUBLIC_KEY = "([^"]+)";/)?.[1];
 assert.ok(publicDer,'native update public key must be embedded');
