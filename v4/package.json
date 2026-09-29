@@ -1,7 +1,7 @@
 {
   "name": "dividend-os",
   "private": true,
-  "version": "0.12.8",
+  "version": "0.12.9",
   "type": "module",
   "engines": {
     "node": "24.x"
@@ -9,7 +9,7 @@
   "scripts": {
     "compile": "node scripts/compile-typescript.mjs",
     "pretest": "npm run compile",
-    "test": "node tests/activity.test.mjs && node tests/domain.test.mjs && node tests/finance.test.mjs && node tests/toss.test.mjs && node tests/toss-client-security.test.mjs && node tests/toss-native.test.mjs && node tests/cloud-contract.test.mjs && node tests/home-metrics.test.mjs && node tests/demo.test.mjs && node tests/views.test.mjs && node tests/interaction-contract.test.mjs && node tests/stress-10y.test.mjs && node tests/lifetime-30y.test.mjs && node tests/static.test.mjs && node tests/replacement.test.mjs && node tests/golden-contract.test.mjs && node tests/tooling-gates.test.mjs && TZ=Asia/Seoul node tests/hardening.test.mjs",
+    "test": "node tests/activity.test.mjs && node tests/domain.test.mjs && node tests/finance.test.mjs && node tests/toss.test.mjs && node tests/toss-client-security.test.mjs && node tests/toss-native.test.mjs && node tests/hot-update.test.mjs && node tests/cloud-contract.test.mjs && node tests/home-metrics.test.mjs && node tests/demo.test.mjs && node tests/views.test.mjs && node tests/interaction-contract.test.mjs && node tests/stress-10y.test.mjs && node tests/lifetime-30y.test.mjs && node tests/static.test.mjs && node tests/replacement.test.mjs && node tests/golden-contract.test.mjs && node tests/tooling-gates.test.mjs && TZ=Asia/Seoul node tests/hardening.test.mjs",
     "typecheck": "tsc -p tsconfig.json && node scripts/compile-typescript.mjs --check",
     "security": "node scripts/security-check.mjs ..",
     "build": "npm run compile && node scripts/build.mjs",

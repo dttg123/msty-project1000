@@ -18,6 +18,7 @@ import { FREQUENCIES } from './modules/income.js';
 import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 import { listAutoBackups, readAutoBackup, rotateAutoBackups } from './modules/backup-history.js';
 import { tickerChange } from './modules/corporate-actions.js';
+import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, installHotUpdate, isHotUpdateAvailable } from './hot-update.js';
 (() => {
     'use strict';
     const bootAt = performance.now();
@@ -74,6 +75,7 @@ import { tickerChange } from './modules/corporate-actions.js';
     let legacyMigrationSource = null;
     let tossSyncRunning = false;
     let nativeTossStatus = { available: isNativeTossAvailable(), configured: false, publicIp: '', lastPublicIp: '', checking: false };
+    let appUpdateStatus = { available: isHotUpdateAvailable(), checking: false, currentVersion: APP_VERSION, latestVersion: APP_VERSION, updateAvailable: false, nativeUpdateRequired: false, error: '' };
     let pendingTossIp = '';
     let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
     let autoBackupStatus = { count: 0, lastAt: '', error: '' }, autoBackupPromise = null;
@@ -181,7 +183,7 @@ import { tickerChange } from './modules/corporate-actions.js';
     }
     const views = createViews({
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
         displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
@@ -927,6 +929,35 @@ import { tickerChange } from './modules/corporate-actions.js';
         }
         return nativeTossStatus;
     }
+    async function refreshAppUpdateStatus() {
+        if (!appUpdateStatus.available)
+            return appUpdateStatus;
+        appUpdateStatus = { ...appUpdateStatus, checking: true, error: '' };
+        try {
+            appUpdateStatus = { ...appUpdateStatus, ...await fetchHotUpdateStatus(), checking: false, error: '' };
+        }
+        catch (error) {
+            appUpdateStatus = { ...appUpdateStatus, checking: false, error: error?.message || '업데이트 확인 실패' };
+        }
+        return appUpdateStatus;
+    }
+    async function applyAppUpdate() {
+        if (appUpdateStatus.checking)
+            return;
+        appUpdateStatus = { ...appUpdateStatus, checking: true, error: '' };
+        renderSettings();
+        showPage('settings');
+        try {
+            await installHotUpdate();
+            toast('업데이트를 적용하고 다시 시작합니다.');
+        }
+        catch (error) {
+            appUpdateStatus = { ...appUpdateStatus, checking: false, error: error?.message || '업데이트 실패' };
+            renderSettings();
+            showPage('settings');
+            toast(appUpdateStatus.error);
+        }
+    }
     function openNativeTossSetup() {
         openModal(`<h3 class="modal-title">토스 최초 설정</h3><p class="modal-desc">토스 WTS에서 발급한 Client ID와 Secret을 한 번만 입력하세요. 이 기기의 Android 보안 저장소에 암호화해 보관하며 화면에 다시 표시하지 않습니다.</p><form id="tossNativeSetupForm" class="form-grid"><div><label class="input-label">Client ID</label><input class="input" name="clientId" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="256"></div><div><label class="input-label">Client Secret</label><input class="input" name="clientSecret" type="password" autocomplete="new-password" required maxlength="512"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">안전하게 저장</button></div></form>`);
         document.getElementById('tossNativeSetupForm').onsubmit = async (event) => {
@@ -1446,6 +1477,14 @@ import { tickerChange } from './modules/corporate-actions.js';
             syncTossReadOnly();
             return;
         }
+        if ('installHotUpdate' in button.dataset) {
+            applyAppUpdate();
+            return;
+        }
+        if ('checkHotUpdate' in button.dataset) {
+            refreshAppUpdateStatus().then(() => { renderSettings(); showPage('settings'); toast(appUpdateStatus.updateAvailable ? '새 업데이트가 있습니다.' : '현재 최신 버전입니다.'); });
+            return;
+        }
         if ('reviewToss' in button.dataset) {
             reviewTossCandidates();
             return;
@@ -1583,6 +1622,7 @@ import { tickerChange } from './modules/corporate-actions.js';
             selectedProjectId = activeProjects()[0]?.id || '';
             applyTheme(state.settings.appearance);
             await storageSet(STATE_KEY, state);
+            await confirmHotUpdateReady().catch(() => { });
             await Promise.all([refreshAutoBackupStatus().catch(() => { }), refreshNativeTossStatus().catch(() => { })]);
             restoreView();
             renderAll();
@@ -1590,6 +1630,7 @@ import { tickerChange } from './modules/corporate-actions.js';
             showPage(currentPage);
             hideSplash();
             setSaveStatus('');
+            refreshAppUpdateStatus().then(() => renderSettings()).catch(() => { });
             if (!storageStatus().durable)
                 setSaveStatus('임시 저장 · 백업 필요', 'cloud-error');
             if (demoMode) {
