@@ -9,7 +9,7 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { accountScopeChanged, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
@@ -835,6 +835,87 @@ import { tickerChange } from './modules/corporate-actions.js';
             return { ...row, appShares, difference: n(row.shares) - appShares };
         });
     }
+    function adoptMatchingTossDividends() {
+        const toss = state.integrations.toss, adoptedIds = new Set();
+        let adopted = 0;
+        for (const adoption of automaticTossDividendAdoptions(toss.dividendCandidates || [])) {
+            const row = adoption.candidate;
+            const dividend = state.dividends.find((item) => item.id === adoption.manualId && item.source?.provider !== 'toss');
+            if (!dividend)
+                continue;
+            dividend.source = { provider: 'toss', externalId: row.externalId, rawExternalId: row.rawExternalId, sourceIdKind: row.sourceIdKind, sourceFingerprint: row.sourceFingerprint, accountId: row.accountId, assetKey: row.assetKey, market: row.market, securityId: row.securityId, importedAt: new Date().toISOString(), adoptedManual: true };
+            adoptedIds.add(String(row.externalId || ''));
+            adopted++;
+        }
+        if (adoptedIds.size)
+            toss.dividendCandidates = (toss.dividendCandidates || []).filter((row) => !adoptedIds.has(String(row?.externalId || '')));
+        return adopted;
+    }
+    async function tryAutomaticTossImport() {
+        const plan = automaticTossImportPlan(state.integrations.toss);
+        if (!plan.eligible)
+            return { imported: 0, reason: plan.reason };
+        const before = clone(state), importedTradeIds = new Set(), importedDividendIds = new Set(), affectedProjectIds = new Set();
+        let buys = 0, sells = 0, dividends = 0;
+        try {
+            for (const row of plan.candidates) {
+                const normalized = normalizeTossOrder(row);
+                if (!normalized || normalized.currency !== 'USD')
+                    throw new Error('invalid-candidate');
+                let project = findProjectForToss(normalized, { attach: true });
+                if (!project) {
+                    project = blankProject(normalized.symbol, normalized.name);
+                    project.colorIndex = state.projects.length % PROJECT_COLORS.length;
+                    state.projects.push(project);
+                }
+                findProjectForToss(normalized, { attach: true });
+                if (state.trades.some((item) => item.source?.provider === 'toss' && [item.source.externalId, item.source.rawExternalId].includes(normalized.externalId)))
+                    continue;
+                const trade = tossCandidateToTrade(normalized, { projectId: project.id, id: uid('t') });
+                if (!trade)
+                    throw new Error('invalid-trade');
+                state.trades.push(trade);
+                importedTradeIds.add(normalized.externalId);
+                affectedProjectIds.add(project.id);
+                trade.type === 'sell' ? sells++ : buys++;
+            }
+            for (const row of plan.dividendCandidates) {
+                let project = findProjectForToss(row, { attach: true });
+                if (!project) {
+                    project = blankProject(row.symbol, row.name);
+                    project.colorIndex = state.projects.length % PROJECT_COLORS.length;
+                    state.projects.push(project);
+                }
+                findProjectForToss(row, { attach: true });
+                if (state.dividends.some((item) => item.source?.provider === 'toss' && [item.source.externalId, item.source.rawExternalId].includes(row.externalId)))
+                    continue;
+                const dividend = tossCandidateToDividend(row, { projectId: project.id, id: uid('d'), sharesAtPayment: sharesAtDate(project.id, row.date) });
+                if (!dividend)
+                    throw new Error('invalid-dividend');
+                state.dividends.push(dividend);
+                importedDividendIds.add(row.externalId);
+                dividends++;
+            }
+            if ([...affectedProjectIds].some((projectId) => computeProject(projectId).oversells.length))
+                throw new Error('oversell');
+            if (validateLedger(state).length)
+                throw new Error('ledger');
+            refreshTossComparisons();
+            const supported = (state.integrations.toss.comparisons || []).filter((row) => row.supported);
+            if (!supported.length || supported.some((row) => Math.abs(n(row.difference)) >= .0001))
+                throw new Error('reconciliation');
+            const imported = buys + sells + dividends;
+            if (!imported)
+                throw new Error('empty-import');
+            state.integrations.toss.candidates = plan.candidates.filter((row) => !importedTradeIds.has(String(row?.externalId || '')));
+            state.integrations.toss.dividendCandidates = plan.dividendCandidates.filter((row) => !importedDividendIds.has(String(row?.externalId || '')));
+            return { imported, buys, sells, dividends, reason: '' };
+        }
+        catch (error) {
+            state = before;
+            return { imported: 0, reason: error?.message || 'validation' };
+        }
+    }
     async function refreshNativeTossStatus() {
         if (!nativeTossStatus.available)
             return nativeTossStatus;
@@ -952,11 +1033,14 @@ import { tickerChange } from './modules/corporate-actions.js';
                 project.priceUpdatedAt = price.timestamp || new Date().toISOString();
             }
         }
+        const beforeAutomaticChanges = clone(state), adoptedDividends = adoptMatchingTossDividends(), automatic = await tryAutomaticTossImport();
+        if (adoptedDividends || automatic.imported)
+            await storageSet(SAFETY_KEY, beforeAutomaticChanges);
         await saveState(true);
         renderAll();
         showPage('settings');
         const found = result.candidates.length + result.dividendCandidates.length, changed = result.correctionCandidates.length + result.dividendCorrectionCandidates.length;
-        toast(result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : found ? `토스 신규 기록 ${found}건을 찾았습니다.` : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+        toast(automatic.imported ? `자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends ? ` · 배당 ${automatic.dividends}건` : ''}${adoptedDividends ? ` · 기존 배당 ${adoptedDividends}건 연결` : ''}` : adoptedDividends ? `기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.` : result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : found ? `자동 대조를 통과하지 못한 ${found}건만 확인이 필요합니다.` : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
     }
     async function runTossImport(loadSnapshot, errorPrefix) {
         if (tossSyncRunning)

@@ -307,6 +307,29 @@ export function tossSyncProgress(previous: any ={},result: any ={}): any{
   return {syncCursor:accountsComplete?(result.syncCursor||previous.syncCursor||{}):(previous.syncCursor||{}),lastSuccessfulAt:complete?String(result.fetchedAt||''):String(previous.lastSuccessfulAt||''),lastPartialAt:complete?String(previous.lastPartialAt||''):String(result.fetchedAt||previous.lastPartialAt||'')};
 }
 
+export function automaticTossImportPlan(toss: any ={}): any{
+  const candidates: any=Array.isArray(toss.candidates)?toss.candidates:[];
+  const dividendCandidates: any=Array.isArray(toss.dividendCandidates)?toss.dividendCandidates:[];
+  const corrections: any=[...(Array.isArray(toss.correctionCandidates)?toss.correctionCandidates:[]),...(Array.isArray(toss.dividendCorrectionCandidates)?toss.dividendCorrectionCandidates:[])];
+  const total: any=candidates.length+dividendCandidates.length;
+  if(toss.syncStatus!=='complete'||Math.max(0,n(toss.failedAccountCount))>0)return {eligible:false,reason:'partial',candidates,dividendCandidates};
+  if(toss.historyTruncated)return {eligible:false,reason:'truncated',candidates,dividendCandidates};
+  if(corrections.length)return {eligible:false,reason:'correction',candidates,dividendCandidates};
+  if(!total)return {eligible:false,reason:'empty',candidates,dividendCandidates};
+  if([...candidates,...dividendCandidates].some((row: any)=>row?.possibleManualDuplicate))return {eligible:false,reason:'duplicate',candidates,dividendCandidates};
+  return {eligible:true,reason:'',candidates,dividendCandidates};
+}
+
+export function automaticTossDividendAdoptions(candidates: any=[]): any{
+  const used: any=new Set(),adoptions=[];
+  for(const row of Array.isArray(candidates)?candidates:[]){
+    const matches: any=Array.isArray(row?.manualMatchIds)?row.manualMatchIds.filter(Boolean):[];
+    if(!row?.possibleManualDuplicate||matches.length!==1||used.has(matches[0]))continue;
+    used.add(matches[0]);adoptions.push({candidate:row,manualId:matches[0]});
+  }
+  return adoptions;
+}
+
 export function disconnectedTossState(toss: any ={}): any{
   return {...toss,status:'not_connected',lastError:'',accountLabel:'',holdings:[],comparisons:[],candidates:[],dividendCandidates:[],correctionCandidates:[],dividendCorrectionCandidates:[],accountResults:[],failedAccountCount:0};
 }

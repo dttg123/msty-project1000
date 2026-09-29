@@ -96,6 +96,11 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Restore stable APK signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: dividend-os-debug-signing-v1
       - name: Install DividendOS tooling
         working-directory: v4
         run: npm ci

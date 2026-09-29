@@ -15,7 +15,7 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { accountScopeChanged, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
@@ -468,6 +468,54 @@ import { tickerChange } from './modules/corporate-actions.js';
     });
   }
 
+  function adoptMatchingTossDividends(): any{
+    const toss: any=state.integrations.toss,adoptedIds=new Set();let adopted: any=0;
+    for(const adoption of automaticTossDividendAdoptions(toss.dividendCandidates||[])){
+      const row: any=adoption.candidate;
+      const dividend: any=state.dividends.find((item: any)=>item.id===adoption.manualId&&item.source?.provider!=='toss');
+      if(!dividend)continue;
+      dividend.source={provider:'toss',externalId:row.externalId,rawExternalId:row.rawExternalId,sourceIdKind:row.sourceIdKind,sourceFingerprint:row.sourceFingerprint,accountId:row.accountId,assetKey:row.assetKey,market:row.market,securityId:row.securityId,importedAt:new Date().toISOString(),adoptedManual:true};
+      adoptedIds.add(String(row.externalId||''));adopted++;
+    }
+    if(adoptedIds.size)toss.dividendCandidates=(toss.dividendCandidates||[]).filter((row: any)=>!adoptedIds.has(String(row?.externalId||'')));
+    return adopted;
+  }
+
+  async function tryAutomaticTossImport(): Promise<any>{
+    const plan: any=automaticTossImportPlan(state.integrations.toss);
+    if(!plan.eligible)return {imported:0,reason:plan.reason};
+    const before: any=clone(state),importedTradeIds=new Set(),importedDividendIds=new Set(),affectedProjectIds=new Set();
+    let buys: any=0,sells: any=0,dividends: any=0;
+    try{
+      for(const row of plan.candidates){
+        const normalized: any=normalizeTossOrder(row);if(!normalized||normalized.currency!=='USD')throw new Error('invalid-candidate');
+        let project: any=findProjectForToss(normalized,{attach:true});
+        if(!project){project=blankProject(normalized.symbol,normalized.name);project.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(project);}
+        findProjectForToss(normalized,{attach:true});
+        if(state.trades.some((item: any)=>item.source?.provider==='toss'&&[item.source.externalId,item.source.rawExternalId].includes(normalized.externalId)))continue;
+        const trade: any=tossCandidateToTrade(normalized,{projectId:project.id,id:uid('t')} as any);if(!trade)throw new Error('invalid-trade');
+        state.trades.push(trade);importedTradeIds.add(normalized.externalId);affectedProjectIds.add(project.id);trade.type==='sell'?sells++:buys++;
+      }
+      for(const row of plan.dividendCandidates){
+        let project: any=findProjectForToss(row,{attach:true});
+        if(!project){project=blankProject(row.symbol,row.name);project.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(project);}
+        findProjectForToss(row,{attach:true});
+        if(state.dividends.some((item: any)=>item.source?.provider==='toss'&&[item.source.externalId,item.source.rawExternalId].includes(row.externalId)))continue;
+        const dividend: any=tossCandidateToDividend(row,{projectId:project.id,id:uid('d'),sharesAtPayment:sharesAtDate(project.id,row.date)} as any);if(!dividend)throw new Error('invalid-dividend');
+        state.dividends.push(dividend);importedDividendIds.add(row.externalId);dividends++;
+      }
+      if([...affectedProjectIds].some((projectId: any)=>computeProject(projectId).oversells.length))throw new Error('oversell');
+      if(validateLedger(state).length)throw new Error('ledger');
+      refreshTossComparisons();
+      const supported: any=(state.integrations.toss.comparisons||[]).filter((row: any)=>row.supported);
+      if(!supported.length||supported.some((row: any)=>Math.abs(n(row.difference))>=.0001))throw new Error('reconciliation');
+      const imported: any=buys+sells+dividends;if(!imported)throw new Error('empty-import');
+      state.integrations.toss.candidates=plan.candidates.filter((row: any)=>!importedTradeIds.has(String(row?.externalId||'')));
+      state.integrations.toss.dividendCandidates=plan.dividendCandidates.filter((row: any)=>!importedDividendIds.has(String(row?.externalId||'')));
+      return {imported,buys,sells,dividends,reason:''};
+    }catch(error: any){state=before;return {imported:0,reason:error?.message||'validation'};}
+  }
+
   async function refreshNativeTossStatus(): Promise<any>{
     if(!nativeTossStatus.available)return nativeTossStatus;
     try{nativeTossStatus={...nativeTossStatus,...await nativeTossCredentialStatus()};}
@@ -531,7 +579,10 @@ import { tickerChange } from './modules/corporate-actions.js';
       const project: any=findProjectForToss(price);
       if(project){project.currentPrice=price.lastPrice;project.priceSource='toss';project.priceUpdatedAt=price.timestamp||new Date().toISOString();}
     }
-    await saveState(true);renderAll();showPage('settings');const found: any=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;toast(result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?`토스 신규 기록 ${found}건을 찾았습니다.`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+    const beforeAutomaticChanges: any=clone(state),adoptedDividends: any=adoptMatchingTossDividends(),automatic: any=await tryAutomaticTossImport();
+    if(adoptedDividends||automatic.imported)await storageSet(SAFETY_KEY,beforeAutomaticChanges);
+    await saveState(true);renderAll();showPage('settings');const found: any=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;
+    toast(automatic.imported?`자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends?` · 배당 ${automatic.dividends}건`:''}${adoptedDividends?` · 기존 배당 ${adoptedDividends}건 연결`:''}`:adoptedDividends?`기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.`:result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?`자동 대조를 통과하지 못한 ${found}건만 확인이 필요합니다.`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
   }
 
   async function runTossImport(loadSnapshot: any,errorPrefix: any): Promise<any> {

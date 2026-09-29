@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {accountScopeChanged,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
+import {accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
 const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
 assert.equal(normalizeTossOrder(row).shares,2);
 for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
@@ -7,10 +7,13 @@ const result=buildTossSync({orders:[row,row,{...row,id:'order-2',currency:'KRW'}
 assert.equal(result.candidates.length,1);
 assert.equal(result.unsupportedCurrencyCount,1);
 assert.equal(result.comparisons[0].difference,1);
+assert.equal(automaticTossImportPlan({...result,syncStatus:'complete'}).eligible,true);
+assert.equal(automaticTossImportPlan({...result,syncStatus:'partial'}).reason,'partial');
 assert.equal(mergeTossCandidates(result.candidates,result.candidates).length,1);
 const manualConflict=buildTossSync({orders:[row]},{existingTrades:[{id:'manual-1',symbol:'MSTY',date:'2026-01-01',type:'buy',shares:2,price:10}]});
 assert.equal(manualConflict.candidates.length,1,'similar manual rows require user review instead of silent suppression');
 assert.equal(manualConflict.candidates[0].possibleManualDuplicate,true);
+assert.equal(automaticTossImportPlan(manualConflict).reason,'duplicate');
 assert.deepEqual(manualConflict.candidates[0].manualMatchIds,['manual-1']);
 const ledger1=mergeTossSourceLedger({}, {orders:[row],dividends:[{id:'div-1',symbol:'MSTY',date:'2026-01-08',netAmount:12.34,currency:'USD'}]},'2026-01-09T00:00:00Z');
 assert.equal(ledger1.orders.length,1);
@@ -32,6 +35,8 @@ assert.equal(dividendSync.dividendCandidates.length,1);
 const manualDividendConflict=buildTossSync(dividendSnapshot,{existingDividends:[{id:'manual-div',symbol:'MSTY',date:'2026-01-08',amountUSD:12.34}]});
 assert.equal(manualDividendConflict.dividendCandidates.length,1,'matching manual dividend must remain an unchecked review candidate');
 assert.equal(manualDividendConflict.dividendCandidates[0].possibleManualDuplicate,true);
+assert.deepEqual(automaticTossDividendAdoptions(manualDividendConflict.dividendCandidates).map(row=>row.manualId),['manual-div']);
+assert.equal(automaticTossDividendAdoptions([{possibleManualDuplicate:true,manualMatchIds:['a','b']}]).length,0,'ambiguous manual dividends must still require review');
 assert.equal(mergeTossDividendCandidates(dividendSync.dividendCandidates,dividendSync.dividendCandidates).length,1);
 const approved=tossCandidateToDividend(dividendSync.dividendCandidates[0],{projectId:'p-msty',id:'d-approved',sharesAtPayment:100});
 assert.equal(approved.source.externalId,'div-1');
@@ -75,6 +80,7 @@ const voided=buildTossSync({orders:[{...officialOrder,status:'CANCELED',executio
 assert.equal(voided.correctionCandidates.length,1,'a later cancellation with zero filled quantity must still alert the user');
 assert.equal(voided.correctionCandidates[0].changeType,'voided');
 assert.equal(mergeTossCorrectionCandidates(voided.correctionCandidates,voided.correctionCandidates).length,1);
+assert.equal(automaticTossImportPlan({...voided,syncStatus:'complete'}).reason,'correction');
 const noSourceId=normalizeTossOrder({symbol:'MSTY',accountId:'acct-1',date:'2026-02-02',side:'BUY',shares:1,price:12,currency:'USD'});
 assert.equal(noSourceId.sourceIdKind,'fingerprint');
 assert.equal(normalizeTossOrder(noSourceId).externalId,noSourceId.externalId,'fallback fingerprints must be stable across normalization');
