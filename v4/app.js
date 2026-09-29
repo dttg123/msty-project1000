@@ -11,6 +11,7 @@ import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { accountScopeChanged, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
+import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -72,6 +73,8 @@ import { tickerChange } from './modules/corporate-actions.js';
     let toastTimer = null;
     let legacyMigrationSource = null;
     let tossSyncRunning = false;
+    let nativeTossStatus = { available: isNativeTossAvailable(), configured: false, publicIp: '', lastPublicIp: '', checking: false };
+    let pendingTossIp = '';
     let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
     let autoBackupStatus = { count: 0, lastAt: '', error: '' }, autoBackupPromise = null;
     const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
@@ -178,7 +181,7 @@ import { tickerChange } from './modules/corporate-actions.js';
     }
     const views = createViews({
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
         displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
@@ -832,6 +835,89 @@ import { tickerChange } from './modules/corporate-actions.js';
             return { ...row, appShares, difference: n(row.shares) - appShares };
         });
     }
+    async function refreshNativeTossStatus() {
+        if (!nativeTossStatus.available)
+            return nativeTossStatus;
+        try {
+            nativeTossStatus = { ...nativeTossStatus, ...await nativeTossCredentialStatus() };
+        }
+        catch (_) {
+            nativeTossStatus = { ...nativeTossStatus, configured: false };
+        }
+        return nativeTossStatus;
+    }
+    function openNativeTossSetup() {
+        openModal(`<h3 class="modal-title">토스 최초 설정</h3><p class="modal-desc">토스 WTS에서 발급한 Client ID와 Secret을 한 번만 입력하세요. 이 기기의 Android 보안 저장소에 암호화해 보관하며 화면에 다시 표시하지 않습니다.</p><form id="tossNativeSetupForm" class="form-grid"><div><label class="input-label">Client ID</label><input class="input" name="clientId" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="256"></div><div><label class="input-label">Client Secret</label><input class="input" name="clientSecret" type="password" autocomplete="new-password" required maxlength="512"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">안전하게 저장</button></div></form>`);
+        document.getElementById('tossNativeSetupForm').onsubmit = async (event) => {
+            event.preventDefault();
+            if (modalSaving)
+                return;
+            modalSaving = true;
+            const form = new FormData(event.currentTarget);
+            try {
+                await saveNativeTossCredentials(form.get('clientId'), form.get('clientSecret'));
+                nativeTossStatus = { ...nativeTossStatus, configured: true };
+                modalDirty = false;
+                closeModal();
+                renderSettings();
+                showPage('settings');
+                toast('토스 키를 이 기기에 저장했습니다.');
+                await syncNativeTossReadOnly();
+            }
+            catch (error) {
+                toast(error?.message || '토스 키를 저장하지 못했습니다.');
+            }
+            finally {
+                modalSaving = false;
+            }
+        };
+    }
+    async function copyTossIp(ip = pendingTossIp || nativeTossStatus.publicIp) {
+        if (!ip) {
+            toast('복사할 IP가 없습니다.');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(ip);
+            toast('현재 IP를 복사했습니다.');
+        }
+        catch (_) {
+            toast(`현재 IP: ${ip}`);
+        }
+    }
+    function openTossIpStep(ip) {
+        pendingTossIp = ip;
+        openModal(`<h3 class="modal-title">토스에 현재 IP 등록</h3><p class="modal-desc">휴대폰 인터넷 주소가 바뀌었습니다. 아래 IP를 복사해 토스 WTS의 설정 → Open API → 허용 IP에 등록하세요.</p><div class="list"><div class="list-row"><div><div class="row-title">현재 IP</div><div class="row-sub">${esc(ip)}</div></div><button class="btn soft small" data-toss-copy-ip>복사</button></div></div><div class="modal-actions"><button class="btn soft" data-open-toss-ip>토스 WTS 열기</button><button class="btn primary" data-confirm-toss-ip>등록 완료 · 갱신</button></div>`);
+    }
+    async function syncNativeTossReadOnly({ ipConfirmed = false } = {}) {
+        if (tossSyncRunning)
+            return;
+        if (!nativeTossStatus.configured) {
+            openNativeTossSetup();
+            return;
+        }
+        nativeTossStatus = { ...nativeTossStatus, checking: true };
+        renderSettings();
+        showPage('settings');
+        let currentIp = '';
+        try {
+            currentIp = await nativePublicIp();
+            nativeTossStatus = { ...nativeTossStatus, publicIp: currentIp, checking: false };
+        }
+        catch (error) {
+            nativeTossStatus = { ...nativeTossStatus, checking: false };
+            renderSettings();
+            toast(error?.message || '현재 IP를 확인하지 못했습니다.');
+            return;
+        }
+        if (!ipConfirmed && nativeTossStatus.lastPublicIp !== currentIp) {
+            renderSettings();
+            openTossIpStep(currentIp);
+            return;
+        }
+        pendingTossIp = '';
+        return runTossImport(async () => { const snapshot = await fetchNativeTossSnapshot({ from: nextTossSyncFrom(state.integrations.toss), symbols: activeProjects().map((project) => project.symbol) }); await markNativeTossPublicIp(currentIp); nativeTossStatus = { ...nativeTossStatus, lastPublicIp: currentIp }; return snapshot; }, 'Toss Android read-only sync error');
+    }
     function tossLinkOf(row) { return { provider: 'toss', assetKey: String(row?.assetKey || ''), market: String(row?.market || ''), securityId: String(row?.securityId || ''), symbol: String(row?.symbol || '').toUpperCase(), currency: String(row?.currency || '').toUpperCase() }; }
     function findProjectForToss(row, { attach = false } = {}) {
         const assetKey = String(row?.assetKey || ''), symbol = String(row?.symbol || '').toUpperCase();
@@ -903,6 +989,8 @@ import { tickerChange } from './modules/corporate-actions.js';
         }
     }
     async function syncTossReadOnly() {
+        if (nativeTossStatus.available)
+            return syncNativeTossReadOnly();
         return runTossImport(() => fetchTossSnapshot({ from: nextTossSyncFrom(state.integrations.toss), symbols: activeProjects().map((project) => project.symbol) }), 'Toss read-only sync error');
     }
     async function importTossSnapshotFile(file) {
@@ -1247,6 +1335,29 @@ import { tickerChange } from './modules/corporate-actions.js';
             document.getElementById('tossImportInput').click();
             return;
         }
+        if ('configureToss' in button.dataset) {
+            openNativeTossSetup();
+            return;
+        }
+        if ('tossCopyIp' in button.dataset) {
+            copyTossIp();
+            return;
+        }
+        if ('openTossIp' in button.dataset) {
+            copyTossIp().finally(() => openTossIpManagement());
+            return;
+        }
+        if ('confirmTossIp' in button.dataset) {
+            const ip = pendingTossIp;
+            modalDirty = false;
+            closeModal();
+            syncNativeTossReadOnly({ ipConfirmed: !!ip });
+            return;
+        }
+        if ('clearTossCredentials' in button.dataset) {
+            confirmAction('저장한 토스 키 삭제', '이 기기에 암호화 저장한 Client ID와 Secret만 삭제합니다. 가져온 장부 기록은 유지됩니다.', async () => { await clearNativeTossCredentials(); nativeTossStatus = { ...nativeTossStatus, configured: false, publicIp: '', lastPublicIp: '' }; renderSettings(); showPage('settings'); toast('이 기기의 토스 키를 삭제했습니다.'); }, '키 삭제');
+            return;
+        }
         if ('syncToss' in button.dataset) {
             syncTossReadOnly();
             return;
@@ -1388,7 +1499,7 @@ import { tickerChange } from './modules/corporate-actions.js';
             selectedProjectId = activeProjects()[0]?.id || '';
             applyTheme(state.settings.appearance);
             await storageSet(STATE_KEY, state);
-            await refreshAutoBackupStatus().catch(() => { });
+            await Promise.all([refreshAutoBackupStatus().catch(() => { }), refreshNativeTossStatus().catch(() => { })]);
             restoreView();
             renderAll();
             bindStaticEvents();

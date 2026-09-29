@@ -20,6 +20,7 @@ let chartMode='month';
 let homeMode='month';
 let homeYearRange='6';
 let portfolioGroup='highYield';
+let nativeTossStatus={available:false,configured:false,publicIp:'',checking:false};
 const portfolio=createPortfolioEngine(()=>state,()=>selectedProjectId);
 const formatters=createFormatters(()=>state);
 const views=createViews({
@@ -34,6 +35,7 @@ const views=createViews({
   getPortfolioGroup:()=>portfolioGroup,
   setPortfolioGroup:value=>{portfolioGroup=value;},
   getCurrentUser:()=> null,
+  getNativeTossStatus:()=>nativeTossStatus,
   isTossBridgeConfigured:()=> false,
   ...portfolio,
   ...formatters
@@ -115,10 +117,20 @@ assert.match(elements.get('page-settings').innerHTML,/연동 시 자동/);
 assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
 assert.match(elements.get('page-settings').innerHTML,/파일 불러오기/);
 assert.match(elements.get('page-settings').innerHTML,/무료 일회성 조회/);
-assert.match(elements.get('page-settings').innerHTML,/Client ID와 Secret은 앱·브라우저·파일에 저장하지 않습니다/);
+assert.match(elements.get('page-settings').innerHTML,/Client ID와 Secret은 브라우저와 파일에 저장하지 않습니다/);
 assert.match(elements.get('page-settings').innerHTML,/data-import-toss/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/서버 연결 대기/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/name="clientSecret"/);
+nativeTossStatus={available:true,configured:true,publicIp:'118.235.25.74',checking:false};
+views.renderSettings();
+assert.match(elements.get('page-settings').innerHTML,/갱신 준비/);
+assert.match(elements.get('page-settings').innerHTML,/토스 키 저장됨/);
+assert.match(elements.get('page-settings').innerHTML,/118\.235\.25\.74/);
+assert.match(elements.get('page-settings').innerHTML,/data-sync-toss/);
+assert.match(elements.get('page-settings').innerHTML,/토스 갱신/);
+assert.match(elements.get('page-settings').innerHTML,/긴급 수동 불러오기/);
+nativeTossStatus={available:false,configured:false,publicIp:'',checking:false};
+views.renderSettings();
 assert.match(elements.get('page-settings').innerHTML,/클라우드 연결/);
 state.integrations.toss={...state.integrations.toss,status:'partial',accountLabel:'토스증권 •1234',accountScopeId:'scope',lastSyncAt:'2026-09-13T10:00:00Z',comparisons:[{symbol:'MSTY',shares:22,appShares:20,difference:2,supported:true}],candidates:[{externalId:'x'}],matchedExistingCount:3,failedAccountCount:1,correctionCandidates:[{externalId:'changed'}]};
 views.renderSettings();

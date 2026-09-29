@@ -80,6 +80,39 @@ jobs:
         working-directory: v4
         run: npm audit --audit-level=high
 
+  android:
+    needs: fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: v4/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install DividendOS tooling
+        working-directory: v4
+        run: npm ci
+      - name: Sync Android project
+        working-directory: v4
+        run: npm run android:sync
+      - name: Build debug APK
+        working-directory: v4/android
+        run: ./gradlew assembleDebug
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DividendOS-Android-debug
+          path: v4/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
   e2e:
     needs: core
     runs-on: ubuntu-latest

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const repoRoot=resolve(root,'..');
-const runtimeFiles=['index.html','styles.css','app.js','auth.js','backup.js','cloud.js','firebase.js','storage.js','sw.js','manifest.webmanifest','runtime-config.js','toss-client.js'];
+const runtimeFiles=['index.html','styles.css','app.js','auth.js','backup.js','cloud.js','firebase.js','storage.js','sw.js','manifest.webmanifest','runtime-config.js','toss-client.js','toss-native.js'];
 for (const file of runtimeFiles) assert.ok(existsSync(resolve(root,file)),`missing ${file}`);
 
 const modules=['constants.js','utils.js','state.js','portfolio.js','format.js','views.js','home-metrics.js','dividend-analytics.js','finance.js','corporate-actions.js','migration.js','toss.js','cloud-contract.js','backup-history.js'];
@@ -13,7 +13,7 @@ for (const file of modules) assert.ok(existsSync(resolve(root,'modules',file)),`
 
 const index=readFileSync(resolve(root,'index.html'),'utf8');
 assert.ok(index.includes('<link rel="stylesheet" href="./styles.css?v=0.12.7-r65" />'));
-assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.7-r67"></script>'));
+assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.7-r68"></script>'));
 assert.ok(index.includes('data-local-mode'));
 assert.ok(!index.includes('<style>'));
 for (const id of ['page-home','page-projects','page-goal','page-settings','modalBackdrop','restoreInput','tossImportInput']) assert.ok(index.includes(`id="${id}"`),`missing DOM id ${id}`);
@@ -37,7 +37,7 @@ for (const file of ['styles.css',...modules.map(name=>`modules/${name}`)]) {
   assert.ok(sw.includes(`./${file}`),`service worker missing ${file}`);
   assert.ok(backup.includes(`'${file}'`),`portable backup missing ${file}`);
 }
-assert.ok(sw.includes("dividend-os-v0.12.7-r67"));
+assert.ok(sw.includes("dividend-os-v0.12.7-r68"));
 assert.ok(sw.includes("cache: \'no-store\'"));
 assert.match(backup,/APP_VERSION(?::\s*any)?\s*=\s*'0\.12\.7'/);
 assert.ok(backup.includes("format:'portable-app-backup-v2'")&&backup.includes("algorithm:'SHA-256'"));
@@ -49,7 +49,7 @@ assert.ok(app.includes("return localHas?'local':'blank'"),'an empty cloud must n
 assert.ok(app.includes('usingSingleDocument')&&app.includes('legacySingleDocument'),'legacy single-document cloud data must migrate through the verified compatibility path');
 assert.ok(app.includes('name="amountUSD" type="number" min="0.01" step="0.01" required'));
 assert.ok(app.includes("form.dataset.submitting==='true'"));
-assert.ok(index.includes('app.js?v=0.12.7-r67'));
+assert.ok(index.includes('app.js?v=0.12.7-r68'));
 assert.ok(app.includes('showSaveFilePicker')&&app.includes('data-backup-save'),'backup must offer a user-selected save destination with a safe fallback');
 assert.ok(app.includes('Number(parsed.schemaVersion)>=DATA_SCHEMA_VERSION'),'legacy V4 backups without an explicit schema version must migrate before strict validation');
 const manifest=JSON.parse(readFileSync(resolve(root,'manifest.webmanifest'),'utf8'));
@@ -63,6 +63,7 @@ assert.ok(app.includes("storage.js"));
 assert.ok(readFileSync(resolve(root,'storage.ts'),'utf8').includes('indexedDB.open(LEGACY_DB_NAME)'));
 assert.ok(readFileSync(resolve(root,'storage.ts'),'utf8').includes("storageMode='localstorage'"));
 assert.ok(app.includes("toss-client.js"));
+assert.ok(app.includes("toss-native.js"));
 assert.ok(app.includes("syncTossReadOnly"));
 assert.ok(app.includes("importTossSnapshotFile"));
 assert.ok(viewsSource.includes('data-import-toss'));
@@ -115,7 +116,7 @@ assert.ok(!viewsSource.includes('name="clientSecret"'));
 assert.ok(!viewsSource.includes('id="tossDirectForm"'));
 assert.ok(!readFileSync(resolve(root,'modules/state.ts'),'utf8').includes('clientSecret'));
 
-const runtimeTypeScript=['app','auth','backup','cloud','firebase','runtime-config','storage','sw','toss-client',...modules.map(name=>`modules/${name.replace(/\.js$/, '')}`)];
+const runtimeTypeScript=['app','auth','backup','cloud','firebase','runtime-config','storage','sw','toss-client','toss-native',...modules.map(name=>`modules/${name.replace(/\.js$/, '')}`)];
 for(const path of runtimeTypeScript){
   const source=readFileSync(resolve(root,`${path}.ts`),'utf8');
   assert.ok(!source.includes('@ts-nocheck'),`${path}.ts must remain strictly checked`);
@@ -124,6 +125,12 @@ for(const path of runtimeTypeScript){
 assert.ok(!existsSync(resolve(repoRoot,'modules')),'root app modules must not be duplicated');
 assert.ok(!existsSync(resolve(repoRoot,'tests')),'root tests must not be duplicated');
 assert.ok(!existsSync(resolve(root,'toss-bridge')),'Toss bridge must have one canonical copy');
+const androidPlugin=readFileSync(resolve(root,'android/app/src/main/java/com/dividendos/app/TossReadOnlyPlugin.java'),'utf8');
+const androidManifest=readFileSync(resolve(root,'android/app/src/main/AndroidManifest.xml'),'utf8');
+assert.ok(androidPlugin.includes('AndroidKeyStore')&&androidPlugin.includes('AES/GCM/NoPadding'),'Android credentials must use Keystore-backed AES-GCM');
+assert.ok(androidPlugin.includes('allowedReadPath')&&!androidPlugin.includes('app.post('),'Android bridge must remain read-only');
+for(const blocked of ['/orders/new','/orders/cancel','/orders/modify'])assert.ok(!androidPlugin.includes(blocked),`Android bridge contains blocked route ${blocked}`);
+assert.ok(androidManifest.includes('android:allowBackup="false"')&&androidManifest.includes('android:usesCleartextTraffic="false"'),'Android backup and cleartext traffic must be disabled');
 const rootIndex=readFileSync(resolve(repoRoot,'index.html'),'utf8');
 assert.ok(rootIndex.includes("const target = './v4/'")&&rootIndex.includes('location.replace(target)'));
 assert.ok(readFileSync(resolve(repoRoot,'sw.js'),'utf8').includes('registration.unregister()'));
