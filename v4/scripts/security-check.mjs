@@ -11,10 +11,13 @@ async function walk(directory){
   for(const entry of await readdir(directory,{withFileTypes:true})){
     if(ignored.has(entry.name))continue;
     const path=resolve(directory,entry.name);
-    if(entry.isDirectory()){await walk(path);continue;}
+    const relativePath=relative(root,path).replaceAll('\\','/');
+    if(entry.isDirectory()){
+      if(relativePath==='v4/android/app/src/main/assets/public')continue;
+      await walk(path);continue;
+    }
     if(!textExtensions.has(extname(entry.name))&&!['.nvmrc','.node-version','.gitignore'].includes(basename(entry.name)))continue;
     const content=await readFile(path,'utf8');
-    const relativePath=relative(root,path).replaceAll('\\','/');
     for(const rule of scanContent(content)){
       // Firebase browser API keys identify the public project; access control
       // belongs to Firebase Auth and Firestore rules. Keep this exception exact.

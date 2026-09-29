@@ -20,6 +20,8 @@ let chartMode='month';
 let homeMode='month';
 let homeYearRange='6';
 let portfolioGroup='highYield';
+let nativeTossStatus={available:false,configured:false,publicIp:'',checking:false};
+let appUpdateStatus={available:true,checking:false,currentVersion:'0.12.9',latestVersion:'0.13.0',updateAvailable:true,nativeUpdateRequired:false,error:''};
 const portfolio=createPortfolioEngine(()=>state,()=>selectedProjectId);
 const formatters=createFormatters(()=>state);
 const views=createViews({
@@ -34,6 +36,8 @@ const views=createViews({
   getPortfolioGroup:()=>portfolioGroup,
   setPortfolioGroup:value=>{portfolioGroup=value;},
   getCurrentUser:()=> null,
+  getNativeTossStatus:()=>nativeTossStatus,
+  getAppUpdateStatus:()=>appUpdateStatus,
   isTossBridgeConfigured:()=> false,
   ...portfolio,
   ...formatters
@@ -106,18 +110,31 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.7/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.9/);
+assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 최신 0\.13\.0/);
+assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
 assert.match(elements.get('page-settings').innerHTML,/id="dividendSettingsForm"/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/<details class="card settings-section" open/);
 assert.match(elements.get('page-settings').innerHTML,/종목별 설정/);
 assert.match(elements.get('page-settings').innerHTML,/연동 시 자동/);
 assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
-assert.match(elements.get('page-settings').innerHTML,/설정 필요/);
-assert.match(elements.get('page-settings').innerHTML,/서버 연결 대기/);
-assert.match(elements.get('page-settings').innerHTML,/브라우저에는 Client ID나 Secret을 입력하지 않습니다/);
-assert.doesNotMatch(elements.get('page-settings').innerHTML,/현재 IP 확인/);
+assert.match(elements.get('page-settings').innerHTML,/파일 불러오기/);
+assert.match(elements.get('page-settings').innerHTML,/무료 일회성 조회/);
+assert.match(elements.get('page-settings').innerHTML,/Client ID와 Secret은 브라우저와 파일에 저장하지 않습니다/);
+assert.match(elements.get('page-settings').innerHTML,/data-import-toss/);
+assert.doesNotMatch(elements.get('page-settings').innerHTML,/서버 연결 대기/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/name="clientSecret"/);
+nativeTossStatus={available:true,configured:true,publicIp:'118.235.25.74',checking:false};
+views.renderSettings();
+assert.match(elements.get('page-settings').innerHTML,/갱신 준비/);
+assert.match(elements.get('page-settings').innerHTML,/토스 키 저장됨/);
+assert.match(elements.get('page-settings').innerHTML,/118\.235\.25\.74/);
+assert.match(elements.get('page-settings').innerHTML,/data-sync-toss/);
+assert.match(elements.get('page-settings').innerHTML,/토스 갱신/);
+assert.match(elements.get('page-settings').innerHTML,/긴급 수동 불러오기/);
+nativeTossStatus={available:false,configured:false,publicIp:'',checking:false};
+views.renderSettings();
 assert.match(elements.get('page-settings').innerHTML,/클라우드 연결/);
 state.integrations.toss={...state.integrations.toss,status:'partial',accountLabel:'토스증권 •1234',accountScopeId:'scope',lastSyncAt:'2026-09-13T10:00:00Z',comparisons:[{symbol:'MSTY',shares:22,appShares:20,difference:2,supported:true}],candidates:[{externalId:'x'}],matchedExistingCount:3,failedAccountCount:1,correctionCandidates:[{externalId:'changed'}]};
 views.renderSettings();
@@ -126,7 +143,7 @@ assert.match(elements.get('page-settings').innerHTML,/일부 성공/);
 assert.match(elements.get('page-settings').innerHTML,/수동 거래와 유사한 토스 체결 3건/);
 assert.match(elements.get('page-settings').innerHTML,/계좌 1개 조회 실패/);
 assert.match(elements.get('page-settings').innerHTML,/토스 원본 변경 1건/);
-assert.match(elements.get('page-settings').innerHTML,/후보 1건 검토/);
+assert.match(elements.get('page-settings').innerHTML,/예외 1건 확인/);
 assert.match(elements.get('page-settings').innerHTML,/data-disconnect-toss/);
 assert.match(elements.get('page-settings').innerHTML,/\+2주/);
 assert.match(elements.get('page-settings').innerHTML,/V3\.2\.1 데이터 이전/);
@@ -152,4 +169,4 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v0.12.7 view QA: PASS');
+console.log('DividendOS v0.12.9 view QA: PASS');

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DividendOS</string>
+    <string name="title_activity_main">DividendOS</string>
+    <string name="package_name">com.dividendos.app</string>
+    <string name="custom_url_scheme">com.dividendos.app</string>
+</resources>

@@ -14,3 +14,13 @@ Official references:
 - https://openapi.tossinvest.com/openapi-docs/latest/openapi.json
 
 Reviewed against the official OpenAPI 1.2.17 document on 2026-09-28. The bridge caches the client-credentials token until shortly before expiry and retries one read once after an upstream 401; it never exposes the token response to the browser.
+
+## Container verification
+
+The production image runs on Node 24 as an unprivileged user and contains only the runtime package files plus `server.mjs`, `security.mjs`, and `toss-contract.mjs`. CI builds the same image, starts it with non-secret QA placeholders, and requires `/health` to report `mode: read-only` before a release can pass.
+
+## Free on-demand import
+
+The default personal workflow does not keep a paid server or fixed IP running. In a temporary shell, run `bash infra/toss-on-demand/export.sh`, register the displayed current IP with Toss, and enter the client credentials only into the hidden terminal prompts. The exporter writes a bounded, minimized JSON snapshot containing no Client ID, Client Secret, access token, or full account number. Import that file into DividendOS, approve the desired records, and delete the temporary JSON afterward.
+
+The persistent bridge remains an optional deployment for environments that already have a secured fixed outbound IP. Never put the Toss Client ID, Client Secret, or access token in `v4`, GitHub Pages, a commit, an issue, an exported snapshot, or chat.

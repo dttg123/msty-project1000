@@ -15,14 +15,16 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { accountScopeChanged, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
-import { fetchTossSnapshot, isTossBridgeConfigured, removeLegacyTossBrowserCredentials } from './toss-client.js';
+import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
+import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
 import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
 import { listAutoBackups, readAutoBackup, rotateAutoBackups } from './modules/backup-history.js';
 import { tickerChange } from './modules/corporate-actions.js';
+import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, installHotUpdate, isHotUpdateAvailable } from './hot-update.js';
 
 (() => {
   'use strict';
@@ -55,6 +57,9 @@ import { tickerChange } from './modules/corporate-actions.js';
   let toastTimer: any = null;
   let legacyMigrationSource: any = null;
   let tossSyncRunning: any = false;
+  let nativeTossStatus: any={available:isNativeTossAvailable(),configured:false,publicIp:'',lastPublicIp:'',checking:false};
+  let appUpdateStatus: any={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:APP_VERSION,updateAvailable:false,nativeUpdateRequired:false,error:''};
+  let pendingTossIp: any='';
   let localOnlySession: any = sessionStorage.getItem('dividend-os-local-mode') === '1';
   let autoBackupStatus: any={count:0,lastAt:'',error:''},autoBackupPromise: any=null;
 
@@ -112,7 +117,7 @@ import { tickerChange } from './modules/corporate-actions.js';
 
   const views: any = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value: any) => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit, getCashflowMonthKey:() => cashflowMonthKey, getPortfolioGroup:() => portfolioGroup, setPortfolioGroup:(value: any) => { portfolioGroup=value; }, getCurrentUser:() => currentUser, getAutoBackupStatus:()=>autoBackupStatus, isTossBridgeConfigured,
+    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value: any) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -465,6 +470,110 @@ import { tickerChange } from './modules/corporate-actions.js';
     });
   }
 
+  function adoptMatchingTossDividends(): any{
+    const toss: any=state.integrations.toss,adoptedIds=new Set();let adopted: any=0;
+    for(const adoption of automaticTossDividendAdoptions(toss.dividendCandidates||[])){
+      const row: any=adoption.candidate;
+      const dividend: any=state.dividends.find((item: any)=>item.id===adoption.manualId&&item.source?.provider!=='toss');
+      if(!dividend)continue;
+      dividend.source={provider:'toss',externalId:row.externalId,rawExternalId:row.rawExternalId,sourceIdKind:row.sourceIdKind,sourceFingerprint:row.sourceFingerprint,accountId:row.accountId,assetKey:row.assetKey,market:row.market,securityId:row.securityId,importedAt:new Date().toISOString(),adoptedManual:true};
+      adoptedIds.add(String(row.externalId||''));adopted++;
+    }
+    if(adoptedIds.size)toss.dividendCandidates=(toss.dividendCandidates||[]).filter((row: any)=>!adoptedIds.has(String(row?.externalId||'')));
+    return adopted;
+  }
+
+  async function tryAutomaticTossImport(): Promise<any>{
+    const plan: any=automaticTossImportPlan(state.integrations.toss);
+    if(!plan.eligible)return {imported:0,reason:plan.reason};
+    const before: any=clone(state),importedTradeIds=new Set(),importedDividendIds=new Set(),affectedProjectIds=new Set();
+    let buys: any=0,sells: any=0,dividends: any=0;
+    try{
+      for(const row of plan.candidates){
+        const normalized: any=normalizeTossOrder(row);if(!normalized||normalized.currency!=='USD')throw new Error('invalid-candidate');
+        let project: any=findProjectForToss(normalized,{attach:true});
+        if(!project){project=blankProject(normalized.symbol,normalized.name);project.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(project);}
+        findProjectForToss(normalized,{attach:true});
+        if(state.trades.some((item: any)=>item.source?.provider==='toss'&&[item.source.externalId,item.source.rawExternalId].includes(normalized.externalId)))continue;
+        const trade: any=tossCandidateToTrade(normalized,{projectId:project.id,id:uid('t')} as any);if(!trade)throw new Error('invalid-trade');
+        state.trades.push(trade);importedTradeIds.add(normalized.externalId);affectedProjectIds.add(project.id);trade.type==='sell'?sells++:buys++;
+      }
+      for(const row of plan.dividendCandidates){
+        let project: any=findProjectForToss(row,{attach:true});
+        if(!project){project=blankProject(row.symbol,row.name);project.colorIndex=state.projects.length%PROJECT_COLORS.length;state.projects.push(project);}
+        findProjectForToss(row,{attach:true});
+        if(state.dividends.some((item: any)=>item.source?.provider==='toss'&&[item.source.externalId,item.source.rawExternalId].includes(row.externalId)))continue;
+        const dividend: any=tossCandidateToDividend(row,{projectId:project.id,id:uid('d'),sharesAtPayment:sharesAtDate(project.id,row.date)} as any);if(!dividend)throw new Error('invalid-dividend');
+        state.dividends.push(dividend);importedDividendIds.add(row.externalId);dividends++;
+      }
+      if([...affectedProjectIds].some((projectId: any)=>computeProject(projectId).oversells.length))throw new Error('oversell');
+      if(validateLedger(state).length)throw new Error('ledger');
+      refreshTossComparisons();
+      const supported: any=(state.integrations.toss.comparisons||[]).filter((row: any)=>row.supported);
+      if(!supported.length||supported.some((row: any)=>Math.abs(n(row.difference))>=.0001))throw new Error('reconciliation');
+      const imported: any=buys+sells+dividends;if(!imported)throw new Error('empty-import');
+      state.integrations.toss.candidates=plan.candidates.filter((row: any)=>!importedTradeIds.has(String(row?.externalId||'')));
+      state.integrations.toss.dividendCandidates=plan.dividendCandidates.filter((row: any)=>!importedDividendIds.has(String(row?.externalId||'')));
+      return {imported,buys,sells,dividends,reason:''};
+    }catch(error: any){state=before;return {imported:0,reason:error?.message||'validation'};}
+  }
+
+  async function refreshNativeTossStatus(): Promise<any>{
+    if(!nativeTossStatus.available)return nativeTossStatus;
+    try{nativeTossStatus={...nativeTossStatus,...await nativeTossCredentialStatus()};}
+    catch (_: any){nativeTossStatus={...nativeTossStatus,configured:false};}
+    return nativeTossStatus;
+  }
+
+  async function refreshAppUpdateStatus(): Promise<any>{
+    if(!appUpdateStatus.available)return appUpdateStatus;
+    appUpdateStatus={...appUpdateStatus,checking:true,error:''};
+    try{appUpdateStatus={...appUpdateStatus,...await fetchHotUpdateStatus(),checking:false,error:''};}
+    catch(error: any){appUpdateStatus={...appUpdateStatus,checking:false,error:error?.message||'업데이트 확인 실패'};}
+    return appUpdateStatus;
+  }
+
+  async function applyAppUpdate(): Promise<any>{
+    if(appUpdateStatus.checking)return;
+    appUpdateStatus={...appUpdateStatus,checking:true,error:''};renderSettings();showPage('settings');
+    try{await installHotUpdate();toast('업데이트를 적용하고 다시 시작합니다.');}
+    catch(error: any){appUpdateStatus={...appUpdateStatus,checking:false,error:error?.message||'업데이트 실패'};renderSettings();showPage('settings');toast(appUpdateStatus.error);}
+  }
+
+  function openNativeTossSetup(): any{
+    openModal(`<h3 class="modal-title">토스 최초 설정</h3><p class="modal-desc">토스 WTS에서 발급한 Client ID와 Secret을 한 번만 입력하세요. 이 기기의 Android 보안 저장소에 암호화해 보관하며 화면에 다시 표시하지 않습니다.</p><form id="tossNativeSetupForm" class="form-grid"><div><label class="input-label">Client ID</label><input class="input" name="clientId" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="256"></div><div><label class="input-label">Client Secret</label><input class="input" name="clientSecret" type="password" autocomplete="new-password" required maxlength="512"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">안전하게 저장</button></div></form>`);
+    document.getElementById('tossNativeSetupForm').onsubmit=async(event: any)=>{
+      event.preventDefault();if(modalSaving)return;modalSaving=true;
+      const form: any=new FormData(event.currentTarget);
+      try{await saveNativeTossCredentials(form.get('clientId'),form.get('clientSecret'));nativeTossStatus={...nativeTossStatus,configured:true};modalDirty=false;closeModal();renderSettings();showPage('settings');toast('토스 키를 이 기기에 저장했습니다.');await syncNativeTossReadOnly();}
+      catch(error: any){toast(error?.message||'토스 키를 저장하지 못했습니다.');}
+      finally{modalSaving=false;}
+    };
+  }
+
+  async function copyTossIp(ip: any=pendingTossIp||nativeTossStatus.publicIp): Promise<any>{
+    if(!ip){toast('복사할 IP가 없습니다.');return;}
+    try{await navigator.clipboard.writeText(ip);toast('현재 IP를 복사했습니다.');}
+    catch (_: any){toast(`현재 IP: ${ip}`);}
+  }
+
+  function openTossIpStep(ip: any): any{
+    pendingTossIp=ip;
+    openModal(`<h3 class="modal-title">토스에 현재 IP 등록</h3><p class="modal-desc">휴대폰 인터넷 주소가 바뀌었습니다. 아래 IP를 복사해 토스 WTS의 설정 → Open API → 허용 IP에 등록하세요.</p><div class="list"><div class="list-row"><div><div class="row-title">현재 IP</div><div class="row-sub">${esc(ip)}</div></div><button class="btn soft small" data-toss-copy-ip>복사</button></div></div><div class="modal-actions"><button class="btn soft" data-open-toss-ip>토스 WTS 열기</button><button class="btn primary" data-confirm-toss-ip>등록 완료 · 갱신</button></div>`);
+  }
+
+  async function syncNativeTossReadOnly({ipConfirmed=false}: any={}): Promise<any>{
+    if(tossSyncRunning)return;
+    if(!nativeTossStatus.configured){openNativeTossSetup();return;}
+    nativeTossStatus={...nativeTossStatus,checking:true};renderSettings();showPage('settings');
+    let currentIp: any='';
+    try{currentIp=await nativePublicIp();nativeTossStatus={...nativeTossStatus,publicIp:currentIp,checking:false};}
+    catch(error: any){nativeTossStatus={...nativeTossStatus,checking:false};renderSettings();toast(error?.message||'현재 IP를 확인하지 못했습니다.');return;}
+    if(!ipConfirmed&&nativeTossStatus.lastPublicIp!==currentIp){renderSettings();openTossIpStep(currentIp);return;}
+    pendingTossIp='';
+    return runTossImport(async()=>{const snapshot: any=await fetchNativeTossSnapshot({from:nextTossSyncFrom(state.integrations.toss),symbols:activeProjects().map((project: any)=>project.symbol)});await markNativeTossPublicIp(currentIp);nativeTossStatus={...nativeTossStatus,lastPublicIp:currentIp};return snapshot;},'Toss Android read-only sync error');
+  }
+
   function tossLinkOf(row: any): any{return {provider:'toss',assetKey:String(row?.assetKey||''),market:String(row?.market||''),securityId:String(row?.securityId||''),symbol:String(row?.symbol||'').toUpperCase(),currency:String(row?.currency||'').toUpperCase()};}
   function findProjectForToss(row: any,{attach=false}: any ={}): any{
     const assetKey: any=String(row?.assetKey||''),symbol=String(row?.symbol||'').toUpperCase();
@@ -474,29 +583,45 @@ import { tickerChange } from './modules/corporate-actions.js';
     return project||null;
   }
 
-  async function syncTossReadOnly(): Promise<any> {
+  async function applyTossSnapshot(snapshot: any,attemptAt: any): Promise<any> {
+    const toss: any=state.integrations.toss;
+    if(accountScopeChanged(toss.accountScopeId,snapshot.accountScopeId))throw Object.assign(new Error('연결된 토스 계좌 구성이 바뀌었습니다. 기존 계정 데이터와 섞지 않도록 가져오기를 중단했습니다.'),{code:'account-scope-changed'});
+    const syncProjects: any=activeProjects(),symbolCounts=new Map();for(const project of syncProjects)symbolCounts.set(project.symbol,(symbolCounts.get(project.symbol)||0)+1);
+    const appPositions: any=syncProjects.flatMap((project: any)=>{const shares: any=computeProject(project).shares,links=(project.brokerLinks||[]).filter((link: any)=>link.provider==='toss').map((link: any)=>({symbol:project.symbol,assetKey:link.assetKey,shares})),symbolFallback=symbolCounts.get(project.symbol)===1?[{symbol:project.symbol,shares}]:[];return [...links,...symbolFallback];});
+    const result: any=buildTossSync(snapshot,{existingTrades:state.trades,existingDividends:state.dividends,appPositions});
+    const progress: any=tossSyncProgress(toss,result);
+    Object.assign(toss,{status:result.syncStatus==='partial'?'partial':'connected',syncStatus:result.syncStatus,lastSyncAt:result.fetchedAt,...progress,lastAttemptAt:attemptAt,lastError:'',accountLabel:result.accountLabel,accountScopeId:result.accountScopeId,accountResults:result.accountResults,failedAccountCount:result.failedAccountCount,capabilities:result.capabilities,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,matchedExistingCount:result.matchedExistingCount,matchedExistingDividendCount:result.matchedExistingDividendCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates),dividendCandidates:mergeTossDividendCandidates(toss.dividendCandidates,result.dividendCandidates),correctionCandidates:mergeTossCorrectionCandidates(toss.correctionCandidates,result.correctionCandidates),dividendCorrectionCandidates:mergeTossDividendCandidates(toss.dividendCorrectionCandidates,result.dividendCorrectionCandidates),syncSequence:n(toss.syncSequence)+1,sourceLedger:mergeTossSourceLedger(toss.sourceLedger,snapshot,result.fetchedAt)});
+    for(const price of result.prices||[]){
+      if(price.currency!=='USD')continue;
+      const project: any=findProjectForToss(price);
+      if(project){project.currentPrice=price.lastPrice;project.priceSource='toss';project.priceUpdatedAt=price.timestamp||new Date().toISOString();}
+    }
+    const beforeAutomaticChanges: any=clone(state),adoptedDividends: any=adoptMatchingTossDividends(),automatic: any=await tryAutomaticTossImport();
+    if(adoptedDividends||automatic.imported)await storageSet(SAFETY_KEY,beforeAutomaticChanges);
+    await saveState(true);renderAll();showPage('settings');const found: any=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;
+    toast(automatic.imported?`자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends?` · 배당 ${automatic.dividends}건`:''}${adoptedDividends?` · 기존 배당 ${adoptedDividends}건 연결`:''}`:adoptedDividends?`기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.`:result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?`자동 대조를 통과하지 못한 ${found}건만 확인이 필요합니다.`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+  }
+
+  async function runTossImport(loadSnapshot: any,errorPrefix: any): Promise<any> {
     if(tossSyncRunning)return;
     tossSyncRunning=true;
-    const toss: any=state.integrations.toss;
-    const beforeSync: any=clone(toss),attemptAt=new Date().toISOString();
-    toss.status='syncing';toss.lastAttemptAt=attemptAt;toss.lastError='';renderSettings();showPage('settings');
+    const beforeSync: any=clone(state.integrations.toss),attemptAt=new Date().toISOString();
+    state.integrations.toss.status='syncing';state.integrations.toss.lastAttemptAt=attemptAt;state.integrations.toss.lastError='';renderSettings();showPage('settings');
     try{
-      const snapshot: any=await fetchTossSnapshot({from:nextTossSyncFrom(toss),symbols:activeProjects().map((project: any)=>project.symbol)});
-      if(accountScopeChanged(toss.accountScopeId,snapshot.accountScopeId))throw Object.assign(new Error('연결된 토스 계좌 구성이 바뀌었습니다. 기존 계정 데이터와 섞지 않도록 동기화를 중단했습니다.'),{code:'account-scope-changed'});
-      const syncProjects: any=activeProjects(),symbolCounts=new Map();for(const project of syncProjects)symbolCounts.set(project.symbol,(symbolCounts.get(project.symbol)||0)+1);
-      const appPositions: any=syncProjects.flatMap((project: any)=>{const shares: any=computeProject(project).shares,links=(project.brokerLinks||[]).filter((link: any)=>link.provider==='toss').map((link: any)=>({symbol:project.symbol,assetKey:link.assetKey,shares})),symbolFallback=symbolCounts.get(project.symbol)===1?[{symbol:project.symbol,shares}]:[];return [...links,...symbolFallback];});
-      const result: any=buildTossSync(snapshot,{existingTrades:state.trades,existingDividends:state.dividends,appPositions});
-      const progress: any=tossSyncProgress(toss,result);
-      Object.assign(toss,{status:result.syncStatus==='partial'?'partial':'connected',syncStatus:result.syncStatus,lastSyncAt:result.fetchedAt,...progress,lastAttemptAt:attemptAt,lastError:'',accountLabel:result.accountLabel,accountScopeId:result.accountScopeId,accountResults:result.accountResults,failedAccountCount:result.failedAccountCount,capabilities:result.capabilities,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,matchedExistingCount:result.matchedExistingCount,matchedExistingDividendCount:result.matchedExistingDividendCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates),dividendCandidates:mergeTossDividendCandidates(toss.dividendCandidates,result.dividendCandidates),correctionCandidates:mergeTossCorrectionCandidates(toss.correctionCandidates,result.correctionCandidates),dividendCorrectionCandidates:mergeTossDividendCandidates(toss.dividendCorrectionCandidates,result.dividendCorrectionCandidates),syncSequence:n(toss.syncSequence)+1,sourceLedger:mergeTossSourceLedger(toss.sourceLedger,snapshot,result.fetchedAt)});
-      for(const price of result.prices||[]){
-        if(price.currency!=='USD')continue;
-        const project: any=findProjectForToss(price);
-        if(project){project.currentPrice=price.lastPrice;project.priceSource='toss';project.priceUpdatedAt=price.timestamp||new Date().toISOString();}
-      }
-      await saveState(true);renderAll();showPage('settings');const found: any=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;toast(result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?`토스 신규 기록 ${found}건을 찾았습니다.`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+      const snapshot: any=await loadSnapshot();
+      await applyTossSnapshot(snapshot,attemptAt);
     }catch (error: any){
-      console.error('Toss read-only sync error',error);state.integrations.toss={...beforeSync,status:'error',lastAttemptAt:attemptAt,lastError:error?.message||'토스 조회에 실패했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
+      console.error(errorPrefix,error);state.integrations.toss={...beforeSync,status:'error',lastAttemptAt:attemptAt,lastError:error?.message||'토스 조회 파일을 처리하지 못했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
     }finally{tossSyncRunning=false;if(state.integrations.toss.status==='syncing')state.integrations.toss.status='not_connected';renderSettings();showPage('settings');}
+  }
+
+  async function syncTossReadOnly(): Promise<any> {
+    if(nativeTossStatus.available)return syncNativeTossReadOnly();
+    return runTossImport(()=>fetchTossSnapshot({from:nextTossSyncFrom(state.integrations.toss),symbols:activeProjects().map((project: any)=>project.symbol)}),'Toss read-only sync error');
+  }
+
+  async function importTossSnapshotFile(file: any): Promise<any> {
+    return runTossImport(()=>readTossSnapshotFile(file),'Toss snapshot import error');
   }
 
   function reviewTossCandidates(): any {
@@ -579,7 +704,15 @@ import { tickerChange } from './modules/corporate-actions.js';
     if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
     if('restoreAuto'in button.dataset){restoreLatestAutoBackup().catch(()=>toast('자동 백업을 읽지 못했습니다.'));return;}
     if('csv'in button.dataset){exportCSV();return;}
+    if('importToss'in button.dataset){document.getElementById('tossImportInput').click();return;}
+    if('configureToss'in button.dataset){openNativeTossSetup();return;}
+    if('tossCopyIp'in button.dataset){copyTossIp();return;}
+    if('openTossIp'in button.dataset){copyTossIp().finally(()=>openTossIpManagement());return;}
+    if('confirmTossIp'in button.dataset){const ip: any=pendingTossIp;modalDirty=false;closeModal();syncNativeTossReadOnly({ipConfirmed:!!ip});return;}
+    if('clearTossCredentials'in button.dataset){confirmAction('저장한 토스 키 삭제','이 기기에 암호화 저장한 Client ID와 Secret만 삭제합니다. 가져온 장부 기록은 유지됩니다.',async()=>{await clearNativeTossCredentials();nativeTossStatus={...nativeTossStatus,configured:false,publicIp:'',lastPublicIp:''};renderSettings();showPage('settings');toast('이 기기의 토스 키를 삭제했습니다.');},'키 삭제');return;}
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
+    if('installHotUpdate'in button.dataset){applyAppUpdate();return;}
+    if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{renderSettings();showPage('settings');toast(appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':'현재 최신 버전입니다.');});return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('clearTossCorrections'in button.dataset){confirmAction('원본 변경 알림 확인','토스 원본 변경 알림만 정리합니다. 기존 원장과 원본 보존 기록은 바꾸지 않습니다.',async()=>{state.integrations.toss.correctionCandidates=[];state.integrations.toss.dividendCorrectionCandidates=[];await saveState(true);renderSettings();showPage('settings');toast('원본 변경 알림을 확인 처리했습니다.');},'확인 처리');return;}
     if('disconnectToss'in button.dataset){confirmAction('토스 화면 연결 해제','가져온 거래·배당과 원본 보존 기록은 유지하고 현재 조회 상태와 미승인 후보만 정리합니다.',async()=>{state.integrations.toss=disconnectedTossState(state.integrations.toss);await saveState(true);renderAll();showPage('settings');toast('토스 조회 화면 연결을 해제했습니다.');},'연결 해제');return;}
@@ -609,6 +742,7 @@ import { tickerChange } from './modules/corporate-actions.js';
     document.getElementById('modalBackdrop').addEventListener('click',(event: any)=>{if(event.target.id==='modalBackdrop')requestCloseModal();});
     document.addEventListener('keydown',(event: any)=>{const card: any=event.target.closest?.('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('restoreInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
+    document.getElementById('tossImportInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
     document.addEventListener('submit',(event: any)=>{const id: any=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form: any=new FormData(event.target);let next: any={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW: any=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
@@ -625,7 +759,9 @@ import { tickerChange } from './modules/corporate-actions.js';
       else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
       else state=blankState();
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
-      await refreshAutoBackupStatus().catch(()=>{});restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
+      await confirmHotUpdateReady().catch(()=>{});
+      await Promise.all([refreshAutoBackupStatus().catch(()=>{}),refreshNativeTossStatus().catch(()=>{})]);restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
+      refreshAppUpdateStatus().then(()=>renderSettings()).catch(()=>{});
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner: any=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));

@@ -44,6 +44,33 @@ export function validateTossSnapshotPayload(value: any): any {
   return value;
 }
 
+const TOSS_SNAPSHOT_MAX_BYTES: any=16*1024*1024;
+const FORBIDDEN_IMPORT_KEYS: any=new Set(['__proto__','prototype','constructor','accesstoken','access_token','clientsecret','client_secret','authorization']);
+
+function assertSafeImportTree(value: any,depth: any=0): any {
+  if(depth>12)throw Object.assign(new Error('토스 조회 파일의 중첩 구조가 너무 깊습니다.'),{code:'invalid-toss-file'});
+  if(!value||typeof value!=='object')return;
+  for(const key of Object.keys(value)){
+    if(FORBIDDEN_IMPORT_KEYS.has(key.toLowerCase()))throw Object.assign(new Error('토스 조회 파일에 허용되지 않은 보안 항목이 있습니다.'),{code:'unsafe-toss-file'});
+    assertSafeImportTree(value[key],depth+1);
+  }
+}
+
+export async function readTossSnapshotFile(file: any): Promise<any> {
+  if(!file||typeof file.text!=='function')throw Object.assign(new Error('토스 JSON 파일을 선택해 주세요.'),{code:'invalid-toss-file'});
+  const name: any=String(file.name||'');
+  if(name&&!/\.json$/i.test(name))throw Object.assign(new Error('토스 조회 JSON 파일만 불러올 수 있습니다.'),{code:'invalid-toss-file'});
+  if(Number(file.size)>TOSS_SNAPSHOT_MAX_BYTES)throw Object.assign(new Error('토스 조회 파일은 16MB 이하여야 합니다.'),{code:'toss-file-too-large'});
+  const text: any=await file.text();
+  if(new TextEncoder().encode(text).byteLength>TOSS_SNAPSHOT_MAX_BYTES)throw Object.assign(new Error('토스 조회 파일은 16MB 이하여야 합니다.'),{code:'toss-file-too-large'});
+  let envelope: any;
+  try{envelope=JSON.parse(text);}catch (_: any){throw Object.assign(new Error('토스 조회 JSON을 읽을 수 없습니다.'),{code:'invalid-toss-file'});}
+  assertSafeImportTree(envelope);
+  if(!object(envelope)||envelope.format!=='dividend-os-toss-snapshot'||envelope.version!==1||!object(envelope.snapshot))throw Object.assign(new Error('DividendOS 토스 조회 파일 형식 또는 버전이 올바르지 않습니다.'),{code:'invalid-toss-file'});
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(String(envelope.exportedAt||''))||Number.isNaN(Date.parse(envelope.exportedAt)))throw Object.assign(new Error('토스 조회 파일의 생성 시각이 올바르지 않습니다.'),{code:'invalid-toss-file'});
+  return validateTossSnapshotPayload(envelope.snapshot);
+}
+
 function publicBridgeError(status: any,body: any ={}): any {
   if(status===401)return Object.assign(new Error('Google 로그인이 만료되었습니다. 다시 로그인해 주세요.'),{code:'invalid-login'});
   if(status===403)return Object.assign(new Error('이 계정은 토스 연동 사용 권한이 없습니다.'),{code:'owner-only'});
