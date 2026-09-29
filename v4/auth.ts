@@ -19,6 +19,9 @@ let loginRunning: any = false;
 let authStarted: any = false;
 
 function useRedirectAuth(): any {
+  // Capacitor serves the app from https://localhost inside its WebView.
+  // Redirect auth opens that URL in Chrome, where no local server exists.
+  if (window?.Capacitor?.isNativePlatform?.()) return false;
   return matchMedia('(max-width: 760px)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
