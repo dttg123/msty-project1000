@@ -18,3 +18,9 @@ Reviewed against the official OpenAPI 1.2.17 document on 2026-09-28. The bridge 
 ## Container verification
 
 The production image runs on Node 24 as an unprivileged user and contains only the runtime package files plus `server.mjs`, `security.mjs`, and `toss-contract.mjs`. CI builds the same image, starts it with non-secret QA placeholders, and requires `/health` to report `mode: read-only` before a release can pass.
+
+## Google Cloud deployment
+
+Open Google Cloud Shell, clone this repository, and run `bash infra/google-cloud/deploy-toss-bridge.sh`. The script requires an explicit cost confirmation, reads the Toss secret without terminal echo, stores both Toss credentials in Secret Manager, and deploys through Direct VPC egress plus a manually reserved Cloud NAT IP. It prints only the Cloud Run URL and the fixed IP that must be allowlisted in the Toss developer console.
+
+After the fixed IP is registered with Toss, set the printed `TOSS_BRIDGE_URL` as the public value in `v4/runtime-config.ts`, rebuild, run the release QA, and deploy GitHub Pages. Never put the Toss Client ID, Client Secret, or access token in `v4`, GitHub Pages, a commit, an issue, or chat.
