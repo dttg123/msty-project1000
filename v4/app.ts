@@ -16,7 +16,7 @@ import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { accountScopeChanged, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
-import { fetchTossSnapshot, isTossBridgeConfigured, removeLegacyTossBrowserCredentials } from './toss-client.js';
+import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -474,29 +474,41 @@ import { tickerChange } from './modules/corporate-actions.js';
     return project||null;
   }
 
-  async function syncTossReadOnly(): Promise<any> {
+  async function applyTossSnapshot(snapshot: any,attemptAt: any): Promise<any> {
+    const toss: any=state.integrations.toss;
+    if(accountScopeChanged(toss.accountScopeId,snapshot.accountScopeId))throw Object.assign(new Error('연결된 토스 계좌 구성이 바뀌었습니다. 기존 계정 데이터와 섞지 않도록 가져오기를 중단했습니다.'),{code:'account-scope-changed'});
+    const syncProjects: any=activeProjects(),symbolCounts=new Map();for(const project of syncProjects)symbolCounts.set(project.symbol,(symbolCounts.get(project.symbol)||0)+1);
+    const appPositions: any=syncProjects.flatMap((project: any)=>{const shares: any=computeProject(project).shares,links=(project.brokerLinks||[]).filter((link: any)=>link.provider==='toss').map((link: any)=>({symbol:project.symbol,assetKey:link.assetKey,shares})),symbolFallback=symbolCounts.get(project.symbol)===1?[{symbol:project.symbol,shares}]:[];return [...links,...symbolFallback];});
+    const result: any=buildTossSync(snapshot,{existingTrades:state.trades,existingDividends:state.dividends,appPositions});
+    const progress: any=tossSyncProgress(toss,result);
+    Object.assign(toss,{status:result.syncStatus==='partial'?'partial':'connected',syncStatus:result.syncStatus,lastSyncAt:result.fetchedAt,...progress,lastAttemptAt:attemptAt,lastError:'',accountLabel:result.accountLabel,accountScopeId:result.accountScopeId,accountResults:result.accountResults,failedAccountCount:result.failedAccountCount,capabilities:result.capabilities,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,matchedExistingCount:result.matchedExistingCount,matchedExistingDividendCount:result.matchedExistingDividendCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates),dividendCandidates:mergeTossDividendCandidates(toss.dividendCandidates,result.dividendCandidates),correctionCandidates:mergeTossCorrectionCandidates(toss.correctionCandidates,result.correctionCandidates),dividendCorrectionCandidates:mergeTossDividendCandidates(toss.dividendCorrectionCandidates,result.dividendCorrectionCandidates),syncSequence:n(toss.syncSequence)+1,sourceLedger:mergeTossSourceLedger(toss.sourceLedger,snapshot,result.fetchedAt)});
+    for(const price of result.prices||[]){
+      if(price.currency!=='USD')continue;
+      const project: any=findProjectForToss(price);
+      if(project){project.currentPrice=price.lastPrice;project.priceSource='toss';project.priceUpdatedAt=price.timestamp||new Date().toISOString();}
+    }
+    await saveState(true);renderAll();showPage('settings');const found: any=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;toast(result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?`토스 신규 기록 ${found}건을 찾았습니다.`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+  }
+
+  async function runTossImport(loadSnapshot: any,errorPrefix: any): Promise<any> {
     if(tossSyncRunning)return;
     tossSyncRunning=true;
-    const toss: any=state.integrations.toss;
-    const beforeSync: any=clone(toss),attemptAt=new Date().toISOString();
-    toss.status='syncing';toss.lastAttemptAt=attemptAt;toss.lastError='';renderSettings();showPage('settings');
+    const beforeSync: any=clone(state.integrations.toss),attemptAt=new Date().toISOString();
+    state.integrations.toss.status='syncing';state.integrations.toss.lastAttemptAt=attemptAt;state.integrations.toss.lastError='';renderSettings();showPage('settings');
     try{
-      const snapshot: any=await fetchTossSnapshot({from:nextTossSyncFrom(toss),symbols:activeProjects().map((project: any)=>project.symbol)});
-      if(accountScopeChanged(toss.accountScopeId,snapshot.accountScopeId))throw Object.assign(new Error('연결된 토스 계좌 구성이 바뀌었습니다. 기존 계정 데이터와 섞지 않도록 동기화를 중단했습니다.'),{code:'account-scope-changed'});
-      const syncProjects: any=activeProjects(),symbolCounts=new Map();for(const project of syncProjects)symbolCounts.set(project.symbol,(symbolCounts.get(project.symbol)||0)+1);
-      const appPositions: any=syncProjects.flatMap((project: any)=>{const shares: any=computeProject(project).shares,links=(project.brokerLinks||[]).filter((link: any)=>link.provider==='toss').map((link: any)=>({symbol:project.symbol,assetKey:link.assetKey,shares})),symbolFallback=symbolCounts.get(project.symbol)===1?[{symbol:project.symbol,shares}]:[];return [...links,...symbolFallback];});
-      const result: any=buildTossSync(snapshot,{existingTrades:state.trades,existingDividends:state.dividends,appPositions});
-      const progress: any=tossSyncProgress(toss,result);
-      Object.assign(toss,{status:result.syncStatus==='partial'?'partial':'connected',syncStatus:result.syncStatus,lastSyncAt:result.fetchedAt,...progress,lastAttemptAt:attemptAt,lastError:'',accountLabel:result.accountLabel,accountScopeId:result.accountScopeId,accountResults:result.accountResults,failedAccountCount:result.failedAccountCount,capabilities:result.capabilities,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,matchedExistingCount:result.matchedExistingCount,matchedExistingDividendCount:result.matchedExistingDividendCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates),dividendCandidates:mergeTossDividendCandidates(toss.dividendCandidates,result.dividendCandidates),correctionCandidates:mergeTossCorrectionCandidates(toss.correctionCandidates,result.correctionCandidates),dividendCorrectionCandidates:mergeTossDividendCandidates(toss.dividendCorrectionCandidates,result.dividendCorrectionCandidates),syncSequence:n(toss.syncSequence)+1,sourceLedger:mergeTossSourceLedger(toss.sourceLedger,snapshot,result.fetchedAt)});
-      for(const price of result.prices||[]){
-        if(price.currency!=='USD')continue;
-        const project: any=findProjectForToss(price);
-        if(project){project.currentPrice=price.lastPrice;project.priceSource='toss';project.priceUpdatedAt=price.timestamp||new Date().toISOString();}
-      }
-      await saveState(true);renderAll();showPage('settings');const found: any=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;toast(result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?`토스 신규 기록 ${found}건을 찾았습니다.`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+      const snapshot: any=await loadSnapshot();
+      await applyTossSnapshot(snapshot,attemptAt);
     }catch (error: any){
-      console.error('Toss read-only sync error',error);state.integrations.toss={...beforeSync,status:'error',lastAttemptAt:attemptAt,lastError:error?.message||'토스 조회에 실패했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
+      console.error(errorPrefix,error);state.integrations.toss={...beforeSync,status:'error',lastAttemptAt:attemptAt,lastError:error?.message||'토스 조회 파일을 처리하지 못했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
     }finally{tossSyncRunning=false;if(state.integrations.toss.status==='syncing')state.integrations.toss.status='not_connected';renderSettings();showPage('settings');}
+  }
+
+  async function syncTossReadOnly(): Promise<any> {
+    return runTossImport(()=>fetchTossSnapshot({from:nextTossSyncFrom(state.integrations.toss),symbols:activeProjects().map((project: any)=>project.symbol)}),'Toss read-only sync error');
+  }
+
+  async function importTossSnapshotFile(file: any): Promise<any> {
+    return runTossImport(()=>readTossSnapshotFile(file),'Toss snapshot import error');
   }
 
   function reviewTossCandidates(): any {
@@ -579,6 +591,7 @@ import { tickerChange } from './modules/corporate-actions.js';
     if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
     if('restoreAuto'in button.dataset){restoreLatestAutoBackup().catch(()=>toast('자동 백업을 읽지 못했습니다.'));return;}
     if('csv'in button.dataset){exportCSV();return;}
+    if('importToss'in button.dataset){document.getElementById('tossImportInput').click();return;}
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('clearTossCorrections'in button.dataset){confirmAction('원본 변경 알림 확인','토스 원본 변경 알림만 정리합니다. 기존 원장과 원본 보존 기록은 바꾸지 않습니다.',async()=>{state.integrations.toss.correctionCandidates=[];state.integrations.toss.dividendCorrectionCandidates=[];await saveState(true);renderSettings();showPage('settings');toast('원본 변경 알림을 확인 처리했습니다.');},'확인 처리');return;}
@@ -609,6 +622,7 @@ import { tickerChange } from './modules/corporate-actions.js';
     document.getElementById('modalBackdrop').addEventListener('click',(event: any)=>{if(event.target.id==='modalBackdrop')requestCloseModal();});
     document.addEventListener('keydown',(event: any)=>{const card: any=event.target.closest?.('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('restoreInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
+    document.getElementById('tossImportInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
     document.addEventListener('submit',(event: any)=>{const id: any=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form: any=new FormData(event.target);let next: any={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW: any=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));

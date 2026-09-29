@@ -10,7 +10,7 @@ import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { accountScopeChanged, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
-import { fetchTossSnapshot, isTossBridgeConfigured, removeLegacyTossBrowserCredentials } from './toss-client.js';
+import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
@@ -845,47 +845,50 @@ import { tickerChange } from './modules/corporate-actions.js';
             project.brokerLinks = [...(project.brokerLinks || []), tossLinkOf(row)];
         return project || null;
     }
-    async function syncTossReadOnly() {
+    async function applyTossSnapshot(snapshot, attemptAt) {
+        const toss = state.integrations.toss;
+        if (accountScopeChanged(toss.accountScopeId, snapshot.accountScopeId))
+            throw Object.assign(new Error('연결된 토스 계좌 구성이 바뀌었습니다. 기존 계정 데이터와 섞지 않도록 가져오기를 중단했습니다.'), { code: 'account-scope-changed' });
+        const syncProjects = activeProjects(), symbolCounts = new Map();
+        for (const project of syncProjects)
+            symbolCounts.set(project.symbol, (symbolCounts.get(project.symbol) || 0) + 1);
+        const appPositions = syncProjects.flatMap((project) => { const shares = computeProject(project).shares, links = (project.brokerLinks || []).filter((link) => link.provider === 'toss').map((link) => ({ symbol: project.symbol, assetKey: link.assetKey, shares })), symbolFallback = symbolCounts.get(project.symbol) === 1 ? [{ symbol: project.symbol, shares }] : []; return [...links, ...symbolFallback]; });
+        const result = buildTossSync(snapshot, { existingTrades: state.trades, existingDividends: state.dividends, appPositions });
+        const progress = tossSyncProgress(toss, result);
+        Object.assign(toss, { status: result.syncStatus === 'partial' ? 'partial' : 'connected', syncStatus: result.syncStatus, lastSyncAt: result.fetchedAt, ...progress, lastAttemptAt: attemptAt, lastError: '', accountLabel: result.accountLabel, accountScopeId: result.accountScopeId, accountResults: result.accountResults, failedAccountCount: result.failedAccountCount, capabilities: result.capabilities, holdings: result.holdings, comparisons: result.comparisons, ignoredCount: result.ignoredCount, matchedExistingCount: result.matchedExistingCount, matchedExistingDividendCount: result.matchedExistingDividendCount, unsupportedCurrencyCount: result.unsupportedCurrencyCount, historyTruncated: result.historyTruncated, candidates: mergeTossCandidates(toss.candidates, result.candidates), dividendCandidates: mergeTossDividendCandidates(toss.dividendCandidates, result.dividendCandidates), correctionCandidates: mergeTossCorrectionCandidates(toss.correctionCandidates, result.correctionCandidates), dividendCorrectionCandidates: mergeTossDividendCandidates(toss.dividendCorrectionCandidates, result.dividendCorrectionCandidates), syncSequence: n(toss.syncSequence) + 1, sourceLedger: mergeTossSourceLedger(toss.sourceLedger, snapshot, result.fetchedAt) });
+        for (const price of result.prices || []) {
+            if (price.currency !== 'USD')
+                continue;
+            const project = findProjectForToss(price);
+            if (project) {
+                project.currentPrice = price.lastPrice;
+                project.priceSource = 'toss';
+                project.priceUpdatedAt = price.timestamp || new Date().toISOString();
+            }
+        }
+        await saveState(true);
+        renderAll();
+        showPage('settings');
+        const found = result.candidates.length + result.dividendCandidates.length, changed = result.correctionCandidates.length + result.dividendCorrectionCandidates.length;
+        toast(result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : found ? `토스 신규 기록 ${found}건을 찾았습니다.` : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+    }
+    async function runTossImport(loadSnapshot, errorPrefix) {
         if (tossSyncRunning)
             return;
         tossSyncRunning = true;
-        const toss = state.integrations.toss;
-        const beforeSync = clone(toss), attemptAt = new Date().toISOString();
-        toss.status = 'syncing';
-        toss.lastAttemptAt = attemptAt;
-        toss.lastError = '';
+        const beforeSync = clone(state.integrations.toss), attemptAt = new Date().toISOString();
+        state.integrations.toss.status = 'syncing';
+        state.integrations.toss.lastAttemptAt = attemptAt;
+        state.integrations.toss.lastError = '';
         renderSettings();
         showPage('settings');
         try {
-            const snapshot = await fetchTossSnapshot({ from: nextTossSyncFrom(toss), symbols: activeProjects().map((project) => project.symbol) });
-            if (accountScopeChanged(toss.accountScopeId, snapshot.accountScopeId))
-                throw Object.assign(new Error('연결된 토스 계좌 구성이 바뀌었습니다. 기존 계정 데이터와 섞지 않도록 동기화를 중단했습니다.'), { code: 'account-scope-changed' });
-            const syncProjects = activeProjects(), symbolCounts = new Map();
-            for (const project of syncProjects)
-                symbolCounts.set(project.symbol, (symbolCounts.get(project.symbol) || 0) + 1);
-            const appPositions = syncProjects.flatMap((project) => { const shares = computeProject(project).shares, links = (project.brokerLinks || []).filter((link) => link.provider === 'toss').map((link) => ({ symbol: project.symbol, assetKey: link.assetKey, shares })), symbolFallback = symbolCounts.get(project.symbol) === 1 ? [{ symbol: project.symbol, shares }] : []; return [...links, ...symbolFallback]; });
-            const result = buildTossSync(snapshot, { existingTrades: state.trades, existingDividends: state.dividends, appPositions });
-            const progress = tossSyncProgress(toss, result);
-            Object.assign(toss, { status: result.syncStatus === 'partial' ? 'partial' : 'connected', syncStatus: result.syncStatus, lastSyncAt: result.fetchedAt, ...progress, lastAttemptAt: attemptAt, lastError: '', accountLabel: result.accountLabel, accountScopeId: result.accountScopeId, accountResults: result.accountResults, failedAccountCount: result.failedAccountCount, capabilities: result.capabilities, holdings: result.holdings, comparisons: result.comparisons, ignoredCount: result.ignoredCount, matchedExistingCount: result.matchedExistingCount, matchedExistingDividendCount: result.matchedExistingDividendCount, unsupportedCurrencyCount: result.unsupportedCurrencyCount, historyTruncated: result.historyTruncated, candidates: mergeTossCandidates(toss.candidates, result.candidates), dividendCandidates: mergeTossDividendCandidates(toss.dividendCandidates, result.dividendCandidates), correctionCandidates: mergeTossCorrectionCandidates(toss.correctionCandidates, result.correctionCandidates), dividendCorrectionCandidates: mergeTossDividendCandidates(toss.dividendCorrectionCandidates, result.dividendCorrectionCandidates), syncSequence: n(toss.syncSequence) + 1, sourceLedger: mergeTossSourceLedger(toss.sourceLedger, snapshot, result.fetchedAt) });
-            for (const price of result.prices || []) {
-                if (price.currency !== 'USD')
-                    continue;
-                const project = findProjectForToss(price);
-                if (project) {
-                    project.currentPrice = price.lastPrice;
-                    project.priceSource = 'toss';
-                    project.priceUpdatedAt = price.timestamp || new Date().toISOString();
-                }
-            }
-            await saveState(true);
-            renderAll();
-            showPage('settings');
-            const found = result.candidates.length + result.dividendCandidates.length, changed = result.correctionCandidates.length + result.dividendCorrectionCandidates.length;
-            toast(result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : found ? `토스 신규 기록 ${found}건을 찾았습니다.` : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+            const snapshot = await loadSnapshot();
+            await applyTossSnapshot(snapshot, attemptAt);
         }
         catch (error) {
-            console.error('Toss read-only sync error', error);
-            state.integrations.toss = { ...beforeSync, status: 'error', lastAttemptAt: attemptAt, lastError: error?.message || '토스 조회에 실패했습니다.' };
+            console.error(errorPrefix, error);
+            state.integrations.toss = { ...beforeSync, status: 'error', lastAttemptAt: attemptAt, lastError: error?.message || '토스 조회 파일을 처리하지 못했습니다.' };
             await saveState();
             renderSettings();
             showPage('settings');
@@ -898,6 +901,12 @@ import { tickerChange } from './modules/corporate-actions.js';
             renderSettings();
             showPage('settings');
         }
+    }
+    async function syncTossReadOnly() {
+        return runTossImport(() => fetchTossSnapshot({ from: nextTossSyncFrom(state.integrations.toss), symbols: activeProjects().map((project) => project.symbol) }), 'Toss read-only sync error');
+    }
+    async function importTossSnapshotFile(file) {
+        return runTossImport(() => readTossSnapshotFile(file), 'Toss snapshot import error');
     }
     function reviewTossCandidates() {
         const candidates = mergeTossCandidates(state.integrations.toss.candidates || [], []), dividendCandidates = mergeTossDividendCandidates(state.integrations.toss.dividendCandidates || [], []);
@@ -1234,6 +1243,10 @@ import { tickerChange } from './modules/corporate-actions.js';
             exportCSV();
             return;
         }
+        if ('importToss' in button.dataset) {
+            document.getElementById('tossImportInput').click();
+            return;
+        }
         if ('syncToss' in button.dataset) {
             syncTossReadOnly();
             return;
@@ -1328,6 +1341,8 @@ import { tickerChange } from './modules/corporate-actions.js';
             requestCloseModal(); });
         document.getElementById('restoreInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)
             restoreFromFile(file); event.target.value = ''; });
+        document.getElementById('tossImportInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)
+            importTossSnapshotFile(file); event.target.value = ''; });
         document.addEventListener('submit', (event) => { const id = event.target.id; if (id !== 'displaySettingsForm' && id !== 'dividendSettingsForm')
             return; event.preventDefault(); const form = new FormData(event.target); let next = {}, message = ''; if (id === 'displaySettingsForm') {
             next = { exchangeRate: Math.max(0, n(form.get('exchangeRate'))), exchangeRateMode: form.get('exchangeRateMode') === 'auto' ? 'auto' : 'manual', appearance: String(form.get('appearance')) };

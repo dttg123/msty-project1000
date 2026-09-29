@@ -19,8 +19,8 @@ Reviewed against the official OpenAPI 1.2.17 document on 2026-09-28. The bridge 
 
 The production image runs on Node 24 as an unprivileged user and contains only the runtime package files plus `server.mjs`, `security.mjs`, and `toss-contract.mjs`. CI builds the same image, starts it with non-secret QA placeholders, and requires `/health` to report `mode: read-only` before a release can pass.
 
-## Google Cloud deployment
+## Free on-demand import
 
-Open Google Cloud Shell, clone this repository, and run `bash infra/google-cloud/deploy-toss-bridge.sh`. The script requires an explicit cost confirmation, reads the Toss secret without terminal echo, stores both Toss credentials in Secret Manager, and deploys through Direct VPC egress plus a manually reserved Cloud NAT IP. It prints only the Cloud Run URL and the fixed IP that must be allowlisted in the Toss developer console.
+The default personal workflow does not keep a paid server or fixed IP running. In a temporary shell, run `bash infra/toss-on-demand/export.sh`, register the displayed current IP with Toss, and enter the client credentials only into the hidden terminal prompts. The exporter writes a bounded, minimized JSON snapshot containing no Client ID, Client Secret, access token, or full account number. Import that file into DividendOS, approve the desired records, and delete the temporary JSON afterward.
 
-After the fixed IP is registered with Toss, set the printed `TOSS_BRIDGE_URL` as the public value in `v4/runtime-config.ts`, rebuild, run the release QA, and deploy GitHub Pages. Never put the Toss Client ID, Client Secret, or access token in `v4`, GitHub Pages, a commit, an issue, or chat.
+The persistent bridge remains an optional deployment for environments that already have a secured fixed outbound IP. Never put the Toss Client ID, Client Secret, or access token in `v4`, GitHub Pages, a commit, an issue, an exported snapshot, or chat.

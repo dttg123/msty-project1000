@@ -113,10 +113,11 @@ assert.doesNotMatch(elements.get('page-settings').innerHTML,/<details class="car
 assert.match(elements.get('page-settings').innerHTML,/종목별 설정/);
 assert.match(elements.get('page-settings').innerHTML,/연동 시 자동/);
 assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
-assert.match(elements.get('page-settings').innerHTML,/설정 필요/);
-assert.match(elements.get('page-settings').innerHTML,/서버 연결 대기/);
-assert.match(elements.get('page-settings').innerHTML,/브라우저에는 Client ID나 Secret을 입력하지 않습니다/);
-assert.doesNotMatch(elements.get('page-settings').innerHTML,/현재 IP 확인/);
+assert.match(elements.get('page-settings').innerHTML,/파일 불러오기/);
+assert.match(elements.get('page-settings').innerHTML,/무료 일회성 조회/);
+assert.match(elements.get('page-settings').innerHTML,/Client ID와 Secret은 앱·브라우저·파일에 저장하지 않습니다/);
+assert.match(elements.get('page-settings').innerHTML,/data-import-toss/);
+assert.doesNotMatch(elements.get('page-settings').innerHTML,/서버 연결 대기/);
 assert.doesNotMatch(elements.get('page-settings').innerHTML,/name="clientSecret"/);
 assert.match(elements.get('page-settings').innerHTML,/클라우드 연결/);
 state.integrations.toss={...state.integrations.toss,status:'partial',accountLabel:'토스증권 •1234',accountScopeId:'scope',lastSyncAt:'2026-09-13T10:00:00Z',comparisons:[{symbol:'MSTY',shares:22,appShares:20,difference:2,supported:true}],candidates:[{externalId:'x'}],matchedExistingCount:3,failedAccountCount:1,correctionCandidates:[{externalId:'changed'}]};

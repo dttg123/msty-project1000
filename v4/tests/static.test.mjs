@@ -13,10 +13,10 @@ for (const file of modules) assert.ok(existsSync(resolve(root,'modules',file)),`
 
 const index=readFileSync(resolve(root,'index.html'),'utf8');
 assert.ok(index.includes('<link rel="stylesheet" href="./styles.css?v=0.12.7-r65" />'));
-assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.7-r66"></script>'));
+assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.7-r67"></script>'));
 assert.ok(index.includes('data-local-mode'));
 assert.ok(!index.includes('<style>'));
-for (const id of ['page-home','page-projects','page-goal','page-settings','modalBackdrop','restoreInput']) assert.ok(index.includes(`id="${id}"`),`missing DOM id ${id}`);
+for (const id of ['page-home','page-projects','page-goal','page-settings','modalBackdrop','restoreInput','tossImportInput']) assert.ok(index.includes(`id="${id}"`),`missing DOM id ${id}`);
 assert.equal((index.match(/class="nav-btn/g)||[]).length,3,'bottom navigation must have exactly three tabs');
 assert.ok(index.includes('<span>홈</span>')&&index.includes('<span>포트폴리오</span>')&&index.includes('<span>목표</span>'));
 assert.ok(!index.includes('<span>배당</span>'),'dividend detail must live in home and portfolio');
@@ -37,7 +37,7 @@ for (const file of ['styles.css',...modules.map(name=>`modules/${name}`)]) {
   assert.ok(sw.includes(`./${file}`),`service worker missing ${file}`);
   assert.ok(backup.includes(`'${file}'`),`portable backup missing ${file}`);
 }
-assert.ok(sw.includes("dividend-os-v0.12.7-r66"));
+assert.ok(sw.includes("dividend-os-v0.12.7-r67"));
 assert.ok(sw.includes("cache: \'no-store\'"));
 assert.match(backup,/APP_VERSION(?::\s*any)?\s*=\s*'0\.12\.7'/);
 assert.ok(backup.includes("format:'portable-app-backup-v2'")&&backup.includes("algorithm:'SHA-256'"));
@@ -49,7 +49,7 @@ assert.ok(app.includes("return localHas?'local':'blank'"),'an empty cloud must n
 assert.ok(app.includes('usingSingleDocument')&&app.includes('legacySingleDocument'),'legacy single-document cloud data must migrate through the verified compatibility path');
 assert.ok(app.includes('name="amountUSD" type="number" min="0.01" step="0.01" required'));
 assert.ok(app.includes("form.dataset.submitting==='true'"));
-assert.ok(index.includes('app.js?v=0.12.7-r66'));
+assert.ok(index.includes('app.js?v=0.12.7-r67'));
 assert.ok(app.includes('showSaveFilePicker')&&app.includes('data-backup-save'),'backup must offer a user-selected save destination with a safe fallback');
 assert.ok(app.includes('Number(parsed.schemaVersion)>=DATA_SCHEMA_VERSION'),'legacy V4 backups without an explicit schema version must migrate before strict validation');
 const manifest=JSON.parse(readFileSync(resolve(root,'manifest.webmanifest'),'utf8'));
@@ -64,6 +64,8 @@ assert.ok(readFileSync(resolve(root,'storage.ts'),'utf8').includes('indexedDB.op
 assert.ok(readFileSync(resolve(root,'storage.ts'),'utf8').includes("storageMode='localstorage'"));
 assert.ok(app.includes("toss-client.js"));
 assert.ok(app.includes("syncTossReadOnly"));
+assert.ok(app.includes("importTossSnapshotFile"));
+assert.ok(viewsSource.includes('data-import-toss'));
 assert.ok(!readFileSync(resolve(root,'runtime-config.ts'),'utf8').includes('client_secret'));
 const tossBridge=readFileSync(resolve(root,'../toss-bridge/server.mjs'),'utf8');
 const tossBridgeSecurity=readFileSync(resolve(root,'../toss-bridge/security.mjs'),'utf8');
