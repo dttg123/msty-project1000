@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash,createPublicKey,verify} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 
@@ -20,4 +21,11 @@ assert.match(native,/MAX_EXPANDED_BYTES/);
 assert.match(native,/rollbackPendingUpdate/);
 assert.match(native,/raw\.githubusercontent\.com\/dttg123\/msty-project1000\/main\/updates/);
 assert.doesNotMatch(native,/call\.getString\("(?:url|bundleUrl)"/);
+const manifest=JSON.parse(readFileSync(resolve(import.meta.dirname,'../../updates/latest.json'),'utf8'));
+const bundle=readFileSync(resolve(import.meta.dirname,`../../updates/DividendOS-web-${manifest.version}.zip`));
+assert.equal(createHash('sha256').update(bundle).digest('hex'),manifest.sha256,'published hot-update bundle hash must match');
+const publicDer=native.match(/private static final String PUBLIC_KEY = "([^"]+)";/)?.[1];
+assert.ok(publicDer,'native update public key must be embedded');
+const publicKey=createPublicKey({key:Buffer.from(publicDer,'base64'),format:'der',type:'spki'});
+assert.equal(verify('sha256',Buffer.from(`${manifest.version}\n${manifest.sha256}\n${manifest.minNativeVersion}`),publicKey,Buffer.from(manifest.signature,'base64')),true,'published manifest signature must match the exact native verification payload');
 console.log('Signed in-app hot update contract PASS');
