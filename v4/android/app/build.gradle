@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+def dividendOsKeystorePath = System.getenv('DIVIDENDOS_KEYSTORE_PATH')
+def dividendOsKeystorePassword = System.getenv('DIVIDENDOS_KEYSTORE_PASSWORD')
+def dividendOsKeyAlias = System.getenv('DIVIDENDOS_KEY_ALIAS')
+def dividendOsKeyPassword = System.getenv('DIVIDENDOS_KEY_PASSWORD')
+
 android {
     namespace = "com.dividendos.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +21,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (dividendOsKeystorePath) {
+                storeFile file(dividendOsKeystorePath)
+                storePassword dividendOsKeystorePassword
+                keyAlias dividendOsKeyAlias
+                keyPassword dividendOsKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -53,5 +69,5 @@ try {
         apply plugin: 'com.google.gms.google-services'
     }
 } catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifictions won't work")
 }
