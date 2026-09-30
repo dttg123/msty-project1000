@@ -146,7 +146,7 @@ jobs:
           test -x "$APKSIGNER"
           
           CERT_LINE="$("$APKSIGNER" verify --verbose --print-certs "$APK" | grep -im1 'certificate SHA-256 digest')"
-          ACTUAL_CERT_SHA256="$(printf '%s' "${CERT_LINE#*:}" | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]')"
+          ACTUAL_CERT_SHA256="$(printf '%s\n' "$CERT_LINE" | awk '{print $NF}' | tr -cd '[:xdigit:]' | tr '[:lower:]' '[:upper:]')"
           printf 'APK signing certificate SHA-256: %s\n' "$ACTUAL_CERT_SHA256"
           test -n "$ACTUAL_CERT_SHA256"
           test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
