@@ -12,8 +12,8 @@ const modules=['constants.js','utils.js','state.js','portfolio.js','format.js','
 for (const file of modules) assert.ok(existsSync(resolve(root,'modules',file)),`missing modules/${file}`);
 
 const index=readFileSync(resolve(root,'index.html'),'utf8');
-assert.ok(index.includes('<link rel="stylesheet" href="./styles.css?v=0.12.11-r65" />'));
-assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.11-r72"></script>'));
+assert.ok(index.includes('<link rel="stylesheet" href="./styles.css?v=0.12.12-r65" />'));
+assert.ok(index.includes('<script type="module" src="./app.js?v=0.12.12-r73"></script>'));
 assert.ok(index.includes('data-local-mode'));
 assert.ok(!index.includes('<style>'));
 for (const id of ['page-home','page-projects','page-goal','page-settings','modalBackdrop','restoreInput','tossImportInput']) assert.ok(index.includes(`id="${id}"`),`missing DOM id ${id}`);
@@ -33,14 +33,15 @@ for (const path of imports) assert.ok(existsSync(resolve(root,path.split('?')[0]
 const sw=readFileSync(resolve(root,'sw.ts'),'utf8');
 const backup=readFileSync(resolve(root,'backup.ts'),'utf8');
 const auth=readFileSync(resolve(root,'auth.ts'),'utf8');
-assert.match(auth,/Capacitor\?\.isNativePlatform\?\.\(\)/,'native login must not redirect Chrome to localhost');
+assert.match(auth,/NativeGoogleAuth/,'native login must use the Android credential bridge');
+assert.match(auth,/signInWithCredential/,'native Google ID token must be exchanged for a Firebase credential');
 for (const file of ['styles.css',...modules.map(name=>`modules/${name}`)]) {
   assert.ok(sw.includes(`./${file}`),`service worker missing ${file}`);
   assert.ok(backup.includes(`'${file}'`),`portable backup missing ${file}`);
 }
-assert.ok(sw.includes("dividend-os-v0.12.11-r72"));
+assert.ok(sw.includes("dividend-os-v0.12.12-r73"));
 assert.ok(sw.includes("cache: \'no-store\'"));
-assert.match(backup,/APP_VERSION(?::\s*any)?\s*=\s*'0\.12\.11'/);
+assert.match(backup,/APP_VERSION(?::\s*any)?\s*=\s*'0\.12\.12'/);
 assert.ok(backup.includes("format:'portable-app-backup-v2'")&&backup.includes("algorithm:'SHA-256'"));
 assert.ok(readFileSync(resolve(root,'cloud.ts'),'utf8').includes('runTransaction'));
 assert.ok(readFileSync(resolve(root,'cloud.ts'),'utf8').includes('assertCloudRevision'));
@@ -50,7 +51,7 @@ assert.ok(app.includes("return localHas?'local':'blank'"),'an empty cloud must n
 assert.ok(app.includes('usingSingleDocument')&&app.includes('legacySingleDocument'),'legacy single-document cloud data must migrate through the verified compatibility path');
 assert.ok(app.includes('name="amountUSD" type="number" min="0.01" step="0.01" required'));
 assert.ok(app.includes("form.dataset.submitting==='true'"));
-assert.ok(index.includes('app.js?v=0.12.11-r72'));
+assert.ok(index.includes('app.js?v=0.12.12-r73'));
 assert.ok(app.includes('showSaveFilePicker')&&app.includes('data-backup-save'),'backup must offer a user-selected save destination with a safe fallback');
 assert.ok(app.includes('Number(parsed.schemaVersion)>=DATA_SCHEMA_VERSION'),'legacy V4 backups without an explicit schema version must migrate before strict validation');
 const manifest=JSON.parse(readFileSync(resolve(root,'manifest.webmanifest'),'utf8'));
@@ -127,12 +128,21 @@ assert.ok(!existsSync(resolve(repoRoot,'modules')),'root app modules must not be
 assert.ok(!existsSync(resolve(repoRoot,'tests')),'root tests must not be duplicated');
 assert.ok(!existsSync(resolve(root,'toss-bridge')),'Toss bridge must have one canonical copy');
 const androidPlugin=readFileSync(resolve(root,'android/app/src/main/java/com/dividendos/app/TossReadOnlyPlugin.java'),'utf8');
+const nativeGoogleAuth=readFileSync(resolve(root,'android/app/src/main/java/com/dividendos/app/NativeGoogleAuthPlugin.java'),'utf8');
+const mainActivity=readFileSync(resolve(root,'android/app/src/main/java/com/dividendos/app/MainActivity.java'),'utf8');
+const androidBuild=readFileSync(resolve(root,'android/app/build.gradle'),'utf8');
 const androidManifest=readFileSync(resolve(root,'android/app/src/main/AndroidManifest.xml'),'utf8');
 assert.ok(androidPlugin.includes('AndroidKeyStore')&&androidPlugin.includes('AES/GCM/NoPadding'),'Android credentials must use Keystore-backed AES-GCM');
 assert.ok(androidPlugin.includes('allowedReadPath')&&!androidPlugin.includes('app.post('),'Android bridge must remain read-only');
 for(const blocked of ['/orders/new','/orders/cancel','/orders/modify'])assert.ok(!androidPlugin.includes(blocked),`Android bridge contains blocked route ${blocked}`);
+assert.ok(nativeGoogleAuth.includes('CredentialManager')&&nativeGoogleAuth.includes('GetGoogleIdOption'),'Android Google login must use Credential Manager');
+assert.ok(nativeGoogleAuth.includes('setFilterByAuthorizedAccounts(false)'),'native login must allow first-time device accounts');
+assert.ok(nativeGoogleAuth.includes('getIdToken()')&&nativeGoogleAuth.includes('clearCredentialStateAsync'),'native Google token and sign-out lifecycle must be implemented');
+assert.ok(mainActivity.includes('registerPlugin(NativeGoogleAuthPlugin.class)'),'native Google auth plugin must be registered');
+assert.ok(androidBuild.includes('androidx.credentials:credentials:1.3.0')&&androidBuild.includes('googleid:1.1.1'),'approved Credential Manager dependencies must be pinned');
+assert.ok(androidBuild.includes('versionCode 4')&&androidBuild.includes('versionName "0.12.12"'),'native authentication release must increment Android version');
 assert.ok(androidManifest.includes('android:allowBackup="false"')&&androidManifest.includes('android:usesCleartextTraffic="false"'),'Android backup and cleartext traffic must be disabled');
 const rootIndex=readFileSync(resolve(repoRoot,'index.html'),'utf8');
 assert.ok(rootIndex.includes("const target = './v4/'")&&rootIndex.includes('location.replace(target)'));
 assert.ok(readFileSync(resolve(repoRoot,'sw.js'),'utf8').includes('registration.unregister()'));
-console.log('DividendOS v0.12.11 static QA: PASS');
+console.log('DividendOS v0.12.12 static QA: PASS');

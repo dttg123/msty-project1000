@@ -9,6 +9,7 @@ declare module 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js' {
   export const GoogleAuthProvider: any;
   export const onAuthStateChanged: any;
   export const setPersistence: any;
+  export const signInWithCredential: any;
   export const signInWithPopup: any;
   export const signInWithRedirect: any;
   export const signOut: any;

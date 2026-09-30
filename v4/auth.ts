@@ -9,11 +9,12 @@ import {
   getRedirectResult,
   onAuthStateChanged,
   setPersistence,
+  signInWithCredential,
   signInWithPopup,
   signInWithRedirect,
   signOut
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { auth, googleProvider } from './firebase.js';
+import { auth, googleProvider, GoogleAuthProvider } from './firebase.js';
 
 let loginRunning: any = false;
 let authStarted: any = false;
@@ -25,6 +26,11 @@ function useRedirectAuth(): any {
   return matchMedia('(max-width: 760px)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
+function nativeGoogleAuth(): any {
+  if (!window?.Capacitor?.isNativePlatform?.()) return null;
+  return window?.Capacitor?.Plugins?.NativeGoogleAuth || null;
+}
+
 function friendlyAuthError(error: any): any {
   switch (error?.code) {
     case 'auth/unauthorized-domain': return 'Firebase 승인 도메인을 확인해 주세요.';
@@ -32,6 +38,9 @@ function friendlyAuthError(error: any): any {
     case 'auth/popup-blocked': return '로그인 화면을 열지 못했습니다. 다시 눌러 주세요.';
     case 'auth/popup-closed-by-user': return '로그인 창이 닫혔습니다. 다시 눌러 주세요.';
     case 'auth/cancelled-popup-request': return '이미 로그인 창이 열려 있습니다.';
+    case 'native-auth-cancelled': return 'Google 로그인이 취소되었습니다.';
+    case 'native-auth-unavailable': return '기기의 Google 로그인을 사용할 수 없습니다.';
+    case 'native-auth-config': return 'Google 로그인 설정을 확인해 주세요.';
     default: return '로그인에 실패했습니다. 다시 눌러 주세요.';
   }
 }
@@ -45,7 +54,7 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
 
   try {
     await setPersistence(auth, browserLocalPersistence);
-    await getRedirectResult(auth);
+    if (!nativeGoogleAuth()) await getRedirectResult(auth);
   } catch (error: any) {
     console.error('Auth startup error', error);
     const message: any=friendlyAuthError(error);
@@ -59,7 +68,12 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
     button.disabled = true;
     if (status) status.textContent = 'Google 로그인 창을 여는 중…';
     try {
-      if(useRedirectAuth())await signInWithRedirect(auth,googleProvider);
+      const native: any=nativeGoogleAuth();
+      if(native){
+        const result: any=await native.signIn();
+        if(!result?.idToken)throw {code:'native-auth-unavailable'};
+        await signInWithCredential(auth,GoogleAuthProvider.credential(result.idToken));
+      }else if(useRedirectAuth())await signInWithRedirect(auth,googleProvider);
       else await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
       console.error('Google login error', error);
@@ -88,8 +102,10 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
   });
 }
 
-export function logoutGoogle(): any {
-  return signOut(auth);
+export async function logoutGoogle(): Promise<any> {
+  await signOut(auth);
+  const native: any=nativeGoogleAuth();
+  if(native?.signOut)await native.signOut().catch(()=>{});
 }
 
 export function getGoogleIdToken(forceRefresh: any =false): any {

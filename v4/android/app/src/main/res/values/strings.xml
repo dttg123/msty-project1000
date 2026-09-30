@@ -4,4 +4,5 @@
     <string name="title_activity_main">DividendOS</string>
     <string name="package_name">com.dividendos.app</string>
     <string name="custom_url_scheme">com.dividendos.app</string>
+    <string name="default_web_client_id" translatable="false">836173148792-jvanf715ln9q5bko8s71b08ep4fbkbt4.apps.googleusercontent.com</string>
 </resources>

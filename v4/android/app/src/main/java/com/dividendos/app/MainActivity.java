@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         HotUpdatePlugin.rollbackPendingUpdate(this);
         registerPlugin(TossReadOnlyPlugin.class);
         registerPlugin(HotUpdatePlugin.class);
+        registerPlugin(NativeGoogleAuthPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
