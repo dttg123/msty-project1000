@@ -34,6 +34,12 @@ async function enterTrade(page,date,shares,price){
   await expect(page.locator('#tradeForm')).toBeHidden();
 }
 
+async function openAdvancedSettings(page){
+  await page.locator('[data-page="settings"]').first().click();
+  const section=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});
+  if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
+}
+
 test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP 복원·되돌리기를 대조한다',async({page},testInfo)=>{
   test.skip(process.env.QA_LIFETIME_UI!=='1'||testInfo.project.name!=='mobile-chromium','Explicit mobile release QA only');
   test.setTimeout(15*60_000);
@@ -70,6 +76,9 @@ test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP �
   const before=await ledger(page);
   expect(before.trades.reduce((sum,row)=>sum+row.shares,0)).toBe(450);
   expect(before.dividends.reduce((sum,row)=>sum+Math.round(row.amountUSD*100),0)).toBe(64980);
+  await page.locator('#usdBtn').click();
+  await expect(page.locator('.holding-row strong').first()).toHaveText('450주');
+  await expect(page.locator('.cashflow-secondary strong').first()).toHaveText('$649.80');
   await page.reload();
   await expect(page.locator('#splashScreen')).toBeHidden();
   const restarted=await ledger(page);
@@ -80,6 +89,7 @@ test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP �
     await expect(page.locator(`#page-${section}`)).toBeVisible();
     expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   }
+  await openAdvancedSettings(page);
   await page.locator('[data-backup]').click();
   await expect(page.locator('.modal-title')).toHaveText('백업 준비 완료');
   const downloadPromise=page.waitForEvent('download');
@@ -96,7 +106,7 @@ test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP �
   const restored=await ledger(page);
   expect(restored.trades).toEqual(before.trades);
   expect(restored.dividends).toEqual(before.dividends);
-  await page.locator('[data-page="settings"]').first().click();
+  await openAdvancedSettings(page);
   await page.locator('[data-restore-safety]').click();
   await page.locator('#modalConfirm').click();
   await expect(page.locator('#modalConfirm')).toBeHidden();
@@ -107,7 +117,7 @@ test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP �
   await testInfo.attach('lifetime-ui-evidence',{
     body:JSON.stringify({scope:'localhost isolated browser, synthetic data only',years:30,individualSaves:720,tradeCount:360,dividendCount:360,shares:450,dividendCents:64980,restart:true,zipRestore:true,safetyRollback:true,pageErrors:errors},null,2),contentType:'application/json'
   });
-  await page.locator('[data-page="settings"]').first().click();
+  await openAdvancedSettings(page);
   await page.locator('[data-reset]').click();
   await page.locator('#modalConfirm').click();
   await expect(page.locator('#modalConfirm')).toBeHidden();
