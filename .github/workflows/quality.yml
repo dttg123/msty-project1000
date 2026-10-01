@@ -1,6 +1,12 @@
 name: DividendOS quality gate
 
 on:
+  workflow_dispatch:
+    inputs:
+      lifetime_ui:
+        description: 'Run 30-year individual mobile UI entry QA'
+        type: boolean
+        default: false
   push:
     branches: [main, "hardening/**"]
   pull_request:
@@ -186,7 +192,17 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run mobile and desktop browser QA
         working-directory: v4
+        env:
+          QA_LIFETIME_UI: ${{ ((github.event_name == 'workflow_dispatch' && inputs.lifetime_ui) || contains(github.head_ref, 'lifetime-ui') || contains(github.ref_name, 'lifetime-ui')) && '1' || '0' }}
         run: npm run qa:e2e
+      - name: Preserve synthetic lifetime UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifetime-ui-evidence
+          path: v4/test-results
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Preserve browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
