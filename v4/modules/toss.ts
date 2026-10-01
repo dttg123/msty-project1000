@@ -1,4 +1,4 @@
-import { isDate, n, todayISO } from './utils.js';
+import { isDate, n, todayISO, uid } from './utils.js';
 
 const SYMBOL_PATTERN: any = /^[A-Z0-9.-]{1,16}$/;
 
@@ -289,6 +289,40 @@ export function tossCandidateToDividend(candidate: any,{projectId,id,sharesAtPay
     id,projectId,symbol:row.symbol,date:row.date,amountUSD:row.amountUSD,grossAmountUSD:row.grossAmountUSD,withholdingTaxUSD:row.withholdingTaxUSD,feeUSD:row.feeUSD,sharesAtPayment:Math.max(0,n(sharesAtPayment)),
     referencePrice:0,rocPercent:null,rocStatus:'estimated',note:'토스 배당 승인 가져오기',createdAt,
     source:{provider:'toss',externalId:row.externalId,rawExternalId:row.rawExternalId,sourceIdKind:row.sourceIdKind,sourceFingerprint:row.sourceFingerprint,accountId:row.accountId,assetKey:row.assetKey,market:row.market,securityId:row.securityId,importedAt:createdAt}
+  };
+}
+
+export function rebuildProjectFromTossSource({project,sourceLedger,currentTrades=[],currentDividends=[],capabilities={},syncStatus='',failedAccountCount=0,historyTruncated=false,makeId=uid,createdAt=new Date().toISOString(),sharesAtDate=()=>0}: any={}): any{
+  if(!project?.id||!symbolOf(project.symbol))return {ok:false,reason:'project'};
+  if(syncStatus!=='complete'||Math.max(0,n(failedAccountCount))>0)return {ok:false,reason:'partial'};
+  if(historyTruncated)return {ok:false,reason:'truncated'};
+  const symbol: any=symbolOf(project.symbol);
+  const unique: any=(rows: any,normalizer: any)=>{
+    const map: any=new Map();
+    for(const raw of Array.isArray(rows)?rows:[]){
+      const row: any=normalizer(raw);
+      if(row?.symbol===symbol&&row.currency==='USD'&&row.externalId)map.set(row.externalId,row);
+    }
+    return [...map.values()].sort((a: any,b: any)=>a.date.localeCompare(b.date)||a.externalId.localeCompare(b.externalId));
+  };
+  const orders: any=unique(sourceLedger?.orders,normalizeTossOrder);
+  if(!orders.length)return {ok:false,reason:'empty-orders'};
+  const rebuiltTrades: any=orders.map((row: any)=>tossCandidateToTrade(row,{projectId:project.id,id:makeId('t'),createdAt})).filter(Boolean);
+  const projectTrades: any=currentTrades.filter((row: any)=>row.projectId===project.id);
+  const keepTrades: any=currentTrades.filter((row: any)=>row.projectId!==project.id);
+  const dividendSourceSupported: any=capabilities?.dividends===true;
+  const projectDividends: any=currentDividends.filter((row: any)=>row.projectId===project.id);
+  const keepDividends: any=currentDividends.filter((row: any)=>row.projectId!==project.id);
+  let rebuiltDividends: any=projectDividends;
+  if(dividendSourceSupported){
+    const rows: any=unique(sourceLedger?.dividends,normalizeTossDividend);
+    rebuiltDividends=rows.map((row: any)=>tossCandidateToDividend(row,{projectId:project.id,id:makeId('d'),sharesAtPayment:Math.max(0,n(sharesAtDate(row.date))),createdAt})).filter(Boolean);
+  }
+  return {
+    ok:true,reason:'',trades:[...keepTrades,...rebuiltTrades],dividends:[...keepDividends,...rebuiltDividends],
+    importedTrades:rebuiltTrades.length,replacedTrades:projectTrades.length,
+    importedDividends:dividendSourceSupported?rebuiltDividends.length:0,replacedDividends:dividendSourceSupported?projectDividends.length:0,
+    preservedDividends:dividendSourceSupported?0:projectDividends.length,dividendSourceSupported
   };
 }
 
