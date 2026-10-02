@@ -1,0 +1,33 @@
+name: Refresh official MSTY distributions
+on:
+  schedule:
+    - cron: '30 22 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: official-msty-distributions
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: v4/package-lock.json
+      - run: npm ci
+        working-directory: v4
+      - run: npm run compile && node scripts/refresh-official-distributions.mjs
+        working-directory: v4
+      - name: Save only verified public distribution data
+        run: |
+          git add v4/data/dividend-announcements.json
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Refresh verified public MSTY distribution data'
+          git push

@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {parseOfficialDistributionFeed,parseMSTYDistributionTable,MSTY_OFFICIAL_SOURCE} from '../modules/finance.js';
+const row={declaredDate:'2026-09-30',exDate:'2026-10-01',payDate:'2026-10-02',amountPerShareUSD:.3111};
+const feed={format:'dividend-os-official-distributions-v1',symbol:'MSTY',sourceURL:MSTY_OFFICIAL_SOURCE,retrievedAt:'2026-10-02T19:00:00Z',rows:[row]};
+assert.deepEqual(parseOfficialDistributionFeed(feed),feed);
+for(const bad of [{...feed,sourceURL:'https://fake.invalid/'},{...feed,rows:[row,row]},{...feed,rows:[{...row,exDate:'2026-02-30'}]},{...feed,rows:[{...row,amountPerShareUSD:Infinity}]},{...feed,rows:[{...row,payDate:'2026-09-01'}]}])assert.throws(()=>parseOfficialDistributionFeed(bad));
+const html='<table><tr><td>unrelated</td></tr></table><table><thead><tr><th>DISTRIBUTION PER SHARE</th><th>DECLARED DATE</th><th>EX DATE</th><th>RECORD DATE</th><th>PAYABLE DATE</th><th>ROC</th></tr></thead><tbody><tr><td>$0.3111</td><td>09/30/2026</td><td>10/01/2026</td><td>10/01/2026</td><td>10/02/2026</td><td>98.87%</td></tr></tbody></table>';
+assert.deepEqual(parseMSTYDistributionTable(html,feed.retrievedAt),feed);
+assert.throws(()=>parseMSTYDistributionTable(html.replace('PAYABLE DATE','Changed header'),feed.retrievedAt));
+console.log('Official source/date/amount parsing: PASS');

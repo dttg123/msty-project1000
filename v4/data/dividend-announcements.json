@@ -1,0 +1,104 @@
+{
+  "format": "dividend-os-official-distributions-v1",
+  "symbol": "MSTY",
+  "sourceURL": "https://yieldmaxetfs.com/our-etfs/msty/",
+  "retrievedAt": "2026-10-02T19:18:58.190Z",
+  "rows": [
+    {
+      "declaredDate": "2026-09-30",
+      "exDate": "2026-10-01",
+      "payDate": "2026-10-02",
+      "amountPerShareUSD": 0.3111
+    },
+    {
+      "declaredDate": "2026-09-23",
+      "exDate": "2026-09-24",
+      "payDate": "2026-09-25",
+      "amountPerShareUSD": 0.3421
+    },
+    {
+      "declaredDate": "2026-09-16",
+      "exDate": "2026-09-17",
+      "payDate": "2026-09-18",
+      "amountPerShareUSD": 0.2395
+    },
+    {
+      "declaredDate": "2026-09-09",
+      "exDate": "2026-09-10",
+      "payDate": "2026-09-11",
+      "amountPerShareUSD": 0.3121
+    },
+    {
+      "declaredDate": "2026-09-02",
+      "exDate": "2026-09-03",
+      "payDate": "2026-09-04",
+      "amountPerShareUSD": 0.2105
+    },
+    {
+      "declaredDate": "2026-08-26",
+      "exDate": "2026-08-27",
+      "payDate": "2026-08-28",
+      "amountPerShareUSD": 0.2836
+    },
+    {
+      "declaredDate": "2026-08-19",
+      "exDate": "2026-08-20",
+      "payDate": "2026-08-21",
+      "amountPerShareUSD": 0.162
+    },
+    {
+      "declaredDate": "2026-08-12",
+      "exDate": "2026-08-13",
+      "payDate": "2026-08-14",
+      "amountPerShareUSD": 0.1809
+    },
+    {
+      "declaredDate": "2026-08-05",
+      "exDate": "2026-08-06",
+      "payDate": "2026-08-07",
+      "amountPerShareUSD": 0.2083
+    },
+    {
+      "declaredDate": "2026-07-29",
+      "exDate": "2026-07-30",
+      "payDate": "2026-07-31",
+      "amountPerShareUSD": 0.2222
+    },
+    {
+      "declaredDate": "2026-07-22",
+      "exDate": "2026-07-23",
+      "payDate": "2026-07-24",
+      "amountPerShareUSD": 0.2231
+    },
+    {
+      "declaredDate": "2026-07-15",
+      "exDate": "2026-07-16",
+      "payDate": "2026-07-17",
+      "amountPerShareUSD": 0.2067
+    },
+    {
+      "declaredDate": "2026-07-08",
+      "exDate": "2026-07-09",
+      "payDate": "2026-07-10",
+      "amountPerShareUSD": 0.2061
+    },
+    {
+      "declaredDate": "2026-07-01",
+      "exDate": "2026-07-02",
+      "payDate": "2026-07-06",
+      "amountPerShareUSD": 0.1549
+    },
+    {
+      "declaredDate": "2026-06-24",
+      "exDate": "2026-06-25",
+      "payDate": "2026-06-26",
+      "amountPerShareUSD": 0.1883
+    },
+    {
+      "declaredDate": "2026-06-17",
+      "exDate": "2026-06-18",
+      "payDate": "2026-06-22",
+      "amountPerShareUSD": 0.2286
+    }
+  ]
+}

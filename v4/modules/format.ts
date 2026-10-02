@@ -1,31 +1,32 @@
+import type { Currency, DividendRecord, Project } from '../types/domain.js';
 import { PROJECT_COLORS } from './constants.js';
 import { n } from './utils.js';
 
-export function createFormatters(getState: any): any {
-  function displayCurrency(): any {
+export function createFormatters(getState: () => {settings: {displayCurrency?: unknown;exchangeRate?: unknown}}) {
+  function displayCurrency(): Currency {
     return getState().settings.displayCurrency === 'KRW' ? 'KRW' : 'USD';
   }
 
-  function fmtDividend(row: any,digits=2): string {
+  function fmtDividend(row: DividendRecord,digits=2): string {
     if(row.currency==='KRW')return displayCurrency()==='KRW'?`${Math.round(n(row.amountKRW)).toLocaleString('ko-KR')}원`:`≈ ${fmtMoney(n(row.amountKRW)/Math.max(.000001,n(getState().settings.exchangeRate)),digits)}`;
     return fmtMoney(row.amountUSD,digits);
   }
-  function fmtMoney(usd: any, digits: any =2): any {
-    const state: any=getState();
+  function fmtMoney(usd: number, digits: number =2) {
+    const state=getState();
     if (displayCurrency()==='KRW') return `${Math.round(n(usd)*Math.max(0,n(state.settings.exchangeRate))).toLocaleString('ko-KR')}원`;
     return `${n(usd)<0?'-':''}$${Math.abs(n(usd)).toLocaleString('en-US',{minimumFractionDigits:digits,maximumFractionDigits:digits})}`;
   }
 
-  const fmtSignedMoney: any = (usd: any) => `${n(usd)>=0?'+':'-'}${fmtMoney(Math.abs(n(usd)))}`;
-  const fmtShares: any = (value: any) => n(value).toLocaleString('en-US',{maximumFractionDigits:4});
-  const fmtPct: any = (value: any) => `${n(value).toLocaleString('ko-KR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;
-  const fmtDate: any = (value: any) => {
+  const fmtSignedMoney = (usd: number) => `${n(usd)>=0?'+':'-'}${fmtMoney(Math.abs(n(usd)))}`;
+  const fmtShares = (value: unknown) => n(value).toLocaleString('en-US',{maximumFractionDigits:4});
+  const fmtPct = (value: unknown) => `${n(value).toLocaleString('ko-KR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;
+  const fmtDate = (value: unknown) => {
     if(!value)return '-';
     const [year,month,day]=String(value).slice(0,10).split('-');
     return `${year}.${month}.${day}`;
   };
-  const signClass: any = (value: any) => n(value)>0?'positive':n(value)<0?'negative':'';
-  const projectColors: any = (project: any) => PROJECT_COLORS[n(project?.colorIndex)%PROJECT_COLORS.length] || PROJECT_COLORS[0];
+  const signClass = (value: unknown) => n(value)>0?'positive':n(value)<0?'negative':'';
+  const projectColors = (project: Pick<Project, 'colorIndex'> | null | undefined) => PROJECT_COLORS[n(project?.colorIndex)%PROJECT_COLORS.length] || PROJECT_COLORS[0];
 
   return { fmtDividend, displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors };
 }

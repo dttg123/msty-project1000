@@ -1,0 +1,12 @@
+import {writeFile,readFile} from 'node:fs/promises';
+import {MSTY_OFFICIAL_SOURCE,parseMSTYDistributionTable} from '../modules/finance.js';
+const response=await fetch(MSTY_OFFICIAL_SOURCE,{signal:AbortSignal.timeout(20000),headers:{'User-Agent':'DividendOS/1.0 (public fund distribution schedule)'}});
+if(!response.ok)throw new Error(`Official source HTTP ${response.status}`);
+const html=await response.text();
+if(html.length>3_000_000)throw new Error('Official source too large');
+const feed=parseMSTYDistributionTable(html,new Date().toISOString());
+const path=new URL('../data/dividend-announcements.json',import.meta.url);
+const previous=JSON.parse(await readFile(path,'utf8').catch(()=> 'null'));
+if(previous?.retrievedAt?.slice(0,10)===feed.retrievedAt.slice(0,10)&&JSON.stringify(previous.rows)===JSON.stringify(feed.rows))process.exit(0);
+await writeFile(path,JSON.stringify(feed,null,2)+'\n');
+console.log('Official MSTY distributions refreshed; personal ledgers are not accessed');

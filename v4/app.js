@@ -1,4 +1,5 @@
-import { parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
+import { chooseCloudSync, syncSignature } from './modules/cloud-contract.js';
+import { OFFICIAL_DISTRIBUTIONS_URL, parseOfficialDistributionFeed, parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
 import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js';
@@ -66,18 +67,58 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     catch (_) { } }
     let currentUser = null;
     let cloudReady = false, pendingCloudState = null, cloudChoiceResolve = null;
+    let cloudBaseSignature = null;
+    let cloudConnectGeneration = 0;
     let cloudUnsubscribe = null;
     let applyingCloudState = false;
     let saveTimer = null;
     let cloudTimer = null;
     let cloudRevision = 0;
     let cloudWritePending = false;
+    let cloudPushQueued = false;
     let toastTimer = null;
     let legacyMigrationSource = null;
     let tossSyncRunning = false;
     let nativeTossStatus = { available: isNativeTossAvailable(), configured: false, publicIp: '', lastPublicIp: '', checking: false };
     let appUpdateStatus = { available: isHotUpdateAvailable(), checking: false, currentVersion: APP_VERSION, latestVersion: APP_VERSION, updateAvailable: false, nativeUpdateRequired: false, error: '' };
     let exchangeRateBusy = false, exchangeRateError = '', lastExchangeRateAttempt = 0;
+    let officialFeed = null, officialBusy = false, officialError = '', officialAttempt = 0;
+    async function refreshOfficialDistributions(manual = false) {
+        if (officialBusy || (!manual && (demoMode || Date.now() - officialAttempt < 6 * 3600000)))
+            return;
+        if (!activeProjects().some((p) => p.symbol === 'MSTY'))
+            return;
+        officialAttempt = Date.now();
+        officialBusy = true;
+        officialError = '';
+        renderProjects();
+        try {
+            if (!navigator.onLine)
+                throw new Error('offline');
+            const response = await fetch(OFFICIAL_DISTRIBUTIONS_URL, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+            if (!response.ok)
+                throw new Error('http');
+            const text = await response.text();
+            if (text.length > 20000)
+                throw new Error('size');
+            const next = parseOfficialDistributionFeed(JSON.parse(text));
+            if (Date.parse(next.retrievedAt) > Date.now() + 300000 || officialFeed && next.retrievedAt < officialFeed.retrievedAt)
+                throw new Error('stale');
+            await storageSet('officialDistributionFeed', next);
+            officialFeed = next;
+            if (manual)
+                toast('운용사 공시 자료를 확인했습니다.');
+        }
+        catch {
+            officialError = '공시 갱신 실패 · 마지막 확인 자료 유지';
+            if (manual)
+                toast(officialError);
+        }
+        finally {
+            officialBusy = false;
+            renderProjects();
+        }
+    }
     let pendingTossIp = '';
     let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
     let autoBackupStatus = { count: 0, lastAt: '', error: '' }, autoBackupPromise = null;
@@ -178,20 +219,31 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     async function pushCloudState() {
         if (demoMode || !currentUser || !cloudReady || applyingCloudState)
             return;
+        if (cloudWritePending) {
+            cloudPushQueued = true;
+            return;
+        }
         if (!navigator.onLine) {
             setSaveStatus('오프라인', 'cloud-error');
             return;
         }
         try {
             setSaveStatus('동기화 중', 'cloud-busy');
-            const now = new Date().toISOString();
+            const now = new Date().toISOString(), uid = currentUser.uid;
             state.meta.lastCloudAttemptAt = now;
             cloudWritePending = true;
-            const saved = await saveCloudDocument(currentUser.uid, clone(state), { expectedRevision: cloudRevision, appVersion: APP_VERSION });
+            const sent = clone(state);
+            sent.meta.lastCloudSaveAt = now;
+            const sentSignature = syncSignature(sent);
+            const saved = await saveCloudDocument(uid, sent, { expectedRevision: cloudRevision, appVersion: APP_VERSION });
+            if (currentUser?.uid !== uid)
+                return;
             cloudRevision = saved.revision;
             cloudWritePending = false;
             state.meta.lastCloudSaveAt = now;
             await storageSet(STATE_KEY, state);
+            cloudBaseSignature = sentSignature;
+            await storageSet('cloudSyncBase:' + uid, cloudBaseSignature);
             setSaveStatus('', 'cloud-ok');
         }
         catch (error) {
@@ -210,6 +262,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             }
             setSaveStatus('클라우드 오류', 'cloud-error');
             toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.', { haptic: true });
+        }
+        finally {
+            cloudWritePending = false;
+            if (cloudPushQueued) {
+                cloudPushQueued = false;
+                if (currentUser && cloudReady)
+                    cloudTimer = setTimeout(pushCloudState, 0);
+            }
         }
     }
     async function saveState(immediate = false) {
@@ -237,7 +297,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     const views = createViews({
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getSaveSummary, isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getSaveSummary, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
         displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
@@ -468,8 +528,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const projects = activeProjects().filter((project) => project.symbol === parsed.symbol);
             if (projects.length !== 1)
                 throw new Error('교체 대상 종목이 정확히 하나 있어야 합니다.');
-            if (pendingCloudState || currentUser && !cloudReady)
-                throw new Error('클라우드 기록 충돌을 먼저 확인해 주세요.');
+            // Import is a local ledger operation; unresolved cloud records remain untouched.
             const project = projects[0], fingerprint = JSON.stringify({ currency: parsed.currency, rows: parsed.rows }), replacementMoney = (row) => parsed.currency === 'KRW' ? row.amountKRW.toLocaleString('ko-KR') + '원' : '$' + row.amountUSD.toFixed(2);
             if (state.meta.lastDividendReplacementFingerprint === fingerprint && state.dividends.length === parsed.rows.length && state.dividends.every((row, index) => row.projectId === project.id && row.currency === parsed.currency && row.date === parsed.rows[index].date && (parsed.currency === 'KRW' ? row.amountKRW === parsed.rows[index].amountKRW : row.amountUSD === parsed.rows[index].amountUSD))) {
                 toast('이미 같은 배당 기록으로 교체되어 있습니다.');
@@ -479,10 +538,6 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             document.getElementById('confirmDividendReplacement').onclick = async () => {
                 if (modalSaving)
                     return;
-                if (pendingCloudState || currentUser && !cloudReady) {
-                    toast('클라우드 변경을 먼저 확인해 주세요.');
-                    return;
-                }
                 const before = clone(state), next = clone(state);
                 next.dividends = parsed.rows.map(row => ({ id: uid('d'), projectId: project.id, symbol: project.symbol, date: row.date, status: 'actual', currency: parsed.currency, amountKRW: row.amountKRW, amountUSD: row.amountUSD || 0, sharesAtPayment: 0, rocPercent: null, rocStatus: 'none', note: '사용자 제공 증권앱 화면의 ' + parsed.symbol + ' ' + parsed.currency + ' 세후 금액', createdAt: new Date().toISOString() }));
                 next.meta.lastDividendReplacementFingerprint = fingerprint;
@@ -501,7 +556,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                     closeModal();
                     renderAll();
                     showPage('projects');
-                    toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.`);
+                    toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.${currentUser && !cloudReady ? ' 기기에 저장 · 클라우드 동기화 보류' : ''}`);
                 }
                 catch (error) {
                     state = before;
@@ -931,28 +986,34 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         confirmAction('최근 자동 백업 복원', `${entries[0].createdAt.slice(0, 16).replace('T', ' ')} 기록으로 되돌립니다. 현재 기록도 먼저 안전 복사합니다.`, async () => { await storageSet(SAFETY_KEY, clone(state)); state = restored; selectedProjectId = activeProjects()[0]?.id || ''; await saveState(true); renderAll(); showPage('home'); toast('최근 자동 백업을 복원했습니다.'); }, '복원');
     }
     function exportCSV() { downloadFile(`DividendOS_CSV_${todayISO().replaceAll('-', '')}.zip`, buildCsvExportZip(state)); toast('종목·거래·배당·목표 CSV 4개를 저장했습니다.'); }
-    async function chooseInitialSync(cloudState) {
+    async function chooseInitialSync(cloudState, review = false) {
         const localHas = hasMeaningfulData(state), cloudHas = hasMeaningfulData(cloudState);
-        const signature = (value) => JSON.stringify(['projects', 'trades', 'dividends', 'splits', 'cashAdjustments', 'settings'].map(key => value?.[key]));
-        if (cloudHas) {
-            if (localHas && signature(state) !== signature(cloudState))
-                return await new Promise(resolve => {
-                    openModal(`<h3 class="modal-title">동기화할 데이터 선택</h3><p class="modal-desc">기기와 클라우드 기록이 다릅니다. 날짜만으로 자동 덮어쓰지 않습니다.<br>기기: 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>클라우드: 거래 ${cloudState.trades.length}건 · 배당 ${cloudState.dividends.length}건<br>닫으면 기기 기록을 유지하고 동기화를 보류합니다.</p><div class="form-grid"><button class="btn primary" id="useLocal">기기 기록 저장</button><button class="btn secondary" id="useCloud">클라우드 불러오기</button></div>`);
-                    cloudChoiceResolve = resolve;
-                    for (const [id, choice] of [['useLocal', 'local'], ['useCloud', 'cloud']])
-                        document.getElementById(id).onclick = () => { cloudChoiceResolve = null; closeModal(); resolve(choice); };
-                });
+        if (!cloudHas)
+            return localHas ? 'local' : 'blank';
+        if (!localHas)
             return 'cloud';
-        }
-        return localHas ? 'local' : 'blank';
+        const choice = chooseCloudSync(state, cloudState, cloudBaseSignature);
+        if (choice !== 'review')
+            return choice;
+        if (!review)
+            return 'cancel';
+        return new Promise(resolve => {
+            openModal(`<h3 class="modal-title">클라우드 기록 확인</h3><p class="modal-desc">기기와 클라우드에 서로 다른 기록이 있습니다.<br>기기: 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>클라우드: 거래 ${cloudState.trades.length}건 · 배당 ${cloudState.dividends.length}건<br>선택하지 않아도 로그인과 기기 저장은 계속 사용할 수 있습니다.</p><div class="form-grid"><button class="btn primary" id="useLocal">이 기기 기록을 클라우드에 저장</button><button class="btn secondary" id="useCloud">클라우드 기록으로 기기 교체</button></div>`);
+            cloudChoiceResolve = resolve;
+            for (const [id, choice] of [['useLocal', 'local'], ['useCloud', 'cloud']])
+                document.getElementById(id).onclick = () => { cloudChoiceResolve = null; closeModal(); resolve(choice); };
+        });
     }
-    async function connectCloudForUser(user) {
+    async function connectCloudForUser(user, review = false) {
+        const generation = ++cloudConnectGeneration;
+        document.getElementById('authGate')?.classList.add('hidden');
         currentUser = user;
         cloudReady = false;
         cloudUnsubscribe?.();
         cloudUnsubscribe = null;
         setSaveStatus('동기화 확인', 'cloud-busy');
         try {
+            cloudBaseSignature = await storageGet('cloudSyncBase:' + user.uid) || null;
             let cloudData = await getCloudDocument(user.uid), cloudState = cloudData?.state ? migrate(cloudData.state) : null, usingLegacyCloud = false, usingSingleDocument = !!cloudData?.legacySingleDocument;
             cloudRevision = Math.max(0, n(cloudData?.revision));
             if (!cloudState) {
@@ -974,10 +1035,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                         cloudState.meta.legacyMigrationAvailable = true;
                 }
             }
-            const choice = await chooseInitialSync(cloudState);
+            if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
+                return;
+            const choice = await chooseInitialSync(cloudState, review);
+            if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
+                return;
             if (choice === 'cancel') {
                 pendingCloudState = cloudState;
-                setSaveStatus('동기화 보류', 'cloud-error');
+                setSaveStatus('기기 저장 · 클라우드 확인 필요', 'cloud-error');
+                renderAll();
                 return;
             }
             if (cloudState) {
@@ -985,11 +1051,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 if (issues.length)
                     throw new Error(issues.join(' '));
             }
+            if (review && choice === 'local' && cloudState && syncSignature(state) !== syncSignature(cloudState))
+                await storageSet(SAFETY_KEY, clone(cloudState));
             pendingCloudState = null;
             if (choice === 'cloud' && cloudState) {
                 await storageSet(SAFETY_KEY, clone(state));
                 await storageSet(STATE_KEY, cloudState);
                 state = cloudState;
+                cloudBaseSignature = syncSignature(state);
+                await storageSet('cloudSyncBase:' + user.uid, cloudBaseSignature);
                 cloudReady = true;
                 if (usingLegacyCloud || usingSingleDocument)
                     await pushCloudState();
@@ -1003,7 +1073,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             showPage(currentPage);
             document.getElementById('authGate')?.classList.add('hidden');
             cloudUnsubscribe = await subscribeCloudDocument(user.uid, (data) => {
-                if (!data?.state || applyingCloudState || cloudWritePending || n(data.revision) <= cloudRevision)
+                if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid || !data?.state || applyingCloudState || cloudWritePending || n(data.revision) <= cloudRevision)
                     return;
                 const remote = migrate(data.state);
                 pendingCloudState = remote;
@@ -1026,7 +1096,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');
         }
     }
-    async function initAuth() { await initGoogleAuth({ loginButtonId: 'googleLoginBtn', statusElementId: 'authGateStatus', onSignedIn: connectCloudForUser, onSignedOut: () => { currentUser = null; cloudRevision = 0; cloudUnsubscribe?.(); cloudUnsubscribe = null; setSaveStatus(''); document.getElementById('authGate')?.classList.add('hidden'); }, onError: (message) => toast(message, { haptic: true }) }); }
+    async function initAuth() { await initGoogleAuth({ loginButtonId: 'googleLoginBtn', statusElementId: 'authGateStatus', onSignedIn: connectCloudForUser, onSignedOut: () => { cloudConnectGeneration++; currentUser = null; cloudBaseSignature = null; pendingCloudState = null; cloudReady = false; cloudRevision = 0; cloudUnsubscribe?.(); cloudUnsubscribe = null; setSaveStatus(''); document.getElementById('authGate')?.classList.add('hidden'); }, onError: (message) => toast(message, { haptic: true }) }); }
     function refreshTossComparisons() {
         const toss = state.integrations.toss;
         toss.comparisons = (toss.comparisons || []).map((row) => {
@@ -1693,6 +1763,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         if ('showLogin' in button.dataset) {
+            if (currentUser) {
+                document.getElementById('authGate')?.classList.add('hidden');
+                showPage('settings');
+                return;
+            }
             if (demoMode) {
                 toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');
                 return;
@@ -1731,7 +1806,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         if ('reviewCloud' in button.dataset) {
             if (currentUser)
-                connectCloudForUser(currentUser);
+                connectCloudForUser(currentUser, true);
             else
                 toast('클라우드 연결 후 사용할 수 있습니다.');
             return;
@@ -1791,6 +1866,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             refreshAppUpdateStatus().then(() => { renderSettings(); showPage('settings'); toast(appUpdateStatus.updateAvailable ? '새 업데이트가 있습니다.' : '현재 최신 버전입니다.'); });
             return;
         }
+        if ('refreshOfficialDistributions' in button.dataset) {
+            refreshOfficialDistributions(true);
+            return;
+        }
         if ('refreshExchangeRate' in button.dataset) {
             refreshExchangeRate(true);
             return;
@@ -1839,7 +1918,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
     }
     function bindStaticEvents() {
-        window.addEventListener('online', () => refreshExchangeRate());
+        window.addEventListener('online', () => { refreshExchangeRate(); refreshOfficialDistributions(); });
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
             refreshExchangeRate(); });
         document.addEventListener('submit', (event) => {
@@ -1921,6 +2000,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         try {
             removeLegacyTossBrowserCredentials();
             await openStorage();
+            try {
+                const cached = await storageGet('officialDistributionFeed');
+                if (cached)
+                    officialFeed = parseOfficialDistributionFeed(cached);
+            }
+            catch { }
             const existing = await storageGet(STATE_KEY);
             legacyMigrationSource = demoMode ? null : await readLegacyState();
             if (demoMode)
@@ -1951,6 +2036,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             hideSplash();
             setSaveStatus('');
             refreshExchangeRate();
+            refreshOfficialDistributions();
             refreshAppUpdateStatus().then(() => renderSettings()).catch(() => { });
             if (!storageStatus().durable)
                 setSaveStatus('임시 저장 · 백업 필요', 'cloud-error');

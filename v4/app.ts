@@ -1,10 +1,12 @@
+import type {OfficialDistributionFeed} from './modules/finance.js';
+import {chooseCloudSync, syncSignature} from './modules/cloud-contract.js';
 declare const document: any;
 declare const window: any;
 declare const navigator: any;
 declare const location: any;
 declare const localStorage: any;
 declare const sessionStorage: any;
-import { parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
+import { OFFICIAL_DISTRIBUTIONS_URL, parseOfficialDistributionFeed, parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
 import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js';
@@ -49,18 +51,36 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function restoreView(): any{try{const saved: any=JSON.parse(localStorage.getItem(viewKey)||'null');if(!saved)return;const project: any=activeProjects().find((p: any)=>p.id===saved.selectedProjectId);if(project)selectedProjectId=project.id;const savedGroup: any=saved.portfolioGroup||(saved.portfolioCategory==='highYield'?'highYield':saved.portfolioCategory?'dividend':'');if(['highYield','dividend'].includes(savedGroup))portfolioGroup=savedGroup;if(['home','projects','goal'].includes(saved.page))currentPage=saved.page;if(['week','month','year','monthWeeks'].includes(saved.chartMode))chartMode=saved.chartMode;if(['month','year'].includes(saved.homeCashflowMode))homeCashflowMode=saved.homeCashflowMode;if(['6','10','all'].includes(saved.homeYearRange))homeYearRange=saved.homeYearRange;if(/^\d{4}-\d{2}$/.test(saved.chartMonth||''))chartMonth=saved.chartMonth;if(/^\d{4}$/.test(saved.chartYear||''))chartYear=saved.chartYear;}catch (_: any){}}
   let currentUser: any = null;
   let cloudReady: any = false, pendingCloudState: any = null, cloudChoiceResolve: any = null;
+  let cloudBaseSignature: string | null = null;
+  let cloudConnectGeneration=0;
   let cloudUnsubscribe: any = null;
   let applyingCloudState: any = false;
   let saveTimer: any = null;
   let cloudTimer: any = null;
   let cloudRevision: any = 0;
   let cloudWritePending: any = false;
+  let cloudPushQueued=false;
   let toastTimer: any = null;
   let legacyMigrationSource: any = null;
   let tossSyncRunning: any = false;
   let nativeTossStatus: any={available:isNativeTossAvailable(),configured:false,publicIp:'',lastPublicIp:'',checking:false};
   let appUpdateStatus: any={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:APP_VERSION,updateAvailable:false,nativeUpdateRequired:false,error:''};
   let exchangeRateBusy=false,exchangeRateError='',lastExchangeRateAttempt=0;
+  let officialFeed: OfficialDistributionFeed | null=null,officialBusy=false,officialError='',officialAttempt=0;
+  async function refreshOfficialDistributions(manual=false):Promise<void>{
+    if(officialBusy||(!manual&&(demoMode||Date.now()-officialAttempt<6*3600000)))return;
+    if(!activeProjects().some((p: any)=>p.symbol==='MSTY'))return;
+    officialAttempt=Date.now();officialBusy=true;officialError='';renderProjects();
+    try{
+      if(!navigator.onLine)throw new Error('offline');
+      const response=await fetch(OFFICIAL_DISTRIBUTIONS_URL,{cache:'no-store',signal:AbortSignal.timeout(10000)});
+      if(!response.ok)throw new Error('http');const text=await response.text();if(text.length>20000)throw new Error('size');
+      const next=parseOfficialDistributionFeed(JSON.parse(text));
+      if(Date.parse(next.retrievedAt)>Date.now()+300000||officialFeed&&next.retrievedAt<officialFeed.retrievedAt)throw new Error('stale');
+      await storageSet('officialDistributionFeed',next);officialFeed=next;if(manual)toast('운용사 공시 자료를 확인했습니다.');
+    }catch{officialError='공시 갱신 실패 · 마지막 확인 자료 유지';if(manual)toast(officialError);}
+    finally{officialBusy=false;renderProjects();}
+  }
   let pendingTossIp: any='';
   let localOnlySession: any = sessionStorage.getItem('dividend-os-local-mode') === '1';
   let autoBackupStatus: any={count:0,lastAt:'',error:''},autoBackupPromise: any=null;
@@ -116,19 +136,22 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   async function pushCloudState(): Promise<any> {
     if(demoMode||!currentUser||!cloudReady||applyingCloudState)return;
+    if(cloudWritePending){cloudPushQueued=true;return;}
     if(!navigator.onLine){setSaveStatus('오프라인','cloud-error');return;}
     try {
       setSaveStatus('동기화 중','cloud-busy');
-      const now: any=new Date().toISOString(); state.meta.lastCloudAttemptAt=now;cloudWritePending=true;
-      const saved: any=await saveCloudDocument(currentUser.uid,clone(state),{expectedRevision:cloudRevision,appVersion:APP_VERSION});cloudRevision=saved.revision;
-      cloudWritePending=false;state.meta.lastCloudSaveAt=now;await storageSet(STATE_KEY,state); setSaveStatus('','cloud-ok');
+      const now=new Date().toISOString(),uid=currentUser.uid;state.meta.lastCloudAttemptAt=now;cloudWritePending=true;
+      const sent=clone(state);sent.meta.lastCloudSaveAt=now;const sentSignature=syncSignature(sent);
+      const saved: any=await saveCloudDocument(uid,sent,{expectedRevision:cloudRevision,appVersion:APP_VERSION});
+      if(currentUser?.uid!==uid)return;cloudRevision=saved.revision;
+      cloudWritePending=false;state.meta.lastCloudSaveAt=now;await storageSet(STATE_KEY,state);cloudBaseSignature=sentSignature;await storageSet('cloudSyncBase:'+uid,cloudBaseSignature); setSaveStatus('','cloud-ok');
     } catch (error: any) {
       cloudWritePending=false;console.error(error);
       if(error?.code==='cloud-conflict'){
         const latest: any=await getCloudDocument(currentUser.uid).catch(()=>null);pendingCloudState=latest?.state?migrate(latest.state):null;cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
       }
       setSaveStatus('클라우드 오류','cloud-error');toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true});
-    }
+    }finally{cloudWritePending=false;if(cloudPushQueued){cloudPushQueued=false;if(currentUser&&cloudReady)cloudTimer=setTimeout(pushCloudState,0);}}
   }
   async function saveState(immediate: any =false): Promise<any> {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
@@ -138,7 +161,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   const views: any = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value: any) => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value: any) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getSaveSummary,isTossBridgeConfigured,
+    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value: any) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -286,19 +309,18 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const parsed=parseDividendReplacement(JSON.parse(await file.text()),todayISO());
       const projects=activeProjects().filter((project: any)=>project.symbol===parsed.symbol);
       if(projects.length!==1)throw new Error('교체 대상 종목이 정확히 하나 있어야 합니다.');
-      if(pendingCloudState||currentUser&&!cloudReady)throw new Error('클라우드 기록 충돌을 먼저 확인해 주세요.');
+      // Import is a local ledger operation; unresolved cloud records remain untouched.
       const project=projects[0],fingerprint=JSON.stringify({currency:parsed.currency,rows:parsed.rows}),replacementMoney=(row: any)=>parsed.currency==='KRW'?row.amountKRW.toLocaleString('ko-KR')+'원':'$'+row.amountUSD.toFixed(2);
       if(state.meta.lastDividendReplacementFingerprint===fingerprint&&state.dividends.length===parsed.rows.length&&state.dividends.every((row: any,index: number)=>row.projectId===project.id&&row.currency===parsed.currency&&row.date===parsed.rows[index].date&&(parsed.currency==='KRW'?row.amountKRW===parsed.rows[index].amountKRW:row.amountUSD===parsed.rows[index].amountUSD))){toast('이미 같은 배당 기록으로 교체되어 있습니다.');return;}
       openModal(`<h3 class="modal-title">전체 배당 교체 확인</h3><p class="modal-desc">기존 배당 ${state.dividends.length}건을 삭제하고 ${esc(parsed.symbol)} ${parsed.rows.length}건으로 교체합니다. 거래·보유주수·목표·토스 원본은 유지합니다.</p><strong>${parsed.currency==='KRW'?parsed.totalKRW.toLocaleString('ko-KR')+'원':'$'+parsed.totalUSD.toFixed(2)}</strong><div class="list">${parsed.rows.map(row=>`<div class="list-row"><span>${esc(row.date)}</span><strong>${replacementMoney(row)}</strong></div>`).join('')}</div><p class="detail-note">${parsed.currency==='KRW'?'원화 확인액만 저장합니다. 달러 금액·지급 당시 주수는 미확인이며 달러 재투자 잔액과 총손익에 임의 합산하지 않습니다.':'확인된 달러 세후 입금액을 저장합니다. 지급 당시 주수는 미확인으로 남깁니다.'} 교체 직전 기록은 안전 사본으로 남깁니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmDividendReplacement">기존 배당 삭제 후 교체</button></div>`);
       document.getElementById('confirmDividendReplacement').onclick=async()=>{
         if(modalSaving)return;
-        if(pendingCloudState||currentUser&&!cloudReady){toast('클라우드 변경을 먼저 확인해 주세요.');return;}
         const before=clone(state),next=clone(state);
         next.dividends=parsed.rows.map(row=>({id:uid('d'),projectId:project.id,symbol:project.symbol,date:row.date,status:'actual',currency:parsed.currency,amountKRW:row.amountKRW,amountUSD:row.amountUSD||0,sharesAtPayment:0,rocPercent:null,rocStatus:'none',note:'사용자 제공 증권앱 화면의 '+parsed.symbol+' '+parsed.currency+' 세후 금액',createdAt:new Date().toISOString()}));
         next.meta.lastDividendReplacementFingerprint=fingerprint;
         const errors=validateLedger(next);if(errors.length){toast(errors[0]);return;}
         modalSaving=true;document.getElementById('confirmDividendReplacement').disabled=true;
-        try{await storageSet(SAFETY_KEY,before);state=next;await saveState(true);selectedProjectId=project.id;closeModal();renderAll();showPage('projects');toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.`);}
+        try{await storageSet(SAFETY_KEY,before);state=next;await saveState(true);selectedProjectId=project.id;closeModal();renderAll();showPage('projects');toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.${currentUser&&!cloudReady?' 기기에 저장 · 클라우드 동기화 보류':''}`);}
         catch(error){state=before;try{await storageSet(STATE_KEY,before);}catch{}toast('교체를 저장하지 못해 기존 배당을 유지했습니다.');document.getElementById('confirmDividendReplacement')?.removeAttribute('disabled');}
         finally{modalSaving=false;}
       };
@@ -508,39 +530,45 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
   function exportCSV(): any{downloadFile(`DividendOS_CSV_${todayISO().replaceAll('-','')}.zip`,buildCsvExportZip(state));toast('종목·거래·배당·목표 CSV 4개를 저장했습니다.');}
 
-  async function chooseInitialSync(cloudState: any): Promise<any> {
-    const localHas: any=hasMeaningfulData(state),cloudHas=hasMeaningfulData(cloudState);
-    const signature: any=(value: any)=>JSON.stringify(['projects','trades','dividends','splits','cashAdjustments','settings'].map(key=>value?.[key]));
-    if(cloudHas){
-      if(localHas&&signature(state)!==signature(cloudState))return await new Promise(resolve=>{
-        openModal(`<h3 class="modal-title">동기화할 데이터 선택</h3><p class="modal-desc">기기와 클라우드 기록이 다릅니다. 날짜만으로 자동 덮어쓰지 않습니다.<br>기기: 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>클라우드: 거래 ${cloudState.trades.length}건 · 배당 ${cloudState.dividends.length}건<br>닫으면 기기 기록을 유지하고 동기화를 보류합니다.</p><div class="form-grid"><button class="btn primary" id="useLocal">기기 기록 저장</button><button class="btn secondary" id="useCloud">클라우드 불러오기</button></div>`);
-        cloudChoiceResolve=resolve;
-        for(const [id,choice] of [['useLocal','local'],['useCloud','cloud']])document.getElementById(id).onclick=()=>{cloudChoiceResolve=null;closeModal();resolve(choice);};
-      });
-      return 'cloud';
-    }
-    return localHas?'local':'blank';
+  async function chooseInitialSync(cloudState: any,review=false): Promise<string> {
+    const localHas=hasMeaningfulData(state),cloudHas=hasMeaningfulData(cloudState);
+    if(!cloudHas)return localHas?'local':'blank';
+    if(!localHas)return 'cloud';
+    const choice=chooseCloudSync(state,cloudState,cloudBaseSignature);
+    if(choice!=='review')return choice;
+    if(!review)return 'cancel';
+    return new Promise(resolve=>{
+      openModal(`<h3 class="modal-title">클라우드 기록 확인</h3><p class="modal-desc">기기와 클라우드에 서로 다른 기록이 있습니다.<br>기기: 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>클라우드: 거래 ${cloudState.trades.length}건 · 배당 ${cloudState.dividends.length}건<br>선택하지 않아도 로그인과 기기 저장은 계속 사용할 수 있습니다.</p><div class="form-grid"><button class="btn primary" id="useLocal">이 기기 기록을 클라우드에 저장</button><button class="btn secondary" id="useCloud">클라우드 기록으로 기기 교체</button></div>`);
+      cloudChoiceResolve=resolve;
+      for(const [id,choice] of [['useLocal','local'],['useCloud','cloud']])document.getElementById(id).onclick=()=>{cloudChoiceResolve=null;closeModal();resolve(choice);};
+    });
   }
-  async function connectCloudForUser(user: any): Promise<any> {
+  async function connectCloudForUser(user: any,review=false): Promise<any> {
+    const generation=++cloudConnectGeneration;
+    document.getElementById('authGate')?.classList.add('hidden');
     currentUser=user;cloudReady=false;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('동기화 확인','cloud-busy');
     try{
+      cloudBaseSignature=await storageGet<string>('cloudSyncBase:'+user.uid)||null;
       let cloudData: any=await getCloudDocument(user.uid),cloudState=cloudData?.state?migrate(cloudData.state):null,usingLegacyCloud=false,usingSingleDocument=!!cloudData?.legacySingleDocument;cloudRevision=Math.max(0,n(cloudData?.revision));
       if(!cloudState){const legacy: any=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;cloudState=prepareLegacyMigration(legacy.state).candidate;usingLegacyCloud=true;}}
       else if(!cloudState.meta?.migrationAudit){const legacy: any=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;const audit: any=auditLegacyAgainstState(legacy.state,cloudState);if(audit?.passed)cloudState.meta.migrationAudit=audit;else cloudState.meta.legacyMigrationAvailable=true;}}
-      const choice: any=await chooseInitialSync(cloudState);
-      if(choice==='cancel'){pendingCloudState=cloudState;setSaveStatus('동기화 보류','cloud-error');return;}
+      if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
+      const choice: any=await chooseInitialSync(cloudState,review);
+      if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
+      if(choice==='cancel'){pendingCloudState=cloudState;setSaveStatus('기기 저장 · 클라우드 확인 필요','cloud-error');renderAll();return;}
       if(cloudState){const issues: any=validateLedger(cloudState);if(issues.length)throw new Error(issues.join(' '));}
+      if(review&&choice==='local'&&cloudState&&syncSignature(state)!==syncSignature(cloudState))await storageSet(SAFETY_KEY,clone(cloudState));
       pendingCloudState=null;
-      if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudReady=true;if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
+      if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudBaseSignature=syncSignature(state);await storageSet('cloudSyncBase:'+user.uid,cloudBaseSignature);cloudReady=true;if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
       cloudUnsubscribe=await subscribeCloudDocument(user.uid,(data: any)=>{
-        if(!data?.state||applyingCloudState||cloudWritePending||n(data.revision)<=cloudRevision)return;
+        if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid||!data?.state||applyingCloudState||cloudWritePending||n(data.revision)<=cloudRevision)return;
         const remote: any=migrate(data.state);pendingCloudState=remote;cloudRevision=n(data.revision);cloudReady=false;clearTimeout(cloudTimer);autoBackup('remote-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');renderAll();
       },(error: any)=>{console.error(error);cloudReady=false;setSaveStatus('동기화 오류','cloud-error');});
       setSaveStatus('','cloud-ok');
     }catch (error: any){cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
-  async function initAuth(): Promise<any>{await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{currentUser=null;cloudRevision=0;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:(message: any)=>toast(message,{haptic:true})});}
+  async function initAuth(): Promise<any>{await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{cloudConnectGeneration++;currentUser=null;cloudBaseSignature=null;pendingCloudState=null;cloudReady=false;cloudRevision=0;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:(message: any)=>toast(message,{haptic:true})});}
 
   function refreshTossComparisons(): any {
     const toss: any=state.integrations.toss;
@@ -819,14 +847,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(button.dataset.editRecovery){lockRecovery(button.dataset.editRecovery,true);return;}
     if(button.dataset.restoreProject){const project: any=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
     if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
-    if('showLogin'in button.dataset){if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
+    if('showLogin'in button.dataset){if(currentUser){document.getElementById('authGate')?.classList.add('hidden');showPage('settings');return;}if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('backupDownload'in button.dataset){downloadPreparedBackup();return;}
     if('backupSave'in button.dataset){saveBackupToChosenLocation();return;}
     if('replaceDividends'in button.dataset){document.getElementById('dividendReplacementInput').click();return;}
     if(button.dataset.dividendSchedule){openDividendSchedule(button.dataset.dividendSchedule);return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
-    if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
+    if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser,true);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
     if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
     if('restoreAuto'in button.dataset){restoreLatestAutoBackup().catch(()=>toast('자동 백업을 읽지 못했습니다.'));return;}
     if('csv'in button.dataset){exportCSV();return;}
@@ -840,6 +868,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('rebuildMstyToss'in button.dataset){confirmAction('MSTY 기록 다시 만들기','기존 MSTY 거래만 지우고 보존된 토스 전체 체결 원본으로 다시 만듭니다. 분할 기록과 다른 종목은 유지하며, 토스 배당 조회가 지원되지 않으면 기존 배당도 유지합니다.',rebuildMstyFromToss,'다시 만들기');return;}
     if('installHotUpdate'in button.dataset){applyAppUpdate();return;}
     if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{renderSettings();showPage('settings');toast(appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':'현재 최신 버전입니다.');});return;}
+    if('refreshOfficialDistributions'in button.dataset){refreshOfficialDistributions(true);return;}
     if('refreshExchangeRate'in button.dataset){refreshExchangeRate(true);return;}
     if('deleteTossExceptions'in button.dataset){openTossExceptionDeletion();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
@@ -854,7 +883,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   function bindStaticEvents(): any {
-    window.addEventListener('online',()=>refreshExchangeRate());
+    window.addEventListener('online',()=>{refreshExchangeRate();refreshOfficialDistributions();});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshExchangeRate();});
     document.addEventListener('submit',(event: any)=>{
       const form: any=event.target;if(!(form instanceof HTMLFormElement))return;
@@ -884,6 +913,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     try{
       removeLegacyTossBrowserCredentials();
       await openStorage();
+      try{const cached=await storageGet('officialDistributionFeed');if(cached)officialFeed=parseOfficialDistributionFeed(cached);}catch{}
       const existing: any=await storageGet(STATE_KEY);
       legacyMigrationSource=demoMode?null:await readLegacyState();
       if(demoMode)state=demoState();
@@ -893,7 +923,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       await confirmHotUpdateReady().catch(()=>{});
       await Promise.all([refreshAutoBackupStatus().catch(()=>{}),refreshNativeTossStatus().catch(()=>{})]);restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
-      refreshExchangeRate();
+      refreshExchangeRate();refreshOfficialDistributions();
       refreshAppUpdateStatus().then(()=>renderSettings()).catch(()=>{});
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner: any=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}

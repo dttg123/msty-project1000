@@ -34,6 +34,38 @@ export function reportingDividends(rows:DividendRecord[],rate:number):DividendRe
 }
 
 export interface DividendReplacementRow {date:string;amountKRW?:number;amountUSD?:number;}
+export const OFFICIAL_DISTRIBUTIONS_URL='https://raw.githubusercontent.com/dttg123/msty-project1000/main/v4/data/dividend-announcements.json';
+export const MSTY_OFFICIAL_SOURCE='https://yieldmaxetfs.com/our-etfs/msty/';
+export interface OfficialDistribution {declaredDate:string;exDate:string;payDate:string;amountPerShareUSD:number;}
+export interface OfficialDistributionFeed {format:'dividend-os-official-distributions-v1';symbol:'MSTY';sourceURL:string;retrievedAt:string;rows:OfficialDistribution[];}
+const validISODate=(date:unknown):date is string=>typeof date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T12:00:00Z'))&&new Date(date+'T12:00:00Z').toISOString().slice(0,10)===date;
+export function parseOfficialDistributionFeed(value:unknown):OfficialDistributionFeed {
+  if(!value||typeof value!=='object')throw new Error('공시 자료 형식 오류');
+  const raw=value as Partial<OfficialDistributionFeed>;
+  if(raw.format!=='dividend-os-official-distributions-v1'||raw.symbol!=='MSTY'||raw.sourceURL!==MSTY_OFFICIAL_SOURCE||typeof raw.retrievedAt!=='string'||!Number.isFinite(Date.parse(raw.retrievedAt))||!Array.isArray(raw.rows)||!raw.rows.length||raw.rows.length>16)throw new Error('공시 출처 또는 형식 오류');
+  const dates=new Set<string>();
+  const rows=raw.rows.map((row):OfficialDistribution=>{
+    if(!row||!validISODate(row.declaredDate)||!validISODate(row.exDate)||!validISODate(row.payDate)||row.declaredDate>row.exDate||row.exDate>row.payDate||row.declaredDate>raw.retrievedAt!.slice(0,10)||dates.has(row.payDate)||typeof row.amountPerShareUSD!=='number'||!Number.isFinite(row.amountPerShareUSD)||row.amountPerShareUSD<=0||row.amountPerShareUSD>10000)throw new Error('공시 날짜 또는 금액 오류');
+    dates.add(row.payDate);return {declaredDate:row.declaredDate,exDate:row.exDate,payDate:row.payDate,amountPerShareUSD:row.amountPerShareUSD};
+  }).sort((a,b)=>b.payDate.localeCompare(a.payDate));
+  return {format:raw.format,symbol:raw.symbol,sourceURL:raw.sourceURL,retrievedAt:raw.retrievedAt,rows};
+}
+// Only the declared distribution table is accepted; generic annual calendars are not declarations.
+export function parseMSTYDistributionTable(html:string,retrievedAt:string):OfficialDistributionFeed {
+  const table=[...html.matchAll(/<table\b[^>]*>[\s\S]*?<\/table>/gi)].find(match=>match[0].includes('DISTRIBUTION PER SHARE'))?.[0];
+  if(!table||!['DECLARED DATE','EX DATE','PAYABLE DATE'].every(header=>table.includes(header)))throw new Error('운용사 공시 표를 찾지 못했습니다.');
+  const iso=(value:string)=>{const parts=value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);return parts?`${parts[3]}-${parts[1]}-${parts[2]}`:'';};
+  const rows:OfficialDistribution[]=[],dates=new Set<string>();
+  for(const match of table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)){
+    const cells=[...match[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(cell=>cell[1].replace(/<[^>]*>/g,'').trim());
+    if(!cells.length)continue;
+    if(cells.length!==6||!/^\$\d+(?:\.\d+)?$/.test(cells[0]))throw new Error('운용사 공시 표 형식이 변경되었습니다.');
+    const payDate=iso(cells[4]);if(dates.has(payDate))continue;dates.add(payDate);
+    rows.push({declaredDate:iso(cells[1]),exDate:iso(cells[2]),payDate,amountPerShareUSD:Number(cells[0].slice(1))});
+    if(rows.length===16)break;
+  }
+  return parseOfficialDistributionFeed({format:'dividend-os-official-distributions-v1',symbol:'MSTY',sourceURL:MSTY_OFFICIAL_SOURCE,retrievedAt,rows});
+}
 export interface DividendReplacement {symbol:string;currency:'KRW'|'USD';rows:DividendReplacementRow[];totalKRW:number;totalUSD:number;}
 export function parseDividendReplacement(input:unknown,today:string):DividendReplacement {
   const raw=input as {format?:unknown;scope?:unknown;symbol?:unknown;currency?:unknown;rows?:unknown};
