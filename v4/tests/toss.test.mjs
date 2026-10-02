@@ -15,6 +15,11 @@ assert.equal(manualConflict.candidates.length,1,'similar manual rows require use
 assert.equal(manualConflict.candidates[0].possibleManualDuplicate,true);
 assert.equal(automaticTossImportPlan(manualConflict).reason,'duplicate');
 assert.deepEqual(manualConflict.candidates[0].manualMatchIds,['manual-1']);
+const incrementalPlan=automaticTossImportPlan({...manualConflict,candidates:[...manualConflict.candidates,{...normalizeTossOrder({...row,id:'new-four',date:'2026-02-01',shares:4}),possibleManualDuplicate:false}]});
+assert.equal(incrementalPlan.eligible,true,'old manual duplicates must not block a new verified buy');
+assert.deepEqual(incrementalPlan.candidates.map(item=>item.externalId),['new-four']);
+assert.equal(manualConflict.candidates.length,1,'planning must preserve the pending manual match');
+
 const restoredStaleConflict={...manualConflict,candidates:manualConflict.candidates.map(item=>({...item}))};
 refreshTossCandidateConflicts(restoredStaleConflict,[],[]);
 assert.equal(automaticTossImportPlan(restoredStaleConflict).eligible,true,'restored candidates must not keep deleted manual-duplicate flags');

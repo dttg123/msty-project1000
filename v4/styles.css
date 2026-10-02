@@ -1194,3 +1194,20 @@ html[data-theme="dark"] .project-hero { background:var(--surface); border-color:
   .card { border-radius:21px; }
   .entry-actions { grid-template-columns:.7fr 1.35fr 1fr; }
 }
+
+/* Broker settings: independent collapsible sections, with status outside hidden details. */
+.toss-details { margin-top:14px; border:1px solid var(--line); border-radius:16px; padding:0 14px; }
+.toss-details > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:54px; padding:12px 0; cursor:pointer; list-style:none; }
+.toss-details > summary::-webkit-details-marker { display:none; }
+.toss-details > summary strong { font-size:14px; }
+.toss-details > summary small { display:block; color:var(--muted); margin-top:4px; font-size:11px; }
+.toss-details[open] > summary { border-bottom:1px solid var(--line); margin-bottom:12px; }
+.toss-details[open] > summary .chev { transform:rotate(180deg); }
+.toss-details[open] { padding-bottom:14px; }
+.toss-management-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.toss-management-actions > button { width:100%; margin-top:0 !important; font-size:13px; min-width:0; }
+.toss-management-actions > [data-rebuild-msty-toss] { grid-column:1 / -1; }
+.toss-sync-warning { padding:14px; margin:14px 0; border:1px solid var(--line); border-radius:14px; }
+.toss-sync-warning strong { color:var(--red); font-size:14px; }
+.toss-sync-warning p { margin:8px 0; font-size:13px; }
+.toss-sync-warning span { color:var(--muted); font-size:12px; }

@@ -135,3 +135,38 @@ test('Android 백업 저장 버튼은 네이티브 저장 창을 호출하고 �
   const file=await page.evaluate(()=>window.backupDownloadCall);
   expect(Buffer.from(file.base64,'base64').subarray(0,2).toString()).toBe('PK');
 });
+
+test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장하고 재조회해도 251주를 유지한다',async({page})=>{
+  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
+  await manualForm(page,'trade');
+  await page.locator('#tradeForm [name="date"]').fill('2025-12-01');
+  await page.locator('#tradeForm [name="shares"]').fill('247');
+  await page.locator('#tradeForm [name="price"]').fill('18.01');
+  await page.locator('#tradeForm button[type="submit"]').click();await expect(page.locator('#tradeForm')).toBeHidden();
+  await manualForm(page,'dividend');
+  await page.locator('#dividendForm [name="date"]').fill('2026-01-02');
+  await page.locator('#dividendForm [name="amountUSD"]').fill('10');
+  await page.locator('#dividendForm button[type="submit"].primary').click();await expect(page.locator('#dividendForm')).toBeHidden();
+  const before=await readLedger(page);
+  const snapshot={syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:251}],orders:[{id:'old-manual-match',symbol:'MSTY',currency:'USD',date:'2025-12-01',type:'buy',shares:247,price:18.01},{id:'new-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16.25}]};
+  const load=()=>page.locator('#tossImportInput').setInputFiles({name:'incremental.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-01T00:00:00Z',snapshot}))});
+  await load();await expect(page.locator('.toast')).toContainText('매수 1건');
+  const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
+  expect(saved.trades).toHaveLength(2);expect(saved.trades.reduce((sum,row)=>sum+row.shares,0)).toBe(251);
+  expect(saved.dividends).toEqual(before.dividends);expect(saved.trades[0]).toEqual(before.trades[0]);
+  expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
+  expect(saved.integrations.toss.candidates).toHaveLength(1);expect(saved.integrations.toss.candidates[0].possibleManualDuplicate).toBe(true);
+  expect(safety.trades).toEqual(before.trades);
+  await load();await expect.poll(async()=>(await readLedger(page)).integrations.toss.syncSequence).toBeGreaterThan(saved.integrations.toss.syncSequence);
+  expect((await readLedger(page)).trades).toEqual(saved.trades);
+  const section=page.locator('details.settings-section').filter({has:page.locator('[data-review-toss]')});
+  if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
+  await expect(page.locator('.toss-sync-warning')).toHaveCount(0);
+  snapshot.holdings[0].shares=253;
+  snapshot.orders.push({id:'missing-counterpart',symbol:'MSTY',currency:'USD',date:'2026-02-02',type:'buy',shares:1,price:16.25});
+  await load();await expect(page.locator('.toast')).toContainText('체결 합계와 보유주수 불일치');
+  expect((await readLedger(page)).trades).toEqual(saved.trades);
+  if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
+  await expect(page.locator('.toss-sync-warning')).toBeVisible();await expect(page.locator('.toss-sync-warning')).toContainText('보유주수');
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
+});
