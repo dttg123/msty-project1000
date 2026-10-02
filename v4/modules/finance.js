@@ -9,6 +9,8 @@ export function tradeCashBreakdown(trade) {
 }
 export function dividendCashBreakdown(record) {
     const status = record.status === 'confirmed' || record.status === 'estimated' ? record.status : 'actual';
+    if (record.currency === 'KRW')
+        return { grossUSD: 0, withholdingTaxUSD: 0, feeUSD: 0, netUSD: 0, netKRW: finiteNonNegative(record.amountKRW), rocUSD: 0, incomeUSD: 0, status };
     const legacyNet = finiteNonNegative(record.amountUSD), tax = finiteNonNegative(record.withholdingTaxUSD ?? record.taxUSD), fee = finiteNonNegative(record.feeUSD);
     const explicitGross = finiteNonNegative(record.grossAmountUSD), explicitNet = finiteNonNegative(record.netAmountUSD);
     const grossUSD = explicitGross || (explicitNet ? explicitNet + tax + fee : legacyNet + tax + fee);
@@ -19,7 +21,26 @@ export function dividendCashBreakdown(record) {
 }
 export function isPostedDividend(record, asOf) {
     const cash = dividendCashBreakdown(record);
-    return record.date <= asOf && cash.status === 'actual' && cash.netUSD > 0;
+    return record.date <= asOf && cash.status === 'actual' && (cash.netUSD > 0 || (cash.netKRW || 0) > 0);
+}
+// View-only conversion: never persist a fabricated USD receipt or fund the USD cash ledger with it.
+export function reportingDividends(rows, rate) {
+    return rows.map(row => row.currency === 'KRW' ? { ...row, currency: 'USD', amountUSD: (dividendCashBreakdown(row).netKRW || 0) / Math.max(.000001, rate), netAmountUSD: undefined, grossAmountUSD: undefined, taxUSD: 0, withholdingTaxUSD: 0, feeUSD: 0, rocPercent: undefined, rocAmountUSD: 0, sharesAtPayment: 0 } : row);
+}
+export function parseDividendReplacement(input, today) {
+    const raw = input;
+    if (raw?.format !== 'dividend-os-dividend-replacement-v1' || raw.scope !== 'all-dividends' || typeof raw.symbol !== 'string' || !/^[A-Z0-9.-]{1,16}$/.test(raw.symbol) || !Array.isArray(raw.rows) || !raw.rows.length || raw.rows.length > 5000 || raw.currency !== undefined && !['KRW', 'USD'].includes(String(raw.currency)))
+        throw new Error('올바른 배당 교체 파일이 아닙니다.');
+    const currency = raw.currency === 'USD' ? 'USD' : 'KRW', dates = new Set();
+    const rows = raw.rows.map((value) => {
+        const row = value;
+        const amount = currency === 'KRW' ? row?.amountKRW : row?.amountUSD;
+        if (typeof row?.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) || !Number.isFinite(Date.parse(row.date + 'T12:00:00Z')) || new Date(row.date + 'T12:00:00Z').toISOString().slice(0, 10) !== row.date || row.date > today || dates.has(row.date) || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0 || amount > 1e12 || (currency === 'KRW' ? !Number.isSafeInteger(amount) : Math.abs(Math.round(amount * 100) - amount * 100) > 1e-6))
+            throw new Error('날짜·중복·입금 금액을 확인해 주세요.');
+        dates.add(row.date);
+        return currency === 'KRW' ? { date: row.date, amountKRW: amount } : { date: row.date, amountUSD: amount };
+    }).sort((a, b) => a.date.localeCompare(b.date));
+    return { symbol: raw.symbol, currency, rows, totalKRW: rows.reduce((sum, row) => sum + (row.amountKRW || 0), 0), totalUSD: Math.round(rows.reduce((sum, row) => sum + (row.amountUSD || 0), 0) * 100) / 100 };
 }
 export function economicTotalReturn({ marketValueUSD, buyCashOutUSD, sellCashInUSD, dividendCashInUSD }) {
     return finiteNonNegative(marketValueUSD) + finiteNonNegative(sellCashInUSD) + finiteNonNegative(dividendCashInUSD) - finiteNonNegative(buyCashOutUSD);

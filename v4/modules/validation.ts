@@ -35,7 +35,8 @@ export function validateLedger(raw: any): any {
       if(key==='trades'&&(!['buy','sell'].includes(row.type)||!valid('shares',.00000001)||!valid('price')))errors.push('거래 수량·단가가 올바르지 않습니다.');
       if(key==='trades'&&((row.feeUSD!==undefined&&!valid('feeUSD'))||(row.taxUSD!==undefined&&!valid('taxUSD'))))errors.push('거래 수수료·세금을 확인해 주세요.');
       if(key==='trades'&&row.type==='buy'&&(!['direct','opening','reinvest','mixed'].includes(row.buyType)||row.buyType==='mixed'&&(!valid('reinvestAmountUSD')||Number(row.reinvestAmountUSD)>Number(row.shares)*Number(row.price))))errors.push('매수 유형·재투자액을 확인해 주세요.');
-      if(key==='dividends'&&!valid('amountUSD',.00000001))errors.push('배당 금액이 올바르지 않습니다.');
+      if(key==='dividends'&&(row.currency==='KRW'?(!Number.isSafeInteger(row.amountKRW)||row.amountKRW<=0||row.amountKRW>1e12||Number(row.amountUSD)!==0):!valid('amountUSD',.00000001)))errors.push('배당 금액이 올바르지 않습니다.');
+      if(key==='dividends'&&row.currency!==undefined&&!['USD','KRW'].includes(row.currency))errors.push('배당 통화를 확인해 주세요.');
       if(key==='dividends'&&row.status!==undefined&&!['actual','confirmed','estimated'].includes(row.status))errors.push('배당 상태를 확인해 주세요.');
       if(key==='dividends'&&['grossAmountUSD','withholdingTaxUSD','taxUSD','feeUSD','netAmountUSD','rocAmountUSD'].some(field=>row[field]!==undefined&&!valid(field)))errors.push('배당 총액·세금·수수료·ROC 금액을 확인해 주세요.');
       if(key==='dividends'&&row.grossAmountUSD!==undefined&&Number(row.grossAmountUSD)+1e-8<Number(row.netAmountUSD??row.amountUSD))errors.push('배당 총액은 순배당보다 작을 수 없습니다.');

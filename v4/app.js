@@ -1,4 +1,4 @@
-import { fetchReferenceExchangeRate } from './modules/finance.js';
+import { parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
 import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js';
@@ -84,7 +84,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
     const { activeProjects, projectById, projectRows, sharesAtDate, computeProject, recoveryStats, totals } = portfolio;
     const formatters = createFormatters(() => state);
-    const { displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors } = formatters;
+    const { displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors } = formatters;
     function applyTheme(pref = state?.settings?.appearance || 'system') {
         const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme:dark)').matches);
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -180,11 +180,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         try {
             setSaveStatus('동기화 중', 'cloud-busy');
             const now = new Date().toISOString();
-            state.meta.lastCloudSaveAt = now;
+            state.meta.lastCloudAttemptAt = now;
             cloudWritePending = true;
             const saved = await saveCloudDocument(currentUser.uid, clone(state), { expectedRevision: cloudRevision, appVersion: APP_VERSION });
             cloudRevision = saved.revision;
             cloudWritePending = false;
+            state.meta.lastCloudSaveAt = now;
             await storageSet(STATE_KEY, state);
             setSaveStatus('', 'cloud-ok');
         }
@@ -231,9 +232,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     const views = createViews({
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getSaveSummary: () => esc(document.getElementById("saveStatus")?.textContent || (cloudReady ? "최근 저장 " + state.meta.lastCloudSaveAt : "저장 대기")), isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
-        displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
+        displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
     const { renderHome, renderProjects, renderGoals, renderSettings } = views;
     function auditLegacyAgainstState(raw, targetState) {
@@ -437,7 +438,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         openModal(`<h3 class="modal-title">${esc(project.symbol)} 현재가 수정</h3><p class="modal-desc">평가금액과 목표 매수금 계산에 사용할 현재가입니다.</p><form id="priceForm" class="form-grid"><div><label class="input-label">현재가 USD</label><input class="input" name="price" type="number" min="0.0001" step="0.0001" inputmode="decimal" required value="${n(project.currentPrice) || ''}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
         document.getElementById('priceForm').onsubmit = async (event) => { event.preventDefault(); const price = n(new FormData(event.currentTarget).get('price')); if (price <= 0)
-            return; project.currentPrice = price; await saveState(true); closeModal(); renderAll(true); toast('현재가를 저장했습니다.'); };
+            return; project.currentPrice = price; project.priceSource = 'manual'; project.priceUpdatedAt = new Date().toISOString(); await saveState(true); closeModal(); renderAll(true); toast('현재가를 저장했습니다.'); };
     }
     function openIncomeMonth(month = todayISO().slice(0, 7), projectId = '', symbolFilter = '') {
         if (!/^\d{4}-\d{2}$/.test(month))
@@ -446,19 +447,110 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         if (!Number.isFinite(date.getTime()))
             return;
         const shift = (delta) => { const d = new Date(date); d.setMonth(d.getMonth() + delta); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
-        const allRows = monthActivity(state, [], month, todayISO()).filter((row) => !row.estimated && (!projectId || row.projectId === projectId)), allActual = allRows.reduce((sum, row) => sum + n(row.amountUSD), 0), project = projectId ? projectById(projectId) : null;
+        const allRows = monthActivity({ ...state, dividends: reportingDividends(state.dividends.filter((row) => isPostedDividend(row, todayISO())), n(state.settings.exchangeRate)) }, [], month, todayISO()).filter((row) => !row.estimated && (!projectId || row.projectId === projectId)), allActual = allRows.reduce((sum, row) => sum + n(row.amountUSD), 0), project = projectId ? projectById(projectId) : null;
         const bySymbol = [...allRows.reduce((map, row) => { const key = row.symbol || '기타', item = map.get(key) || { symbol: key, value: 0, projectId: row.projectId }; item.value += n(row.amountUSD); map.set(key, item); return map; }, new Map()).values()].sort((a, b) => b.value - a.value), top = bySymbol.slice(0, 4), otherSymbols = new Set(bySymbol.slice(4).map((item) => item.symbol)), other = bySymbol.slice(4).reduce((sum, row) => sum + row.value, 0), composition = other ? [...top, { symbol: '기타', value: other, filter: '__other__' }] : top, total = Math.max(1, allActual);
         const validFilter = symbolFilter && (symbolFilter === '__other__' ? otherSymbols.size : bySymbol.some((item) => item.symbol === symbolFilter)) ? symbolFilter : '', rows = validFilter ? (validFilter === '__other__' ? allRows.filter((row) => otherSymbols.has(row.symbol || '기타')) : allRows.filter((row) => (row.symbol || '기타') === validFilter)) : allRows, actual = rows.reduce((sum, row) => sum + n(row.amountUSD), 0), filterLabel = validFilter === '__other__' ? '기타' : validFilter;
         openModal(`<h3 class="modal-title">${project ? `${esc(project.symbol)} 최근 입금` : '월별 배당'}</h3><div class="month-navigation"><button class="btn soft" data-income-month="${shift(-1)}" ${projectId ? `data-income-project="${esc(projectId)}"` : ''} aria-label="이전 달">‹</button><strong>${month.replace('-', '년 ')}월</strong><button class="btn soft" data-income-month="${shift(1)}" ${projectId ? `data-income-project="${esc(projectId)}"` : ''} aria-label="다음 달">›</button></div>
       <section class="month-actual-summary"><span>${filterLabel ? `${esc(filterLabel)} 실제 세후 입금` : '실제 세후 입금'}</span><strong>${fmtMoney(actual, 2)}</strong><small>${rows.length}회 입금</small></section>
       ${composition.length > 1 ? `<section class="month-composition"><div class="composition-heading"><h4>종목별 구성</h4>${filterLabel ? `<button type="button" data-income-month="${esc(month)}" ${projectId ? `data-income-project="${esc(projectId)}"` : ''}>전체 보기</button>` : '<span>색을 누르면 기록 필터</span>'}</div><div class="composition-bar interactive">${composition.map((item, index) => { const itemProject = projectById(item.projectId), color = itemProject ? projectColors(itemProject)[0] : `hsl(${225 + index * 24} 18% ${55 - index * 3}%)`, filter = item.filter || item.symbol; return `<button type="button" class="${filter === validFilter ? 'active' : validFilter ? 'dimmed' : ''}" style="width:${item.value / total * 100}%;--segment:${color}" data-income-month="${esc(month)}" ${projectId ? `data-income-project="${esc(projectId)}"` : ''} data-income-symbol="${esc(filter)}" aria-label="${esc(item.symbol)} 입금기록만 보기"></button>`; }).join('')}</div><div class="composition-legend interactive">${composition.map((item, index) => { const itemProject = projectById(item.projectId), color = itemProject ? projectColors(itemProject)[0] : `hsl(${225 + index * 24} 18% ${55 - index * 3}%)`, filter = item.filter || item.symbol; return `<button type="button" class="${filter === validFilter ? 'active' : validFilter ? 'dimmed' : ''}" data-income-month="${esc(month)}" ${projectId ? `data-income-project="${esc(projectId)}"` : ''} data-income-symbol="${esc(filter)}"><span><i style="--dot:${color}"></i>${esc(item.symbol)}</span><b>${fmtMoney(item.value, 0)}</b></button>`; }).join('')}</div></section>` : composition.length ? `<p class="single-symbol-note">${esc(composition[0].symbol)} 실제 입금만 있습니다.</p>` : ''}
-      <div class="agenda-heading"><h4>${filterLabel ? `${esc(filterLabel)} 입금 기록` : '입금 기록'}</h4><span>${rows.length}건 · 눌러서 상세 보기</span></div><div class="income-agenda">${rows.map((r) => `<button type="button" class="agenda-row agenda-row-button" data-view-record="dividend:${esc(r.id)}"><div><span class="agenda-status actual">완료</span><strong>${esc(r.symbol)} <small>${fmtDate(r.date)}</small></strong></div><div><strong>${fmtMoney(r.amountUSD, 2)}</strong><i>›</i></div></button>`).join('') || '<p class="empty">이 달의 실제 입금 기록이 없습니다.</p>'}</div><button class="btn soft" style="width:100%;margin-top:16px" data-close-modal>닫기</button>`);
+      <div class="agenda-heading"><h4>${filterLabel ? `${esc(filterLabel)} 입금 기록` : '입금 기록'}</h4><span>${rows.length}건 · 눌러서 상세 보기</span></div><div class="income-agenda">${rows.map((r) => `<button type="button" class="agenda-row agenda-row-button" data-view-record="dividend:${esc(r.id)}"><div><span class="agenda-status actual">완료</span><strong>${esc(r.symbol)} <small>${fmtDate(r.date)}</small></strong></div><div><strong>${fmtDividend(r, 2)}</strong><i>›</i></div></button>`).join('') || '<p class="empty">이 달의 실제 입금 기록이 없습니다.</p>'}</div><button class="btn soft" style="width:100%;margin-top:16px" data-close-modal>닫기</button>`);
+    }
+    async function previewDividendReplacement(file) {
+        try {
+            if (file.size > 1024 * 1024)
+                throw new Error('교체 파일이 너무 큽니다.');
+            const parsed = parseDividendReplacement(JSON.parse(await file.text()), todayISO());
+            const projects = activeProjects().filter((project) => project.symbol === parsed.symbol);
+            if (projects.length !== 1)
+                throw new Error('교체 대상 종목이 정확히 하나 있어야 합니다.');
+            if (pendingCloudState || currentUser && !cloudReady)
+                throw new Error('클라우드 기록 충돌을 먼저 확인해 주세요.');
+            const project = projects[0], fingerprint = JSON.stringify({ currency: parsed.currency, rows: parsed.rows }), replacementMoney = (row) => parsed.currency === 'KRW' ? row.amountKRW.toLocaleString('ko-KR') + '원' : '$' + row.amountUSD.toFixed(2);
+            if (state.meta.lastDividendReplacementFingerprint === fingerprint && state.dividends.length === parsed.rows.length && state.dividends.every((row, index) => row.projectId === project.id && row.currency === parsed.currency && row.date === parsed.rows[index].date && (parsed.currency === 'KRW' ? row.amountKRW === parsed.rows[index].amountKRW : row.amountUSD === parsed.rows[index].amountUSD))) {
+                toast('이미 같은 배당 기록으로 교체되어 있습니다.');
+                return;
+            }
+            openModal(`<h3 class="modal-title">전체 배당 교체 확인</h3><p class="modal-desc">기존 배당 ${state.dividends.length}건을 삭제하고 ${esc(parsed.symbol)} ${parsed.rows.length}건으로 교체합니다. 거래·보유주수·목표·토스 원본은 유지합니다.</p><strong>${parsed.currency === 'KRW' ? parsed.totalKRW.toLocaleString('ko-KR') + '원' : '$' + parsed.totalUSD.toFixed(2)}</strong><div class="list">${parsed.rows.map(row => `<div class="list-row"><span>${esc(row.date)}</span><strong>${replacementMoney(row)}</strong></div>`).join('')}</div><p class="detail-note">${parsed.currency === 'KRW' ? '원화 확인액만 저장합니다. 달러 금액·지급 당시 주수는 미확인이며 달러 재투자 잔액과 총손익에 임의 합산하지 않습니다.' : '확인된 달러 세후 입금액을 저장합니다. 지급 당시 주수는 미확인으로 남깁니다.'} 교체 직전 기록은 안전 사본으로 남깁니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmDividendReplacement">기존 배당 삭제 후 교체</button></div>`);
+            document.getElementById('confirmDividendReplacement').onclick = async () => {
+                if (modalSaving)
+                    return;
+                if (pendingCloudState || currentUser && !cloudReady) {
+                    toast('클라우드 변경을 먼저 확인해 주세요.');
+                    return;
+                }
+                const before = clone(state), next = clone(state);
+                next.dividends = parsed.rows.map(row => ({ id: uid('d'), projectId: project.id, symbol: project.symbol, date: row.date, status: 'actual', currency: parsed.currency, amountKRW: row.amountKRW, amountUSD: row.amountUSD || 0, sharesAtPayment: 0, rocPercent: null, rocStatus: 'none', note: '사용자 제공 증권앱 화면의 ' + parsed.symbol + ' ' + parsed.currency + ' 세후 금액', createdAt: new Date().toISOString() }));
+                next.meta.lastDividendReplacementFingerprint = fingerprint;
+                const errors = validateLedger(next);
+                if (errors.length) {
+                    toast(errors[0]);
+                    return;
+                }
+                modalSaving = true;
+                document.getElementById('confirmDividendReplacement').disabled = true;
+                try {
+                    await storageSet(SAFETY_KEY, before);
+                    state = next;
+                    await saveState(true);
+                    selectedProjectId = project.id;
+                    closeModal();
+                    renderAll();
+                    showPage('projects');
+                    toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.`);
+                }
+                catch (error) {
+                    state = before;
+                    try {
+                        await storageSet(STATE_KEY, before);
+                    }
+                    catch { }
+                    toast('교체를 저장하지 못해 기존 배당을 유지했습니다.');
+                    document.getElementById('confirmDividendReplacement')?.removeAttribute('disabled');
+                }
+                finally {
+                    modalSaving = false;
+                }
+            };
+        }
+        catch (error) {
+            toast(error?.message || '교체 파일을 읽지 못했습니다.');
+        }
+    }
+    function openDividendSchedule(projectId) {
+        const project = projectById(projectId), announcement = project.dividendAnnouncement || {};
+        openModal(`<h3 class="modal-title">${esc(project.symbol)} 공시 일정 기록</h3><p class="modal-desc">운용사·기업 공시에서 확인한 날짜를 직접 기록합니다. 자동 검증된 일정이 아니며 배당 입금 장부와 분리됩니다.</p><form id="dividendScheduleForm" class="form-grid"><label>배당락일<input class="input" name="exDate" type="date" required value="${esc(announcement.exDate || '')}"></label><label>공시 지급일<input class="input" name="payDate" type="date" required value="${esc(announcement.payDate || '')}"></label><label>공시 주소<input class="input" name="sourceURL" type="url" required value="${esc(announcement.sourceURL || '')}" placeholder="https://"></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
+        document.getElementById('dividendScheduleForm').onsubmit = async (event) => {
+            event.preventDefault();
+            if (modalSaving)
+                return;
+            const form = new FormData(event.currentTarget), exDate = String(form.get('exDate')), payDate = String(form.get('payDate')), sourceURL = String(form.get('sourceURL'));
+            if (!isDate(exDate) || !isDate(payDate) || !/^https:\/\//.test(sourceURL)) {
+                toast('날짜와 HTTPS 공시 주소를 확인해 주세요.');
+                return;
+            }
+            const before = clone(project.dividendAnnouncement || null);
+            modalSaving = true;
+            try {
+                project.dividendAnnouncement = { exDate, payDate, sourceURL, recordedAt: new Date().toISOString(), verification: 'user' };
+                await saveState(true);
+                closeModal();
+                renderAll();
+                showPage('projects');
+            }
+            catch {
+                project.dividendAnnouncement = before;
+                toast('일정을 저장하지 못했습니다.');
+            }
+            finally {
+                modalSaving = false;
+            }
+        };
     }
     function openDividendForm(record = null, draft = null) {
         const project = projectById(record?.projectId || selectedProjectId), edit = !!record, calc = computeProject(project), returnPage = currentPage;
         openModal(`<h3 class="modal-title">${project.symbol} ${edit ? '배당 수정' : '배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date || draft?.date || todayISO()}"></div>
-      <div><label class="input-label">세후 배당 USD</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${n(record?.amountUSD)}"></div>
+      <div><label class="input-label">입금 통화</label><select class="input select" name="currency"><option value="USD" ${record?.currency !== "KRW" ? "selected" : ""}>달러 실입금</option><option value="KRW" ${record?.currency === "KRW" ? "selected" : ""}>원화 확인액 (달러 미확인)</option></select></div><div><label class="input-label">세후 배당 금액</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${record?.currency === 'KRW' ? n(record.amountKRW) : n(record?.amountUSD)}"></div>
       <details class="dividend-extra"><summary>추가 정보 (선택)</summary><p class="tiny muted">지급 기준 주수는 해당 날짜의 거래기록으로 자동 계산됩니다. 필요한 경우에만 고치세요.</p><div class="form-grid">
         <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record ? n(record.sharesAtPayment) : round(sharesAtDate(project.id, draft?.date || todayISO()), 4)}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record ? n(record.referencePrice) : n(project.currentPrice)}"></div></div>
         <div class="form-grid two"><div><label class="input-label">ROC 비율 %</label><input class="input" name="rocPercent" type="number" min="0" max="100" step="0.01" value="${record?.rocPercent ?? ''}"></div><div><label class="input-label">ROC 자료</label><select class="input" name="rocStatus"><option value="estimated" ${record?.rocStatus !== 'final' ? 'selected' : ''}>운용사 추정</option><option value="final" ${record?.rocStatus === 'final' ? 'selected' : ''}>확정 자료</option></select></div></div>
@@ -469,10 +561,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         preview.className = 'dividend-preview';
         preview.setAttribute('aria-live', 'polite');
         dividendForm.querySelector('.modal-actions').before(preview);
-        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), shares = n(form.get('sharesAtPayment')); if (amount <= 0) {
+        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); dividendForm.elements.amountUSD.step = krw ? '1' : '0.01'; if (amount <= 0) {
             preview.textContent = '실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';
             return;
-        } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`; };
+        } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${krw ? Math.round(amount).toLocaleString('ko-KR') + '원' : fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`; };
         if (!edit)
             dividendForm.elements.date.addEventListener('change', () => { dividendForm.elements.sharesAtPayment.value = round(sharesAtDate(project.id, dividendForm.elements.date.value), 4); updatePreview(); });
         dividendForm.addEventListener('input', updatePreview);
@@ -481,14 +573,24 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             event.preventDefault();
             if (modalSaving)
                 return;
-            const form = new FormData(dividendForm), date = String(form.get('date')), amountUSD = n(form.get('amountUSD'));
-            if (!isDate(date) || amountUSD <= 0) {
+            const form = new FormData(dividendForm), date = String(form.get('date')), entered = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', amountUSD = krw ? 0 : entered;
+            if (!isDate(date) || entered <= 0 || (krw && !Number.isSafeInteger(entered))) {
                 toast('지급일과 배당금을 확인해 주세요.');
                 return;
             }
             const keepEntering = !edit && event.submitter?.name === 'next', before = record ? clone(record) : null;
             const row = record || { id: uid('d'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString() };
-            Object.assign(row, { date, amountUSD, rocPercent: form.get('rocPercent') === '' ? null : n(form.get('rocPercent')), rocStatus: form.get('rocStatus') === 'final' ? 'final' : 'estimated', sharesAtPayment: Math.max(0, n(form.get('sharesAtPayment'))), referencePrice: Math.max(0, n(form.get('referencePrice'))), note: String(form.get('note')).trim() });
+            Object.assign(row, { date, amountUSD, currency: krw ? 'KRW' : 'USD', amountKRW: krw ? entered : undefined, rocPercent: form.get('rocPercent') === '' ? null : n(form.get('rocPercent')), rocStatus: form.get('rocStatus') === 'final' ? 'final' : 'estimated', sharesAtPayment: krw ? 0 : Math.max(0, n(form.get('sharesAtPayment'))), referencePrice: Math.max(0, n(form.get('referencePrice'))), note: String(form.get('note')).trim() });
+            if (krw) {
+                for (const key of ['grossAmountUSD', 'netAmountUSD', 'withholdingTaxUSD', 'taxUSD', 'feeUSD', 'rocAmountUSD'])
+                    delete row[key];
+                row.rocPercent = null;
+                row.rocStatus = 'none';
+            }
+            else if (row.netAmountUSD !== undefined || row.grossAmountUSD !== undefined) {
+                row.netAmountUSD = entered;
+                row.grossAmountUSD = entered + n(row.withholdingTaxUSD ?? row.taxUSD) + n(row.feeUSD);
+            }
             if (!edit)
                 state.dividends.push(row);
             const controls = [...document.getElementById('modal').querySelectorAll('input,select,button')], disabled = controls.map((el) => el.disabled);
@@ -581,7 +683,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const sourceLabel = fromToss ? '토스 동기화 기록' : '직접 입력 기록';
             const note = row.note && !/^더미\s/.test(String(row.note)) ? `<p class="record-note">${esc(row.note)}</p>` : '';
             const action = fromToss ? '<p class="record-source-note">동기화 원본은 앱에서 수정하지 않습니다.</p>' : `<button class="record-edit-link" type="button" data-edit-record="${esc(token)}">직접 입력값 고치기</button>`;
-            openModal(`<div class="record-detail-head"><div><span>${esc(project?.symbol || row.symbol || '')} · 세후 배당</span><h3 class="modal-title">${fmtDate(row.date)} 입금</h3></div><b class="record-source-badge ${fromToss ? 'synced' : 'manual'}">${sourceLabel}</b></div><div class="record-primary-value"><span>실제 입금액</span><strong>${fmtMoney(row.amountUSD, 2)}</strong></div><div class="record-detail-grid compact"><div><span>지급 기준 주수</span><strong>${n(row.sharesAtPayment) > 0 ? fmtShares(row.sharesAtPayment) + '주' : '기록 없음'}</strong></div></div>${note}${action}<button class="btn primary record-close" data-close-modal>닫기</button>`);
+            openModal(`<div class="record-detail-head"><div><span>${esc(project?.symbol || row.symbol || '')} · 세후 배당</span><h3 class="modal-title">${fmtDate(row.date)} 입금</h3></div><b class="record-source-badge ${fromToss ? 'synced' : 'manual'}">${sourceLabel}</b></div><div class="record-primary-value"><span>실제 입금액</span><strong>${fmtDividend(row, 2)}</strong></div><div class="record-detail-grid compact"><div><span>지급 기준 주수</span><strong>${n(row.sharesAtPayment) > 0 ? fmtShares(row.sharesAtPayment) + '주' : '기록 없음'}</strong></div></div>${note}${action}<button class="btn primary record-close" data-close-modal>닫기</button>`);
             return;
         }
         let details = '';
@@ -1507,7 +1609,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             openTradeForm();
             return;
         }
-        if ('addDividend' in button.dataset) {
+        if ('addDividend' in button.dataset || 'quickDividend' in button.dataset) {
             openDividendForm();
             return;
         }
@@ -1609,6 +1711,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         if ('backupSave' in button.dataset) {
             saveBackupToChosenLocation();
+            return;
+        }
+        if ('replaceDividends' in button.dataset) {
+            document.getElementById('dividendReplacementInput').click();
+            return;
+        }
+        if (button.dataset.dividendSchedule) {
+            openDividendSchedule(button.dataset.dividendSchedule);
             return;
         }
         if ('restore' in button.dataset) {
@@ -1776,6 +1886,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         } if (event.key === 'Escape')
             requestCloseModal(); });
+        document.getElementById('dividendReplacementInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)
+            previewDividendReplacement(file); event.target.value = ''; });
         document.getElementById('restoreInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)
             restoreFromFile(file); event.target.value = ''; });
         document.getElementById('tossImportInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)

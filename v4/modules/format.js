@@ -4,6 +4,11 @@ export function createFormatters(getState) {
     function displayCurrency() {
         return getState().settings.displayCurrency === 'KRW' ? 'KRW' : 'USD';
     }
+    function fmtDividend(row, digits = 2) {
+        if (row.currency === 'KRW')
+            return displayCurrency() === 'KRW' ? `${Math.round(n(row.amountKRW)).toLocaleString('ko-KR')}원` : `≈ ${fmtMoney(n(row.amountKRW) / Math.max(.000001, n(getState().settings.exchangeRate)), digits)}`;
+        return fmtMoney(row.amountUSD, digits);
+    }
     function fmtMoney(usd, digits = 2) {
         const state = getState();
         if (displayCurrency() === 'KRW')
@@ -21,5 +26,5 @@ export function createFormatters(getState) {
     };
     const signClass = (value) => n(value) > 0 ? 'positive' : n(value) < 0 ? 'negative' : '';
     const projectColors = (project) => PROJECT_COLORS[n(project?.colorIndex) % PROJECT_COLORS.length] || PROJECT_COLORS[0];
-    return { displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors };
+    return { fmtDividend, displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors };
 }

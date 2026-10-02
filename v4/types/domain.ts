@@ -101,6 +101,8 @@ export interface DividendRecord {
   date: string;
   status?: DividendStatus;
   amountUSD: number;
+  currency?: Currency;
+  amountKRW?: number;
   grossAmountUSD?: number;
   withholdingTaxUSD?: number;
   feeUSD?: number;
@@ -122,6 +124,7 @@ export interface TradeCashBreakdown {
 }
 
 export interface DividendCashBreakdown {
+  netKRW?: number;
   grossUSD: number;
   withholdingTaxUSD: number;
   feeUSD: number;

@@ -54,6 +54,7 @@ test('토스 원본 재구축은 238주를 247주로 대조하고 배당과 안�
   const before=await readLedger(page);
   expect(before.trades).toHaveLength(1);
   expect(before.trades[0].shares).toBe(238);
+  await page.locator('details.toss-details').filter({has:page.locator('[data-rebuild-msty-toss]')}).locator(':scope > summary').click();
   await page.locator('[data-rebuild-msty-toss]').click();
   await page.locator('#modalConfirm').click();
   await expect(page.locator('.toast')).toContainText('토스 원본 1건으로 다시 만들었습니다');
@@ -73,6 +74,7 @@ test('토스 원본 재구축은 238주를 247주로 대조하고 배당과 안�
 test('토스 보유주수와 체결 합계가 다르면 재구축을 거절하고 기존 기록을 유지한다',async({page})=>{
   await setup(page,246);
   const before=await readLedger(page);
+  await page.locator('details.toss-details').filter({has:page.locator('[data-rebuild-msty-toss]')}).locator(':scope > summary').click();
   await page.locator('[data-rebuild-msty-toss]').click();
   await page.locator('#modalConfirm').click();
   await expect(page.locator('.toast')).toContainText('정확히 대조할 수 없어 기존 기록을 유지');
