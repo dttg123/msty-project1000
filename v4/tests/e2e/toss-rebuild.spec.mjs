@@ -150,6 +150,9 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   const before=await readLedger(page);
   const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-02-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:251}],orders:[{id:'old-manual-match',symbol:'MSTY',currency:'USD',date:'2025-12-01',type:'buy',shares:247,price:18.01},{id:'new-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16.25}]};
   const load=()=>page.locator('#tossImportInput').setInputFiles({name:'incremental.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-01T00:00:00Z',snapshot}))});
+  await page.locator('#tossImportInput').setInputFiles({name:'holdings-only.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-01T00:00:00Z',snapshot:{...snapshot,orders:[]}}))});
+  await expect(page.locator('.toast')).toContainText('체결 합계와 보유주수 불일치');
+  expect((await readLedger(page)).trades).toEqual(before.trades);
   await load();await expect(page.locator('.toast')).toContainText('매수 1건');
   const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
   expect(saved.trades).toHaveLength(2);expect(saved.trades.reduce((sum,row)=>sum+row.shares,0)).toBe(251);
