@@ -710,7 +710,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const beforeAutomaticChanges: any=clone(state),adoptedDividends: any=adoptMatchingTossDividends(),automatic: any=await tryAutomaticTossImport();
     if(adoptedDividends||automatic.imported)await storageSet(SAFETY_KEY,beforeAutomaticChanges);
     await saveState(true);renderAll();showPage('settings');const found: any=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;
-    toast(automatic.imported?`자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends?` · 배당 ${automatic.dividends}건`:''}${adoptedDividends?` · 기존 배당 ${adoptedDividends}건 연결`:''}`:adoptedDividends?`기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.`:result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?`자동 대조를 통과하지 못한 ${found}건만 확인이 필요합니다.`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+    toast(automatic.imported?`자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends?` · 배당 ${automatic.dividends}건`:''}${adoptedDividends?` · 기존 배당 ${adoptedDividends}건 연결`:''}`:adoptedDividends?`기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.`:result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:found?'토스 조회를 완료했습니다. 거래 자동 저장 결과는 조회 상세에서 볼 수 있습니다.':'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
   }
 
   async function runTossImport(loadSnapshot: any,errorPrefix: any): Promise<any> {
