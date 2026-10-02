@@ -13,7 +13,7 @@ async function cleanupOldRevisions(uid: any,currentManifest: any): Promise<any> 
   const snapshots: any=await getDocs(revisionsRef(uid));
   const rows: any=snapshots.docs.map((item: any)=>({id:item.id,ref:item.ref,...item.data()}));
   const previous: any=rows.filter((row: any)=>row.id!==currentManifest.revisionId&&Number(row.revision)<Number(currentManifest.revision)).sort((a: any,b: any)=>Number(b.revision)-Number(a.revision))[0];
-  const keep: any=new Set([currentManifest.revisionId,previous?.id].filter(Boolean)),remove=rows.filter((row: any)=>!keep.has(row.id));
+  const keep: any=new Set([currentManifest.revisionId,previous?.id].filter(Boolean)),remove=rows.filter((row: any)=>!keep.has(row.id)&&Number(row.revision)<Number(currentManifest.revision));
   const writes: any=[];
   for(const row of remove){const segments: any=await getDocs(segmentsRef(uid,row.id));for(const segment of segments.docs)writes.push(segment.ref);writes.push(row.ref);}
   for(let offset: any=0;offset<writes.length;offset+=450){const batch: any=writeBatch(firestore);for(const ref of writes.slice(offset,offset+450))batch.delete(ref);await batch.commit();}
