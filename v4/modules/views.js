@@ -10,7 +10,6 @@ export function createViews(context) {
     function sectionTitle(title, note = '') { return `<div class="section-title-row"><h2 class="section-title">${esc(title)}</h2>${note ? `<span class="section-note">${esc(note)}</span>` : ''}</div>`; }
     function progress(value, color = '') { return `<div class="progress-track"><div class="progress-fill" style="width:${clamp(value, 0, 100)}%;${color ? `background:${color}` : ''}"></div></div>`; }
     function pricedMoney(calc, value, digits = 2) { return calc.priceAvailable ? fmtMoney(value, digits) : '—'; }
-    function estimateLabel(calc, short = false) { return calc.income.spec.key === 'weekly' ? (short ? '최근 4회 월환산' : '최근 8회 월환산') : (short ? '최근 1회' : '최근 3회 평균'); }
     const categoryLabel = (category) => category === 'highYield' ? '고배당주' : '배당주';
     const projectGroup = (project) => project?.category === 'highYield' ? 'highYield' : 'dividend';
     const finitePct = (value) => value === null || value === undefined || !Number.isFinite(value) ? '—' : fmtPct(value);
@@ -28,7 +27,7 @@ export function createViews(context) {
     }
     function strategyInsightHTML(calc) {
         if (calc.project.category === 'highYield')
-            return `<div class="analysis-divider"><strong>${calc.income.payments.length && calc.income.payments.every((row) => row.known) ? '주당 실제 지급액' : '실제 입금액 추세'}</strong><span>최근 최대 8회</span></div>${paymentTrendHTML(calc)}<div class="strategy-metrics two easy-yield-metrics"><div><span>입력 기록 기준 배당률</span><strong>${calc.analytics.trailingYoc === null ? '기록 부족' : fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>투입금 대비 누적 배당률</span><strong>${fmtPct(calc.lifetimeDividendRecoveryPct)}</strong></div></div><details class="metric-guide"><summary>지표 뜻 보기</summary><p><b>1년 배당률</b> 현재 보유분 매입금과 최근 1년 실제 세후 배당의 비율입니다.</p><p><b>누적 배당률</b> 직접 넣은 투자금과 지금까지 실제 세후 배당의 비율입니다. 원금 회수율은 아닙니다.</p></details>`;
+            return `<div class="analysis-divider"><strong>${calc.income.payments.length && calc.income.payments.every((row) => row.known) ? '주당 실제 지급액' : '실제 입금액 추세'}</strong><span>최근 최대 8회</span></div>${paymentTrendHTML(calc)}<div class="strategy-metrics two easy-yield-metrics"><div><span>입력 기록 기준 배당률</span><strong>${calc.analytics.trailingYoc === null ? '기록 부족' : fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>투입금 대비 누적 배당률</span><strong>${calc.hasKRWDividends ? '달러 금액 미확인' : fmtPct(calc.lifetimeDividendRecoveryPct)}</strong></div></div><details class="metric-guide"><summary>지표 뜻 보기</summary><p><b>1년 배당률</b> 현재 보유분 매입금과 최근 1년 실제 세후 배당의 비율입니다.</p><p><b>누적 배당률</b> 직접 넣은 투자금과 지금까지 실제 세후 배당의 비율입니다. 원금 회수율은 아닙니다.</p></details>`;
         if (calc.project.category === 'growth')
             return `<div class="analysis-divider"><strong>주당배당 성장</strong><span>완료 연도 기준</span></div>${annualDpsHTML(calc)}<details class="metric-guide"><summary>계산 기준 보기</summary><p>분할을 보정한 실제 주당배당만 사용하며 진행 중인 연도는 성장률에서 제외합니다.</p></details>`;
         return `<div class="analysis-divider"><strong>배당 변화</strong><span>같은 기간 비교</span></div><div class="strategy-metrics two"><div><span>입력 기록 기준 배당률</span><strong>${calc.analytics.trailingYoc === null ? '기록 부족' : fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>전년 같은 기간 대비</span><strong class="${calc.analytics.ytdChange === null ? '' : signClass(calc.analytics.ytdChange)}">${finitePct(calc.analytics.ytdChange)}</strong></div></div><details class="metric-guide"><summary>지표 뜻 보기</summary><p>최근 1년 실제 세후 배당을 내 매입금과 비교하고, 올해 받은 배당을 지난해 같은 기간과 비교합니다.</p></details>`;
@@ -162,17 +161,6 @@ export function createViews(context) {
         if (mode === 'year' && typeof requestAnimationFrame === 'function')
             requestAnimationFrame(() => document.querySelector('#page-home .cashflow-month.active')?.scrollIntoView({ block: 'nearest', inline: 'center' }));
     }
-    function periodButtons() {
-        return `<div class="chart-period">${[['week', '주'], ['month', '월'], ['year', '년'], ['monthWeeks', '주차']].map(([mode, label]) => `<button type="button" data-chart-mode="${mode}" class="${getChartMode() === mode ? 'active' : ''}">${label}</button>`).join('')}</div>`;
-    }
-    function projectSummaryCard(calc) {
-        const colors = projectColors(calc.project), pct = calc.progress * 100;
-        return `<article class="card compact project-list-card" data-open-project="${calc.project.id}" tabindex="0" role="button" aria-label="${esc(calc.project.symbol)} 프로젝트 열기" style="border-left:4px solid ${colors[0]}">
-      <div class="card-head"><div><div class="row-title">${esc(calc.project.symbol)} · ${esc(calc.project.tag)}</div><div class="row-sub">${fmtShares(calc.shares)} / ${fmtShares(calc.currentTarget)}주</div></div><span class="status-pill">${fmtPct(pct)}</span></div>
-      ${progress(pct, `linear-gradient(90deg,${colors[0]},${colors[1]})`)}
-      <div class="summary-grid" style="margin-top:12px"><div class="summary-chip"><div class="label">누적 세후배당</div><div class="value">${fmtMoney(calc.dividendsTotal, 2)}</div></div><div class="summary-chip"><div class="label">총손익</div><div class="value ${calc.totalReturn !== null ? signClass(calc.totalReturn) : ''}">${calc.totalReturn !== null ? fmtMoney(calc.totalReturn, 2) : calc.hasKRWDividends ? '달러 배당액 미확인' : '현재가 필요'}</div></div></div>
-    </article>`;
-    }
     function combinedRecords(calc) {
         return [
             ...calc.trades.map((row) => ({ ...row, kind: 'trade' })),
@@ -245,11 +233,11 @@ export function createViews(context) {
         <article class="card portfolio-cashflow compact-income dividend-analysis-card">
           <div class="overview-heading"><h3>배당 분석</h3><button class="text-link" data-quick-dividend>＋ 입금 기록</button><span>${calc.income.spec.label}${calc.income.spec.automatic ? ' · 자동' : ''} · 세후</span></div>
           <div class="portfolio-income-hero"><span>이번 달 실제 배당</span><strong>${fmtMoney(calc.currentMonthDividends, 2)}</strong></div>
-          <div class="cashflow-secondary"><div><span>누적 세후배당</span><strong>${fmtMoney(calc.dividendsTotal, 2)}</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet, 2)}</strong></div>${Math.abs(calc.dividendAvailable - calc.dividendsTotal) > .01 ? `<div><span>남은 배당금</span><strong>${fmtMoney(calc.dividendAvailable, 2)}</strong></div>` : calc.reinvestAmount > 0 ? `<div><span>재투자 사용</span><strong>${fmtMoney(calc.reinvestAmount, 2)}</strong></div>` : ''}</div>
+          <div class="cashflow-secondary"><div><span>누적 세후배당</span><strong>${fmtMoney(calc.dividendsTotal, 2)}</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet, 2)}</strong></div>${calc.hasKRWDividends ? '<div><span>달러 배당 잔액</span><strong>달러 금액 미확인</strong></div>' : Math.abs(calc.dividendAvailable - calc.dividendsTotal) > .01 ? `<div><span>남은 배당금</span><strong>${fmtMoney(calc.dividendAvailable, 2)}</strong></div>` : calc.reinvestAmount > 0 ? `<div><span>재투자 사용</span><strong>${fmtMoney(calc.reinvestAmount, 2)}</strong></div>` : ''}</div>
           <p class="detail-note">입력된 기록 ${calc.postedDividends.length}건${calc.postedDividends.length ? ` · ${esc(calc.postedDividends[0].date)}부터` : ""} · 누락 여부 미확인${calc.hasKRWDividends ? " · 원화 원본 보존, 달러 표시는 현재 환율 참고값" : ""}</p><details class="analysis-details"><summary>배당률 · 지급 추세 자세히 보기</summary>${strategyInsightHTML(calc)}</details>
         </article>
         <button class="card-link" data-goal-detail="${p.id}"><span>${rec.stage !== 'accumulating' ? '달성 · 원금회수 관리' : '다음 목표 ' + fmtShares(milestone.shares) + '주'}</span><b>›</b></button>
-        <article class="card compact"><div class="detail-title"><strong>다음 배당 일정</strong><button class="text-link" data-dividend-schedule="${p.id}">공시 기록</button></div>${p.dividendAnnouncement?.payDate && p.dividendAnnouncement.payDate >= todayISO() ? `<p>배당락 ${esc(p.dividendAnnouncement.exDate)} · 지급 ${esc(p.dividendAnnouncement.payDate)}</p><p class="tiny muted">직접 기록한 공시 · 실제 계좌 입금일은 다를 수 있습니다.</p>` : '<p class="tiny muted">기록된 공시 없음 · 예상 날짜를 만들지 않습니다.</p>'}</article>
+        <article class="card compact"><div class="detail-title"><strong>다음 배당 일정</strong><button class="text-link" data-dividend-schedule="${p.id}">공시 기록</button></div>${p.dividendAnnouncement?.payDate && p.dividendAnnouncement.payDate >= todayISO() ? `<p>배당락 ${esc(p.dividendAnnouncement.exDate)} · 지급 ${esc(p.dividendAnnouncement.payDate)}</p><p class="tiny muted">직접 기록한 공시 · 실제 계좌 입금일은 다를 수 있습니다.</p>` : '<p class="tiny muted">공시 지급일을 기록하면 여기에 표시합니다.</p>'}</article>
         <article class="card portfolio-section portfolio-flow-card"><div class="detail-title"><strong>실제 입금 흐름</strong><div class="chart-period">${[['week', '주'], ['month', '월'], ['year', '년'], ['monthWeeks', '주차']].map(([mode, label]) => `<button type="button" data-chart-mode="${mode}" class="${getChartMode() === mode ? 'active' : ''}">${label}</button>`).join('')}</div></div><div class="portfolio-chart-stage">${chartContextHTML(calc)}<div id="projectChart">${chartHTML(p.id)}</div>${chartSelectionHTML(p.id)}</div></article>
         <details class="card record-center">
           <summary><div><strong>기록</strong><span>${rows.length}건 · 거래·배당·인출·분할</span></div><b class="chev">⌄</b></summary>
