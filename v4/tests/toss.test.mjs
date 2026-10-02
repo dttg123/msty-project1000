@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,rebuildProjectFromTossSource,refreshTossCandidateConflicts,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
+import {tossExceptionKey,dismissTossExceptions,filterDismissedTossExceptions,accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,rebuildProjectFromTossSource,refreshTossCandidateConflicts,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
 const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
 assert.equal(normalizeTossOrder(row).shares,2);
 for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
@@ -110,3 +110,12 @@ assert.equal(authoritative.trades.some(item=>item.id==='other'),true,'other proj
 assert.equal(authoritative.preservedDividends,1,'manual dividends survive when Toss does not expose dividends');
 assert.equal(rebuildProjectFromTossSource({...authoritative,project:{id:'p-msty',symbol:'MSTY'},sourceLedger:{orders:[row]},currentTrades:[],currentDividends:[],syncStatus:'partial'}).reason,'partial');
 console.log('Toss offline adapter: PASS (no account requests)');
+
+const exceptions={accountScopeId:'scope-a',sourceLedger:{orders:[row]},candidates:[{externalId:'old',sourceFingerprint:'original'}],dividendCandidates:[{externalId:'div',sourceFingerprint:'v1'}]};
+const dismissed=dismissTossExceptions(exceptions,[tossExceptionKey('candidates',exceptions.candidates[0],'scope-a')]);
+assert.equal(dismissed.candidates.length,0);
+assert.deepEqual(dismissed.dividendCandidates,exceptions.dividendCandidates);
+assert.deepEqual(dismissed.sourceLedger,exceptions.sourceLedger);
+assert.equal(filterDismissedTossExceptions(exceptions,dismissed.dismissedExceptionKeys).candidates.length,0);
+assert.equal(filterDismissedTossExceptions({...exceptions,accountScopeId:'scope-b'},dismissed.dismissedExceptionKeys).candidates.length,1);
+assert.equal(filterDismissedTossExceptions({...exceptions,candidates:[{...exceptions.candidates[0],sourceFingerprint:'changed'}]},dismissed.dismissedExceptionKeys).candidates.length,1);

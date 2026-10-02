@@ -93,7 +93,7 @@ test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP �
   await page.locator('[data-backup]').click();
   await expect(page.locator('.modal-title')).toHaveText('백업 준비 완료');
   const downloadPromise=page.waitForEvent('download');
-  await page.locator('a.backup-download').click();
+  await page.locator('[data-backup-download]').click();
   const download=await downloadPromise;
   const backupPath=testInfo.outputPath('synthetic-30y-backup.zip');
   await download.saveAs(backupPath);

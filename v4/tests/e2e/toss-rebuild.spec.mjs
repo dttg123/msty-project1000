@@ -81,3 +81,51 @@ test('토스 보유주수와 체결 합계가 다르면 재구축을 거절하�
   expect(after.dividends).toEqual(before.dividends);
   expect(after.integrations.toss.candidates).toEqual(before.integrations.toss.candidates);
 });
+
+test('예외 삭제는 저장 장부를 유지하고 재조회와 앱 재시작에도 동일 후보가 돌아오지 않는다',async({page})=>{
+  await setup(page,247);
+  const before=await readLedger(page);
+  await page.locator('[data-delete-toss-exceptions]').click();
+  await page.locator('#selectAllTossExceptions').click();
+  await page.locator('#tossDeleteForm button[type="submit"]').click();
+  await page.locator('#modalConfirm').click();
+  await expect(page.locator('.toast')).toContainText('1건의 예외를 삭제');
+  const deleted=await readLedger(page);
+  expect(deleted.trades).toEqual(before.trades);
+  expect(deleted.dividends).toEqual(before.dividends);
+  expect(deleted.integrations.toss.sourceLedger).toEqual(before.integrations.toss.sourceLedger);
+  expect(deleted.integrations.toss.candidates).toHaveLength(0);
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
+  await page.locator('#tossImportInput').setInputFiles({name:'repeated.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-01-02T00:00:00.000Z',snapshot:{accountScopeId:deleted.integrations.toss.accountScopeId,orders:[{id:'synthetic-authoritative',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:247,price:11}],holdings:[{symbol:'MSTY',currency:'USD',shares:247}],capabilities:{orders:true,holdings:true,dividends:false},syncStatus:'complete'}}))});
+  await expect.poll(async()=> (await readLedger(page)).integrations.toss.syncSequence).toBeGreaterThan(deleted.integrations.toss.syncSequence);
+  expect((await readLedger(page)).integrations.toss.candidates).toHaveLength(0);
+});
+
+test('환율 갱신 성공과 실패를 구분하며 실패 시 저장 환율을 유지한다',async({page})=>{
+  await setup(page,247);
+  let fail=false;
+  await page.route('https://api.frankfurter.dev/**',route=>fail?route.fulfill({status:503,body:'Unavailable'}):route.fulfill({contentType:'application/json',body:JSON.stringify({base:'USD',quote:'KRW',rate:1450.25,date:new Date().toISOString().slice(0,10)})}));
+  const display=page.locator('details.settings-section').filter({has:page.locator('#displaySettingsForm')});await display.locator(':scope > summary').click();
+  await page.locator('[data-refresh-exchange-rate]').click();
+  await expect.poll(async()=>(await readLedger(page)).settings.exchangeRate).toBe(1450.25);
+  await expect(page.locator('[data-refresh-exchange-rate]')).toBeEnabled();
+  fail=true;await page.locator('[data-refresh-exchange-rate]').click();
+  await expect(display).toContainText('환율 조회 실패 · 마지막 저장 환율 유지');
+  expect((await readLedger(page)).settings.exchangeRate).toBe(1450.25);
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
+  expect((await readLedger(page)).settings.exchangeRate).toBe(1450.25);
+});
+
+test('Android 백업 저장 버튼은 네이티브 저장 창을 호출하고 취소 시 완료로 표시하지 않는다',async({page})=>{
+  await page.addInitScript(()=>{window.Capacitor={isNativePlatform:()=>true,Plugins:{BackupFile:{save:async(data)=>{window.backupSaveCall=data;return {cancelled:true};},download:async(data)=>{window.backupDownloadCall=data;return {saved:true};}}}};});
+  await setup(page,247);
+  const advanced=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});await advanced.locator(':scope > summary').click();
+  await page.locator('[data-backup]').click();await expect(page.locator('[data-backup-save]')).toBeVisible();
+  await page.locator('[data-backup-save]').click();
+  await expect.poll(()=>page.evaluate(()=>window.backupSaveCall?.filename||'')).toMatch(/\.zip$/);
+  await expect(page.locator('[data-backup-save]')).toBeVisible();
+  await page.locator('[data-backup-download]').click();
+  await expect(page.locator('.toast')).toContainText('다운로드 폴더에 ZIP 백업을 저장');
+  const file=await page.evaluate(()=>window.backupDownloadCall);
+  expect(Buffer.from(file.base64,'base64').subarray(0,2).toString()).toBe('PK');
+});

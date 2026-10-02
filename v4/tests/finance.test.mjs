@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {blankState} from '../modules/state.js';
 import {createPortfolioEngine} from '../modules/portfolio.js';
-import {applyRocToBasis,dividendCashBreakdown,economicTotalReturn,tradeCashBreakdown} from '../modules/finance.js';
+import {parseReferenceExchangeRate,applyRocToBasis,dividendCashBreakdown,economicTotalReturn,tradeCashBreakdown} from '../modules/finance.js';
 
 const buy={id:'buy-1',projectId:'p-msty',date:'2026-01-01',type:'buy',buyType:'direct',shares:10,price:10,feeUSD:2,taxUSD:1};
 const sell={id:'sell-1',projectId:'p-msty',date:'2026-01-03',type:'sell',shares:5,price:12,feeUSD:1,taxUSD:.5};
@@ -20,3 +20,7 @@ assert.equal(calc.grossDividendsTotal,10);assert.equal(calc.dividendTaxes,1);ass
 assert.equal(calc.tradeFees,3);assert.equal(calc.tradeTaxes,1.5);assert.equal(calc.postedDividends.length,1,'confirmed and estimated dividends are not actual cash');
 assert.ok(Math.abs(calc.unrealized+calc.realized+calc.incomeDividends+calc.excessRoc-calc.totalReturn)<1e-10,'tax-basis reconciliation must match economic return');
 console.log('Finance contract PASS: fees, taxes, ROC basis, realized P&L, economic total return, and dividend states reconciled');
+
+const fx={base:'USD',quote:'KRW',rate:1450.25,date:'2026-10-01'},fxNow=new Date('2026-10-02T13:00:00Z');
+assert.deepEqual(parseReferenceExchangeRate(fx,fxNow),{rate:1450.25,date:'2026-10-01'});
+for(const invalid of [{...fx,rate:0},{...fx,rate:Infinity},{...fx,base:'EUR'},{...fx,date:'2026-02-30'},{...fx,date:'2026-09-01'},{...fx,date:'2026-10-10'}])assert.throws(()=>parseReferenceExchangeRate(invalid,fxNow));
