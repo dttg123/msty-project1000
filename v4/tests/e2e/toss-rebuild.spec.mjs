@@ -87,6 +87,10 @@ test('토스 보유주수와 체결 합계가 다르면 재구축을 거절하�
 test('예외 삭제는 저장 장부를 유지하고 재조회와 앱 재시작에도 동일 후보가 돌아오지 않는다',async({page})=>{
   await setup(page,247);
   const before=await readLedger(page);
+  await expect(page.locator('[data-review-toss]')).toBeHidden();
+  await expect(page.locator('[data-delete-toss-exceptions]')).toBeHidden();
+  await expect(page.locator('.toast')).not.toContainText('자동 대조를 통과하지 못한');
+  await page.locator('details.toss-details').filter({has:page.locator('[data-delete-toss-exceptions]')}).locator(':scope > summary').click();
   await page.locator('[data-delete-toss-exceptions]').click();
   await page.locator('#selectAllTossExceptions').click();
   await page.locator('#tossDeleteForm button[type="submit"]').click();
