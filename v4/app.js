@@ -538,10 +538,6 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             document.getElementById('confirmDividendReplacement').onclick = async () => {
                 if (modalSaving)
                     return;
-                if (pendingCloudState || currentUser && !cloudReady) {
-                    toast('클라우드 변경을 먼저 확인해 주세요.');
-                    return;
-                }
                 const before = clone(state), next = clone(state);
                 next.dividends = parsed.rows.map(row => ({ id: uid('d'), projectId: project.id, symbol: project.symbol, date: row.date, status: 'actual', currency: parsed.currency, amountKRW: row.amountKRW, amountUSD: row.amountUSD || 0, sharesAtPayment: 0, rocPercent: null, rocStatus: 'none', note: '사용자 제공 증권앱 화면의 ' + parsed.symbol + ' ' + parsed.currency + ' 세후 금액', createdAt: new Date().toISOString() }));
                 next.meta.lastDividendReplacementFingerprint = fingerprint;
@@ -560,7 +556,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                     closeModal();
                     renderAll();
                     showPage('projects');
-                    toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.`);
+                    toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.${currentUser && !cloudReady ? ' 기기에 저장 · 클라우드 동기화 보류' : ''}`);
                 }
                 catch (error) {
                     state = before;
@@ -1055,6 +1051,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 if (issues.length)
                     throw new Error(issues.join(' '));
             }
+            if (review && choice === 'local' && cloudState && syncSignature(state) !== syncSignature(cloudState))
+                await storageSet(SAFETY_KEY, clone(cloudState));
             pendingCloudState = null;
             if (choice === 'cloud' && cloudState) {
                 await storageSet(SAFETY_KEY, clone(state));

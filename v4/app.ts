@@ -315,13 +315,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       openModal(`<h3 class="modal-title">전체 배당 교체 확인</h3><p class="modal-desc">기존 배당 ${state.dividends.length}건을 삭제하고 ${esc(parsed.symbol)} ${parsed.rows.length}건으로 교체합니다. 거래·보유주수·목표·토스 원본은 유지합니다.</p><strong>${parsed.currency==='KRW'?parsed.totalKRW.toLocaleString('ko-KR')+'원':'$'+parsed.totalUSD.toFixed(2)}</strong><div class="list">${parsed.rows.map(row=>`<div class="list-row"><span>${esc(row.date)}</span><strong>${replacementMoney(row)}</strong></div>`).join('')}</div><p class="detail-note">${parsed.currency==='KRW'?'원화 확인액만 저장합니다. 달러 금액·지급 당시 주수는 미확인이며 달러 재투자 잔액과 총손익에 임의 합산하지 않습니다.':'확인된 달러 세후 입금액을 저장합니다. 지급 당시 주수는 미확인으로 남깁니다.'} 교체 직전 기록은 안전 사본으로 남깁니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmDividendReplacement">기존 배당 삭제 후 교체</button></div>`);
       document.getElementById('confirmDividendReplacement').onclick=async()=>{
         if(modalSaving)return;
-        if(pendingCloudState||currentUser&&!cloudReady){toast('클라우드 변경을 먼저 확인해 주세요.');return;}
         const before=clone(state),next=clone(state);
         next.dividends=parsed.rows.map(row=>({id:uid('d'),projectId:project.id,symbol:project.symbol,date:row.date,status:'actual',currency:parsed.currency,amountKRW:row.amountKRW,amountUSD:row.amountUSD||0,sharesAtPayment:0,rocPercent:null,rocStatus:'none',note:'사용자 제공 증권앱 화면의 '+parsed.symbol+' '+parsed.currency+' 세후 금액',createdAt:new Date().toISOString()}));
         next.meta.lastDividendReplacementFingerprint=fingerprint;
         const errors=validateLedger(next);if(errors.length){toast(errors[0]);return;}
         modalSaving=true;document.getElementById('confirmDividendReplacement').disabled=true;
-        try{await storageSet(SAFETY_KEY,before);state=next;await saveState(true);selectedProjectId=project.id;closeModal();renderAll();showPage('projects');toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.`);}
+        try{await storageSet(SAFETY_KEY,before);state=next;await saveState(true);selectedProjectId=project.id;closeModal();renderAll();showPage('projects');toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.${currentUser&&!cloudReady?' 기기에 저장 · 클라우드 동기화 보류':''}`);}
         catch(error){state=before;try{await storageSet(STATE_KEY,before);}catch{}toast('교체를 저장하지 못해 기존 배당을 유지했습니다.');document.getElementById('confirmDividendReplacement')?.removeAttribute('disabled');}
         finally{modalSaving=false;}
       };
@@ -558,6 +557,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
       if(choice==='cancel'){pendingCloudState=cloudState;setSaveStatus('기기 저장 · 클라우드 확인 필요','cloud-error');renderAll();return;}
       if(cloudState){const issues: any=validateLedger(cloudState);if(issues.length)throw new Error(issues.join(' '));}
+      if(review&&choice==='local'&&cloudState&&syncSignature(state)!==syncSignature(cloudState))await storageSet(SAFETY_KEY,clone(cloudState));
       pendingCloudState=null;
       if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudBaseSignature=syncSignature(state);await storageSet('cloudSyncBase:'+user.uid,cloudBaseSignature);cloudReady=true;if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
