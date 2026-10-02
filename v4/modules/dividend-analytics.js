@@ -25,7 +25,7 @@ export function buildDividendAnalytics(project, dividends, splits = [], avgCost 
     const years = [...yearly.values()].sort((a, b) => a.year.localeCompare(b.year));
     const currentYear = todayString.slice(0, 4), completed = years.filter((item) => item.year < currentYear && item.known && item.dps > 0);
     const latest = completed.at(-1), previous = completed.at(-2);
-    const growthYears = completed.map((item, index) => ({ ...item, change: index ? pctChange(item.dps, completed[index - 1].dps) : null }));
+    const growthYears = completed.map((item, index) => ({ ...item, change: index && Number(item.year) - Number(completed[index - 1].year) === 1 ? pctChange(item.dps, completed[index - 1].dps) : null }));
     const cagrFor = (count) => {
         if (completed.length < count + 1)
             return null;
@@ -44,9 +44,9 @@ export function buildDividendAnalytics(project, dividends, splits = [], avgCost 
         else
             break;
     }
-    growthYears.slice(1).forEach((item) => { if (item.change < -.5)
+    growthYears.slice(1).forEach((item) => { if (item.change !== null && item.change < -.5)
         cutCount++;
-    else if (Math.abs(item.change) <= .5)
+    else if (item.change !== null && Math.abs(item.change) <= .5)
         flatCount++; });
     const trailingStart = new Date(`${todayString}T12:00:00Z`);
     trailingStart.setUTCFullYear(trailingStart.getUTCFullYear() - 1);
@@ -60,7 +60,7 @@ export function buildDividendAnalytics(project, dividends, splits = [], avgCost 
     const priorYtd = priorYtdRows.reduce((sum, row) => sum + dividendCashBreakdown(row).netUSD, 0);
     return {
         years: growthYears, latestCompleted: latest || null, previousCompleted: previous || null,
-        annualDpsChange: latest && previous ? pctChange(latest.dps, previous.dps) : null,
+        annualDpsChange: latest && previous && Number(latest.year) - Number(previous.year) === 1 ? pctChange(latest.dps, previous.dps) : null,
         cagr3: cagrFor(3), cagr5: cagrFor(5), cagr10: cagrFor(10), increaseStreak, cutCount, flatCount,
         trailingNet, trailingDps, trailingYoc, currentYtd: currentYtd?.net || 0, priorYtd, ytdChange: pctChange(currentYtd?.net || 0, priorYtd)
     };

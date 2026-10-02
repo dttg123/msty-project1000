@@ -79,6 +79,7 @@ export interface Project {
   brokerLinks: Array<{provider:'toss';assetKey:string;market?:string;securityId?:string}>;
   status: SecurityStatus;
   corporateActions: CorporateAction[];
+  dividendAnnouncement?: {exDate:string;payDate:string;sourceURL:string;recordedAt:string;verification:'user'};
   colorIndex: number;
   archived: boolean;
 }
@@ -101,6 +102,8 @@ export interface DividendRecord {
   date: string;
   status?: DividendStatus;
   amountUSD: number;
+  currency?: Currency;
+  amountKRW?: number;
   grossAmountUSD?: number;
   withholdingTaxUSD?: number;
   feeUSD?: number;
@@ -122,6 +125,7 @@ export interface TradeCashBreakdown {
 }
 
 export interface DividendCashBreakdown {
+  netKRW?: number;
   grossUSD: number;
   withholdingTaxUSD: number;
   feeUSD: number;

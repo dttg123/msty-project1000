@@ -41,8 +41,8 @@ for(const symbol of ['SCHD','KO']){
 }
 selectedProjectId='demo-schd';views.renderProjects();
 assert.match(elements.get('page-projects').innerHTML,/연도별 주당 세후 배당금/);
-assert.match(elements.get('page-projects').innerHTML,/한 주가 1년간 받은 금액/);
-assert.match(elements.get('page-projects').innerHTML,/배당금 연평균 증가율/);
+assert.match(elements.get('page-projects').innerHTML,/입력된 주당 세후 금액/);
+assert.match(elements.get('page-projects').innerHTML,/입력 기록상 연평균 증가율/);
 assert.match(elements.get('page-projects').innerHTML,/최근 3년/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/10년 —/,'unavailable growth rates must stay hidden');
 portfolioGroup='highYield';selectedProjectId='demo-cony';
@@ -52,9 +52,9 @@ for(const mode of ['week','month','year','monthWeeks']){
   assert.match(html,new RegExp(`data-chart-mode="${mode}" class="active"`));
 }
 selectedProjectId='demo-ymax';views.renderProjects();
-assert.match(elements.get('page-projects').innerHTML,/원금 회수 중/);
-assert.match(elements.get('page-projects').innerHTML,/실제 인출 회수/);
-assert.match(elements.get('page-projects').innerHTML,/data-add-withdrawal="demo-ymax"/);
+assert.match(elements.get('page-projects').innerHTML,/달성 · 원금회수 관리/);
+assert.doesNotMatch(elements.get('page-projects').innerHTML,/실제 인출 회수/);
+views.renderGoals();assert.match(elements.get('page-goal').innerHTML,/data-add-withdrawal="demo-ymax"/);
 views.renderGoals();views.renderSettings();
 assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/목표 · 월 매수계획 설정/);

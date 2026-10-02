@@ -25,7 +25,7 @@ export function buildDividendAnalytics(project: any,dividends: any,splits=[],avg
   const years: any=[...yearly.values()].sort((a,b)=>a.year.localeCompare(b.year));
   const currentYear: any=todayString.slice(0,4),completed=years.filter((item: any)=>item.year<currentYear&&item.known&&item.dps>0);
   const latest: any=completed.at(-1),previous=completed.at(-2);
-  const growthYears: any=completed.map((item: any,index: any)=>({...item,change:index?pctChange(item.dps,completed[index-1].dps):null}));
+  const growthYears: any=completed.map((item: any,index: any)=>({...item,change:index&&Number(item.year)-Number(completed[index-1].year)===1?pctChange(item.dps,completed[index-1].dps):null}));
   const cagrFor: any=(count: any)=>{
     if(completed.length<count+1)return null;
     const end: any=completed.at(-1),startYear=String(Number(end.year)-count),start=completed.find((item: any)=>item.year===startYear);
@@ -38,7 +38,7 @@ export function buildDividendAnalytics(project: any,dividends: any,splits=[],avg
     const change: any=pctChange(completed[index].dps,completed[index-1].dps);
     if(change!==null&&change>.5)increaseStreak++;else break;
   }
-  growthYears.slice(1).forEach((item: any)=>{if(item.change<-.5)cutCount++;else if(Math.abs(item.change)<=.5)flatCount++;});
+  growthYears.slice(1).forEach((item: any)=>{if(item.change!==null&&item.change<-.5)cutCount++;else if(item.change!==null&&Math.abs(item.change)<=.5)flatCount++;});
   const trailingStart: any=new Date(`${todayString}T12:00:00Z`);trailingStart.setUTCFullYear(trailingStart.getUTCFullYear()-1);
   const trailingStartString: any=trailingStart.toISOString().slice(0,10);
   const trailingRows: any=rows.filter((row: any)=>row.date>trailingStartString);
@@ -50,7 +50,7 @@ export function buildDividendAnalytics(project: any,dividends: any,splits=[],avg
   const priorYtd: any=priorYtdRows.reduce((sum: any,row: any)=>sum+dividendCashBreakdown(row).netUSD,0);
   return {
     years:growthYears,latestCompleted:latest||null,previousCompleted:previous||null,
-    annualDpsChange:latest&&previous?pctChange(latest.dps,previous.dps):null,
+    annualDpsChange:latest&&previous&&Number(latest.year)-Number(previous.year)===1?pctChange(latest.dps,previous.dps):null,
     cagr3:cagrFor(3),cagr5:cagrFor(5),cagr10:cagrFor(10),increaseStreak,cutCount,flatCount,
     trailingNet,trailingDps,trailingYoc,currentYtd:currentYtd?.net||0,priorYtd,ytdChange:pctChange(currentYtd?.net||0,priorYtd)
   };

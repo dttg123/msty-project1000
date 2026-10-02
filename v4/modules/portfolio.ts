@@ -2,7 +2,7 @@ import { blankRecovery } from './state.js';
 import { clamp, isDate, n, todayISO } from './utils.js';
 import { incomeEstimate } from './income.js';
 import { buildDividendAnalytics } from './dividend-analytics.js';
-import { applyRocToBasis, dividendCashBreakdown, economicTotalReturn, isPostedDividend, tradeCashBreakdown } from './finance.js';
+import { applyRocToBasis, dividendCashBreakdown, economicTotalReturn, isPostedDividend, reportingDividends, tradeCashBreakdown } from './finance.js';
 
 export function createPortfolioEngine(getState: any, getSelectedProjectId: any): any {
   function activeProjects(): any {
@@ -51,6 +51,8 @@ export function createPortfolioEngine(getState: any, getSelectedProjectId: any):
     const postedTrades: any=trades.filter((row: any)=>isDate(row.date)&&String(row.date)<=asOf&&(row.type==='buy'||row.type==='sell')&&n(row.shares)>0&&n(row.price)>=0);
     const chronological: any=(a: any,b: any)=>String(a.date).localeCompare(String(b.date))||String(a.createdAt||a.id).localeCompare(String(b.createdAt||b.id));
     const postedDividends: any=dividends.filter((row: any)=>isDate(row.date)&&isPostedDividend(row,asOf)).sort(chronological);
+    const reportingRows=reportingDividends(postedDividends,n(getState().settings.exchangeRate));
+    const hasKRWDividends=postedDividends.some((row: any)=>row.currency==='KRW');
     const postedAdjustments: any=adjustments.filter((row: any)=>isDate(row.date)&&String(row.date)<=asOf&&Math.abs(n(row.amountUSD))>0).sort(chronological);
     const targetUnits: any = Math.max(.000001,n(project.targetUnits));
     let factor: any=1, shares=0, normalizedShares=0, costBasis=0, realized=0, directBuyCost=0, sellProceeds=0,totalBuyCashOut=0,totalSellCashIn=0,tradeFees=0,tradeTaxes=0,rocBasisReduction=0,excessRoc=0;
@@ -98,12 +100,12 @@ export function createPortfolioEngine(getState: any, getSelectedProjectId: any):
     costBasis=Math.max(0,Math.abs(costBasis)<1e-7?0:costBasis);
     const currentPrice: any=Math.max(0,n(project.currentPrice)), marketValue=shares*currentPrice;
     const priceAvailable: any=currentPrice>0, unrealized=priceAvailable?marketValue-costBasis:0, avgCost=shares>0?costBasis/shares:0, currentTarget=targetUnits*factor;
-    const dividendCash: any=postedDividends.map(dividendCashBreakdown),dividendsTotal=dividendCash.reduce((sum: any,row: any)=>sum+row.netUSD,0),grossDividendsTotal=dividendCash.reduce((sum: any,row: any)=>sum+row.grossUSD,0),dividendTaxes=dividendCash.reduce((sum: any,row: any)=>sum+row.withholdingTaxUSD,0),dividendFees=dividendCash.reduce((sum: any,row: any)=>sum+row.feeUSD,0),rocDistributions=dividendCash.reduce((sum: any,row: any)=>sum+row.rocUSD,0),incomeDividends=dividendCash.reduce((sum: any,row: any)=>sum+row.incomeUSD,0);
+    const dividendCash: any=postedDividends.map(dividendCashBreakdown),usdDividendsTotal=dividendCash.reduce((sum: any,row: any)=>sum+row.netUSD,0),dividendsTotal=reportingRows.reduce((sum: any,row: any)=>sum+dividendCashBreakdown(row).netUSD,0),grossDividendsTotal=dividendCash.reduce((sum: any,row: any)=>sum+row.grossUSD,0),dividendTaxes=dividendCash.reduce((sum: any,row: any)=>sum+row.withholdingTaxUSD,0),dividendFees=dividendCash.reduce((sum: any,row: any)=>sum+row.feeUSD,0),rocDistributions=dividendCash.reduce((sum: any,row: any)=>sum+row.rocUSD,0),incomeDividends=dividendCash.reduce((sum: any,row: any)=>sum+row.incomeUSD,0);
     const currentYear: any=String(new Date().getFullYear());
-    const yearDividends: any=postedDividends.filter((row: any)=>String(row.date).startsWith(currentYear)).reduce((sum: any,row: any)=>sum+n(row.amountUSD),0);
+    const yearDividends: any=reportingRows.filter((row: any)=>String(row.date).startsWith(currentYear)).reduce((sum: any,row: any)=>sum+n(row.amountUSD),0);
     const recentDividend: any=[...postedDividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0] || null;
     const sortedDividends: any=[...postedDividends].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-    const income: any=incomeEstimate(project,postedDividends,projectRows('splits',project.id),shares);
+    const income: any=incomeEstimate(project,reportingRows,projectRows('splits',project.id),shares);
     const stableCount: any=income.spec.stable, shortCount=income.spec.short;
     const stableRecent: any=sortedDividends.slice(0,stableCount),shortRecent=sortedDividends.slice(0,shortCount);
     const monthlyFactor: any=income.spec.year/12;
@@ -117,9 +119,9 @@ export function createPortfolioEngine(getState: any, getSelectedProjectId: any):
     const annualizedDistributionPerShare: any=income.perShare*income.spec.year;
     const annualizedCurrentYield: any=currentPrice>0?annualizedDistributionPerShare/currentPrice*100:0;
     const currentMonth: any=todayISO().slice(0,7);
-    const currentMonthDividends: any=postedDividends.filter((row: any)=>String(row.date).startsWith(currentMonth)).reduce((sum: any,row: any)=>sum+n(row.amountUSD),0);
+    const currentMonthDividends: any=reportingRows.filter((row: any)=>String(row.date).startsWith(currentMonth)).reduce((sum: any,row: any)=>sum+n(row.amountUSD),0);
     const cutoff: any=new Date();cutoff.setUTCFullYear(cutoff.getUTCFullYear()-1);const cutoffISO: any=cutoff.toISOString().slice(0,10);
-    const trailing12Dividends: any=postedDividends.filter((row: any)=>String(row.date)>=cutoffISO).reduce((sum: any,row: any)=>sum+n(row.amountUSD),0);
+    const trailing12Dividends: any=reportingRows.filter((row: any)=>String(row.date)>=cutoffISO).reduce((sum: any,row: any)=>sum+n(row.amountUSD),0);
     const latestDividendDate: any=sortedDividends[0]?.date||'';
     const latestDividendAgeDays: any=latestDividendDate?Math.max(0,Math.floor((Date.now()-new Date(`${latestDividendDate}T12:00:00Z`).getTime())/86400000)):Infinity;
     const recentGaps: any=stableRecent.slice(0,-1).map((row: any,index: any)=>Math.abs(new Date(`${row.date}T12:00:00Z`).getTime()-new Date(`${stableRecent[index+1].date}T12:00:00Z`).getTime())/86400000).filter(Number.isFinite).sort((a: any,b: any)=>a-b);
@@ -128,8 +130,8 @@ export function createPortfolioEngine(getState: any, getSelectedProjectId: any):
     const estimateStale: any=!!postedDividends.length&&!estimateReliable;
     const monthlyEstimate: any=income.monthly,shortMonthlyEstimate=income.shortMonthly;
     const adjustmentTotal: any=postedAdjustments.reduce((sum: any,row: any)=>sum+n(row.amountUSD),0);
-    const dividendAvailable: any=Math.max(0,n(project.initialDividendBalance))+dividendsTotal+adjustmentTotal-reinvestAmount;
-    const analytics: any=buildDividendAnalytics(project,postedDividends,projectRows('splits',project.id),avgCost,asOf);
+    const dividendAvailable: any=Math.max(0,n(project.initialDividendBalance))+usdDividendsTotal+adjustmentTotal-reinvestAmount;
+    const analytics: any=buildDividendAnalytics(project,reportingRows,projectRows('splits',project.id),avgCost,asOf);
     const lifetimeDividendRecoveryPct: any=directBuyCost>0?dividendsTotal/directBuyCost*100:0;
     const cashLedger: any=[
       ...(n(project.initialDividendBalance)?[{id:'opening-balance',date:project.initialDividendBalanceDate||'0000-01-01',createdAt:'',kind:'opening',amountUSD:Math.max(0,n(project.initialDividendBalance))}]:[]),
@@ -140,13 +142,13 @@ export function createPortfolioEngine(getState: any, getSelectedProjectId: any):
     let cashBalance: any=0,minDividendBalance=0;const cashDeficitEvents: any=[];
     for(const row of cashLedger){cashBalance+=n(row.amountUSD);minDividendBalance=Math.min(minDividendBalance,cashBalance);if(n(row.amountUSD)<0&&cashBalance<-.0001)cashDeficitEvents.push({...row,balance:cashBalance});}
     return {
-      project,trades,dividends,adjustments,postedTrades,postedDividends,postedAdjustments,factor,shares,normalizedShares,costBasis,realized,directBuyCost,sellProceeds,
+      project,trades,dividends,adjustments,postedTrades,postedDividends,reportingRows,hasKRWDividends,usdDividendsTotal,postedAdjustments,factor,shares,normalizedShares,costBasis,realized,directBuyCost,sellProceeds,
       directShares,reinvestAmount,reinvestCount,reinvestShares,currentPrice,priceAvailable,marketValue,unrealized,avgCost,
       currentTarget,progress:currentTarget>0?shares/currentTarget:0,dividendsTotal,yearDividends,currentMonthDividends,trailing12Dividends,
       recentDividend,monthlyEstimate,shortMonthlyEstimate,rawMonthlyEstimate,rawShortMonthlyEstimate,estimateReliable,medianDividendGapDays:medianGap,
       stablePerShare,shortPerShare,perShareTrendPct,annualizedDistributionPerShare,annualizedCurrentYield,
       latestDividendAgeDays,estimateStale,dividendAvailable,cashLedger,income,analytics,lifetimeDividendRecoveryPct,
-      minDividendBalance,cashDeficitEvents,totalReturn:priceAvailable?economicTotalReturn({marketValueUSD:marketValue,buyCashOutUSD:totalBuyCashOut,sellCashInUSD:totalSellCashIn,dividendCashInUSD:dividendsTotal}):null,
+      minDividendBalance,cashDeficitEvents,totalReturn:priceAvailable&&!hasKRWDividends?economicTotalReturn({marketValueUSD:marketValue,buyCashOutUSD:totalBuyCashOut,sellCashInUSD:totalSellCashIn,dividendCashInUSD:dividendsTotal}):null,
       grossDividendsTotal,dividendTaxes,dividendFees,rocDistributions,incomeDividends,rocBasisReduction,excessRoc,totalBuyCashOut,totalSellCashIn,tradeFees,tradeTaxes,
       targetReachedDate,targetBasisSuggestion,milestoneDates,oversells,effectiveSells
     };
@@ -169,10 +171,10 @@ export function createPortfolioEngine(getState: any, getSelectedProjectId: any):
 
   function totals(): any {
     const rows: any=activeProjects().map(computeProject).filter(Boolean);
-    const received: any=getState().dividends.filter((row: any)=>isDate(row.date)&&row.date<=todayISO()&&n(row.amountUSD)>0);
+    const received: any=reportingDividends(getState().dividends.filter((row: any)=>isDate(row.date)&&isPostedDividend(row,todayISO())),n(getState().settings.exchangeRate));
     return {
       rows, marketValue:rows.reduce((sum: any,row: any)=>sum+row.marketValue,0), costBasis:rows.reduce((sum: any,row: any)=>sum+row.costBasis,0),
-      unrealized:rows.reduce((sum: any,row: any)=>sum+row.unrealized,0), totalReturn:rows.every((row: any)=>row.priceAvailable)?rows.reduce((sum: any,row: any)=>sum+n(row.totalReturn),0):null,
+      unrealized:rows.reduce((sum: any,row: any)=>sum+row.unrealized,0), totalReturn:rows.every((row: any)=>row.totalReturn!==null)?rows.reduce((sum: any,row: any)=>sum+n(row.totalReturn),0):null,
       dividendsTotal:received.reduce((sum: any,row: any)=>sum+n(row.amountUSD),0), yearDividends:received.filter((row: any)=>row.date.startsWith(todayISO().slice(0,4))).reduce((sum: any,row: any)=>sum+n(row.amountUSD),0),
       currentMonthDividends:rows.reduce((sum: any,row: any)=>sum+row.currentMonthDividends,0),trailing12Dividends:rows.reduce((sum: any,row: any)=>sum+row.trailing12Dividends,0),
       monthlyEstimate:rows.reduce((sum: any,row: any)=>sum+row.monthlyEstimate,0), dividendAvailable:rows.reduce((sum: any,row: any)=>sum+row.dividendAvailable,0),
