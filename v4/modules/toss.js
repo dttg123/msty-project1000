@@ -1,4 +1,4 @@
-import { isDate, n, todayISO } from './utils.js';
+import { isDate, n, todayISO, uid } from './utils.js';
 const SYMBOL_PATTERN = /^[A-Z0-9.-]{1,16}$/;
 function symbolOf(value) {
     const symbol = String(value || '').trim().toUpperCase();
@@ -324,6 +324,44 @@ export function tossCandidateToDividend(candidate, { projectId, id, sharesAtPaym
         id, projectId, symbol: row.symbol, date: row.date, amountUSD: row.amountUSD, grossAmountUSD: row.grossAmountUSD, withholdingTaxUSD: row.withholdingTaxUSD, feeUSD: row.feeUSD, sharesAtPayment: Math.max(0, n(sharesAtPayment)),
         referencePrice: 0, rocPercent: null, rocStatus: 'estimated', note: '토스 배당 승인 가져오기', createdAt,
         source: { provider: 'toss', externalId: row.externalId, rawExternalId: row.rawExternalId, sourceIdKind: row.sourceIdKind, sourceFingerprint: row.sourceFingerprint, accountId: row.accountId, assetKey: row.assetKey, market: row.market, securityId: row.securityId, importedAt: createdAt }
+    };
+}
+export function rebuildProjectFromTossSource({ project, sourceLedger, currentTrades = [], currentDividends = [], capabilities = {}, syncStatus = '', failedAccountCount = 0, historyTruncated = false, makeId = uid, createdAt = new Date().toISOString(), sharesAtDate = () => 0 } = {}) {
+    if (!project?.id || !symbolOf(project.symbol))
+        return { ok: false, reason: 'project' };
+    if (syncStatus !== 'complete' || Math.max(0, n(failedAccountCount)) > 0)
+        return { ok: false, reason: 'partial' };
+    if (historyTruncated)
+        return { ok: false, reason: 'truncated' };
+    const symbol = symbolOf(project.symbol);
+    const unique = (rows, normalizer) => {
+        const map = new Map();
+        for (const raw of Array.isArray(rows) ? rows : []) {
+            const row = normalizer(raw);
+            if (row?.symbol === symbol && row.currency === 'USD' && row.externalId)
+                map.set(row.externalId, row);
+        }
+        return [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.externalId.localeCompare(b.externalId));
+    };
+    const orders = unique(sourceLedger?.orders, normalizeTossOrder);
+    if (!orders.length)
+        return { ok: false, reason: 'empty-orders' };
+    const rebuiltTrades = orders.map((row) => tossCandidateToTrade(row, { projectId: project.id, id: makeId('t'), createdAt })).filter(Boolean);
+    const projectTrades = currentTrades.filter((row) => row.projectId === project.id);
+    const keepTrades = currentTrades.filter((row) => row.projectId !== project.id);
+    const dividendSourceSupported = capabilities?.dividends === true;
+    const projectDividends = currentDividends.filter((row) => row.projectId === project.id);
+    const keepDividends = currentDividends.filter((row) => row.projectId !== project.id);
+    let rebuiltDividends = projectDividends;
+    if (dividendSourceSupported) {
+        const rows = unique(sourceLedger?.dividends, normalizeTossDividend);
+        rebuiltDividends = rows.map((row) => tossCandidateToDividend(row, { projectId: project.id, id: makeId('d'), sharesAtPayment: Math.max(0, n(sharesAtDate(row.date))), createdAt })).filter(Boolean);
+    }
+    return {
+        ok: true, reason: '', trades: [...keepTrades, ...rebuiltTrades], dividends: [...keepDividends, ...rebuiltDividends],
+        importedTrades: rebuiltTrades.length, replacedTrades: projectTrades.length,
+        importedDividends: dividendSourceSupported ? rebuiltDividends.length : 0, replacedDividends: dividendSourceSupported ? projectDividends.length : 0,
+        preservedDividends: dividendSourceSupported ? 0 : projectDividends.length, dividendSourceSupported
     };
 }
 export function nextTossSyncFrom(toss = {}, fallback = '2020-01-01', overlapDays = 14) {

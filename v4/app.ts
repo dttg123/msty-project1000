@@ -15,7 +15,7 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, refreshTossCandidateConflicts, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, rebuildProjectFromTossSource, refreshTossCandidateConflicts, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
@@ -626,6 +626,29 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     return runTossImport(()=>readTossSnapshotFile(file),'Toss snapshot import error');
   }
 
+  async function rebuildMstyFromToss(): Promise<any>{
+    const projects: any=activeProjects().filter((project: any)=>project.symbol==='MSTY');
+    if(projects.length!==1){toast(projects.length?'MSTY 프로젝트가 여러 개라 하나로 정리한 뒤 실행해 주세요.':'MSTY 프로젝트가 없습니다.');return;}
+    const project: any=projects[0],toss: any=state.integrations.toss,before: any=clone(state);
+    const rebuilt: any=rebuildProjectFromTossSource({project,sourceLedger:toss.sourceLedger,currentTrades:state.trades,currentDividends:state.dividends,capabilities:toss.capabilities,syncStatus:toss.syncStatus,failedAccountCount:toss.failedAccountCount,historyTruncated:toss.historyTruncated,makeId:uid,sharesAtDate:(date: any)=>sharesAtDate(project.id,date)});
+    const reasonText: any={partial:'모든 토스 계좌의 전체 조회가 완료되지 않았습니다.',truncated:'토스 체결 이력이 일부 잘려 있습니다.','empty-orders':'보존된 MSTY 토스 체결 원본이 없습니다.',project:'MSTY 프로젝트를 확인하지 못했습니다.'};
+    if(!rebuilt.ok){toast(reasonText[rebuilt.reason]||'MSTY 원장을 다시 만들 수 없습니다.');return;}
+    state.trades=rebuilt.trades;state.dividends=rebuilt.dividends;
+    if(rebuilt.dividendSourceSupported)for(const row of state.dividends.filter((item: any)=>item.projectId===project.id))row.sharesAtPayment=sharesAtDate(project.id,row.date);
+    for(const row of toss.sourceLedger?.orders||[])if(String(row?.symbol||'').toUpperCase()==='MSTY')findProjectForToss(row,{attach:true});
+    toss.candidates=(toss.candidates||[]).filter((row: any)=>String(row?.symbol||'').toUpperCase()!=='MSTY');
+    if(rebuilt.dividendSourceSupported)toss.dividendCandidates=(toss.dividendCandidates||[]).filter((row: any)=>String(row?.symbol||'').toUpperCase()!=='MSTY');
+    toss.correctionCandidates=(toss.correctionCandidates||[]).filter((row: any)=>String(row?.symbol||'').toUpperCase()!=='MSTY');
+    if(rebuilt.dividendSourceSupported)toss.dividendCorrectionCandidates=(toss.dividendCorrectionCandidates||[]).filter((row: any)=>String(row?.symbol||'').toUpperCase()!=='MSTY');
+    refreshTossComparisons();
+    const oversold: any=computeProject(project.id).oversells.length>0,comparisons=(toss.comparisons||[]).filter((row: any)=>row.symbol==='MSTY'&&row.supported),mismatch=comparisons.length!==1||comparisons.some((row: any)=>Math.abs(n(row.difference))>=.0001);
+    if(oversold||mismatch||validateLedger(state).length){state=before;toast(oversold?'토스 원본에 과매도가 있어 기존 기록을 유지했습니다.':mismatch?'토스 보유주수와 재구축 결과를 정확히 대조할 수 없어 기존 기록을 유지했습니다.':'원장 검증을 통과하지 못해 기존 기록을 유지했습니다.');return;}
+    try{await storageSet(SAFETY_KEY,before);state.meta={...state.meta,lastAuthoritativeMstyImportAt:new Date().toISOString()};await saveState(true);}
+    catch(error: any){state=before;console.error('MSTY rebuild save failed',error);renderAll();toast('재구축 기록을 저장하지 못해 기존 기록을 유지했습니다.');return;}
+    renderAll();showPage('settings');
+    toast(`MSTY 거래 ${rebuilt.replacedTrades}건을 토스 원본 ${rebuilt.importedTrades}건으로 다시 만들었습니다.${rebuilt.preservedDividends?` 배당 ${rebuilt.preservedDividends}건은 유지했습니다.`:''}`);
+  }
+
   function reviewTossCandidates(): any {
     const candidates: any=mergeTossCandidates(state.integrations.toss.candidates||[],[]),dividendCandidates=mergeTossDividendCandidates(state.integrations.toss.dividendCandidates||[],[]);state.integrations.toss.candidates=candidates;state.integrations.toss.dividendCandidates=dividendCandidates;
     if(!candidates.length&&!dividendCandidates.length){toast('검토할 신규 기록이 없습니다.');return;}
@@ -713,6 +736,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('confirmTossIp'in button.dataset){const ip: any=pendingTossIp;modalDirty=false;closeModal();syncNativeTossReadOnly({ipConfirmed:!!ip});return;}
     if('clearTossCredentials'in button.dataset){confirmAction('저장한 토스 키 삭제','이 기기에 암호화 저장한 Client ID와 Secret만 삭제합니다. 가져온 장부 기록은 유지됩니다.',async()=>{await clearNativeTossCredentials();nativeTossStatus={...nativeTossStatus,configured:false,publicIp:'',lastPublicIp:''};renderSettings();showPage('settings');toast('이 기기의 토스 키를 삭제했습니다.');},'키 삭제');return;}
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
+    if('rebuildMstyToss'in button.dataset){confirmAction('MSTY 기록 다시 만들기','기존 MSTY 거래만 지우고 보존된 토스 전체 체결 원본으로 다시 만듭니다. 분할 기록과 다른 종목은 유지하며, 토스 배당 조회가 지원되지 않으면 기존 배당도 유지합니다.',rebuildMstyFromToss,'다시 만들기');return;}
     if('installHotUpdate'in button.dataset){applyAppUpdate();return;}
     if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{renderSettings();showPage('settings');toast(appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':'현재 최신 버전입니다.');});return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}

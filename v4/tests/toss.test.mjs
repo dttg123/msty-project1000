@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,refreshTossCandidateConflicts,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
+import {accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,rebuildProjectFromTossSource,refreshTossCandidateConflicts,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
 const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
 assert.equal(normalizeTossOrder(row).shares,2);
 for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
@@ -101,4 +101,12 @@ const disconnected=disconnectedTossState({accountScopeId:'scope',sourceLedger:{o
 assert.equal(disconnected.accountScopeId,'scope','disconnect keeps the account guard');
 assert.equal(disconnected.sourceLedger.orders.length,1,'disconnect preserves source history');
 assert.equal(disconnected.candidates.length,0);
+const authoritative=rebuildProjectFromTossSource({project:{id:'p-msty',symbol:'MSTY'},sourceLedger:{orders:[row,{...row,id:'order-2',date:'2026-01-02',shares:3}],dividends:[]},currentTrades:[{id:'manual-old',projectId:'p-msty',symbol:'MSTY'},{id:'other',projectId:'p-other',symbol:'SCHD'}],currentDividends:[{id:'manual-div',projectId:'p-msty',symbol:'MSTY'}],capabilities:{dividends:false},syncStatus:'complete',makeId:(prefix)=>`${prefix}-rebuilt`});
+assert.equal(authoritative.ok,true);
+assert.equal(authoritative.replacedTrades,1);
+assert.equal(authoritative.importedTrades,2);
+assert.equal(authoritative.trades.some(item=>item.id==='manual-old'),false,'old MSTY trades are replaced');
+assert.equal(authoritative.trades.some(item=>item.id==='other'),true,'other projects are preserved');
+assert.equal(authoritative.preservedDividends,1,'manual dividends survive when Toss does not expose dividends');
+assert.equal(rebuildProjectFromTossSource({...authoritative,project:{id:'p-msty',symbol:'MSTY'},sourceLedger:{orders:[row]},currentTrades:[],currentDividends:[],syncStatus:'partial'}).reason,'partial');
 console.log('Toss offline adapter: PASS (no account requests)');
