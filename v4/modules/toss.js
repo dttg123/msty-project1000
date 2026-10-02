@@ -391,9 +391,13 @@ export function automaticTossImportPlan(toss = {}) {
         return { eligible: false, reason: 'correction', candidates, dividendCandidates };
     if (!total)
         return { eligible: false, reason: 'empty', candidates, dividendCandidates };
-    if ([...candidates, ...dividendCandidates].some((row) => row?.possibleManualDuplicate))
-        return { eligible: false, reason: 'duplicate', candidates, dividendCandidates };
-    return { eligible: true, reason: '', candidates, dividendCandidates };
+    // Existing manual matches stay pending; they must not block unrelated new receipts.
+    // The caller still validates chronology and reconciles the resulting holdings before saving.
+    const newTrades = candidates.filter((row) => !row?.possibleManualDuplicate);
+    const newDividends = dividendCandidates.filter((row) => !row?.possibleManualDuplicate);
+    if (!newTrades.length && !newDividends.length)
+        return { eligible: false, reason: 'duplicate', candidates: [], dividendCandidates: [] };
+    return { eligible: true, reason: '', candidates: newTrades, dividendCandidates: newDividends };
 }
 export function refreshTossCandidateConflicts(toss = {}, existingTrades = [], existingDividends = []) {
     const manualTradeIds = new Set(existingTrades.filter((row) => row?.source?.provider !== 'toss').map((row) => String(row?.id || '')).filter(Boolean));

@@ -1125,8 +1125,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         refreshTossCandidateConflicts(state.integrations.toss, state.trades, state.dividends);
         const plan = automaticTossImportPlan(state.integrations.toss);
         if (!plan.eligible) {
-            state.integrations.toss.lastAutoImportReason = plan.reason;
-            return { imported: 0, reason: plan.reason };
+            const comparisons = (state.integrations.toss.comparisons || []).filter((row) => row.supported);
+            const matches = comparisons.length > 0 && comparisons.every((row) => Math.abs(n(row.difference)) < .0001);
+            const current = ['duplicate', 'empty'].includes(plan.reason) && matches;
+            const reason = plan.reason === 'empty' && comparisons.length > 0 && !matches ? 'reconciliation' : plan.reason;
+            state.integrations.toss.lastAutoImportReason = current ? '' : reason;
+            return { imported: 0, reason: current ? 'current' : reason };
         }
         const before = clone(state), importedTradeIds = new Set(), importedDividendIds = new Set(), affectedProjectIds = new Set();
         let buys = 0, sells = 0, dividends = 0;
@@ -1180,8 +1184,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const imported = buys + sells + dividends;
             if (!imported)
                 throw new Error('empty-import');
-            state.integrations.toss.candidates = plan.candidates.filter((row) => !importedTradeIds.has(String(row?.externalId || '')));
-            state.integrations.toss.dividendCandidates = plan.dividendCandidates.filter((row) => !importedDividendIds.has(String(row?.externalId || '')));
+            state.integrations.toss.candidates = state.integrations.toss.candidates.filter((row) => !importedTradeIds.has(String(row?.externalId || '')));
+            state.integrations.toss.dividendCandidates = state.integrations.toss.dividendCandidates.filter((row) => !importedDividendIds.has(String(row?.externalId || '')));
             state.integrations.toss.lastAutoImportReason = '';
             return { imported, buys, sells, dividends, reason: '' };
         }
@@ -1344,7 +1348,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         renderAll();
         showPage('settings');
         const found = result.candidates.length + result.dividendCandidates.length, changed = result.correctionCandidates.length + result.dividendCorrectionCandidates.length;
-        toast(automatic.imported ? `자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends ? ` · 배당 ${automatic.dividends}건` : ''}${adoptedDividends ? ` · 기존 배당 ${adoptedDividends}건 연결` : ''}` : adoptedDividends ? `기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.` : result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : found ? '토스 조회를 완료했습니다. 거래 자동 저장 결과는 조회 상세에서 볼 수 있습니다.' : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+        toast(automatic.imported ? `자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends ? ` · 배당 ${automatic.dividends}건` : ''}${adoptedDividends ? ` · 기존 배당 ${adoptedDividends}건 연결` : ''}` : adoptedDividends ? `기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.` : result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : automatic.reason === 'current' ? '토스 보유주수와 일치합니다. 새로 저장할 거래는 없습니다.' : automatic.reason && automatic.reason !== 'empty' ? `조회 완료 · 거래 저장 보류: ${{ duplicate: '기존 수동 거래와 중복 가능', correction: '기존 체결 원본 변경', reconciliation: '체결 합계와 보유주수 불일치', oversell: '중간 보유주수 초과 매도', truncated: '체결 조회 누락', partial: '일부 계좌 조회 실패', ledger: '장부 검증 실패', validation: '장부 검증 실패' }[automatic.reason] || '거래 검증 필요'}` : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
     }
     async function runTossImport(loadSnapshot, errorPrefix) {
         if (tossSyncRunning)
