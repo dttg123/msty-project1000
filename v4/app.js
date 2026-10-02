@@ -155,10 +155,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             renderRateSettings();
         }
     }
+    function getSaveSummary() { if (!currentUser)
+        return '연결 안 됨 · 기기 저장 사용'; const text = document.getElementById('saveStatus')?.textContent; if (text)
+        return String(text); if (!cloudReady)
+        return '클라우드 확인 대기'; return state.meta.lastCloudSaveAt ? '저장 성공 ' + new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(state.meta.lastCloudSaveAt)) : '연결됨 · 저장 성공 기록 없음'; }
     function setSaveStatus(text, kind = '') { const el = document.getElementById('saveStatus'); if (el) {
         el.textContent = text;
         el.className = `save-pill ${kind}`;
-    } }
+    } const summary = document.getElementById('cloudSaveSummary'); if (summary)
+        summary.textContent = getSaveSummary(); }
     function hasMeaningfulData(value = state) { return !!(value && (value.trades?.length || value.dividends?.length || value.splits?.length || value.cashAdjustments?.length || value.projects?.some((p) => n(p.currentPrice) || n(p.monthlyPlanShares) || n(p.initialDividendBalance)))); }
     const backupStorage = { get: storageGet, set: storageSet, remove: storageDelete };
     async function refreshAutoBackupStatus() { const entries = await listAutoBackups(backupStorage); autoBackupStatus = { count: entries.length, lastAt: entries[0]?.createdAt || '', error: '' }; return entries; }
@@ -232,7 +237,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     const views = createViews({
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getSaveSummary: () => esc(document.getElementById("saveStatus")?.textContent || (cloudReady ? "최근 저장 " + state.meta.lastCloudSaveAt : "저장 대기")), isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getSaveSummary, isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
         displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
@@ -551,8 +556,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         openModal(`<h3 class="modal-title">${project.symbol} ${edit ? '배당 수정' : '배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date || draft?.date || todayISO()}"></div>
       <div><label class="input-label">입금 통화</label><select class="input select" name="currency"><option value="USD" ${record?.currency !== "KRW" ? "selected" : ""}>달러 실입금</option><option value="KRW" ${record?.currency === "KRW" ? "selected" : ""}>원화 확인액 (달러 미확인)</option></select></div><div><label class="input-label">세후 배당 금액</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${record?.currency === 'KRW' ? n(record.amountKRW) : n(record?.amountUSD)}"></div>
-      <details class="dividend-extra"><summary>추가 정보 (선택)</summary><p class="tiny muted">지급 기준 주수는 해당 날짜의 거래기록으로 자동 계산됩니다. 필요한 경우에만 고치세요.</p><div class="form-grid">
-        <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record ? n(record.sharesAtPayment) : round(sharesAtDate(project.id, draft?.date || todayISO()), 4)}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record ? n(record.referencePrice) : n(project.currentPrice)}"></div></div>
+      <details class="dividend-extra"><summary>추가 정보 (선택)</summary><p class="tiny muted">배당을 받은 실제 주수를 확인한 경우에만 입력하세요. 입금일 보유주수만으로 배당 권리를 추정하지 않습니다.</p><div class="form-grid">
+        <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record ? n(record.sharesAtPayment) : 0}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record ? n(record.referencePrice) : n(project.currentPrice)}"></div></div>
         <div class="form-grid two"><div><label class="input-label">ROC 비율 %</label><input class="input" name="rocPercent" type="number" min="0" max="100" step="0.01" value="${record?.rocPercent ?? ''}"></div><div><label class="input-label">ROC 자료</label><select class="input" name="rocStatus"><option value="estimated" ${record?.rocStatus !== 'final' ? 'selected' : ''}>운용사 추정</option><option value="final" ${record?.rocStatus === 'final' ? 'selected' : ''}>확정 자료</option></select></div></div>
         <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note || '')}"></div>
       </div></details>
@@ -565,8 +570,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             preview.textContent = '실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';
             return;
         } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${krw ? Math.round(amount).toLocaleString('ko-KR') + '원' : fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`; };
-        if (!edit)
-            dividendForm.elements.date.addEventListener('change', () => { dividendForm.elements.sharesAtPayment.value = round(sharesAtDate(project.id, dividendForm.elements.date.value), 4); updatePreview(); });
+        dividendForm.elements.date.addEventListener('change', updatePreview);
         dividendForm.addEventListener('input', updatePreview);
         updatePreview();
         dividendForm.onsubmit = async (event) => {

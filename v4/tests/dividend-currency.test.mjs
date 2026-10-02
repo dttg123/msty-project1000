@@ -4,6 +4,7 @@ import {blankState,migrate} from '../modules/state.js';
 import {validateLedger} from '../modules/validation.js';
 import {createPortfolioEngine} from '../modules/portfolio.js';
 import {createFormatters} from '../modules/format.js';
+import {buildDividendAnalytics} from '../modules/dividend-analytics.js';
 import {buildHomeMetrics} from '../modules/home-metrics.js';
 import {createStoreZip,readStateFromBackupFile,buildCsvExports} from '../backup.js';
 const file={format:'dividend-os-dividend-replacement-v1',scope:'all-dividends',symbol:'MSTY',rows:[{date:'2026-01-09',amountKRW:10007},{date:'2026-01-02',amountKRW:5003}]};
@@ -26,3 +27,5 @@ const csv=buildCsvExports(state).find(row=>row.name==='dividends.csv').data;asse
 assert.equal(dividendCashBreakdown({...state.dividends[0],amountUSD:999}).netUSD,0,'KRW-only records cannot fund USD even with a contradictory legacy value');
 assert.ok(validateLedger({...state,dividends:[{...state.dividends[0],amountUSD:999}]}).length);
 console.log('Dividend currency PASS: strict replacement validation, immutable KRW, unconverted USD cash, home totals and lossless ZIP/CSV');
+
+const gaps=buildDividendAnalytics({},[{date:'2019-01-01',amountUSD:2,sharesAtPayment:1},{date:'2021-01-01',amountUSD:1,sharesAtPayment:1}],[],1,'2026-01-01');assert.equal(gaps.annualDpsChange,null);assert.equal(gaps.cutCount,0,'missing years are not a verified dividend cut');

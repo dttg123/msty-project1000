@@ -170,3 +170,10 @@ assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
 console.log('DividendOS v0.12.15 view QA: PASS');
+
+state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioGroup='highYield';
+state.dividends=[{id:'known',projectId:'p-msty',date:'2026-01-02',amountUSD:2,sharesAtPayment:10},{id:'unknown',projectId:'p-msty',date:'2026-01-09',amountUSD:4,sharesAtPayment:0}];
+views.renderProjects();const mixedHTML=elements.get('page-projects').innerHTML;
+assert.match(mixedHTML,/직전 지급 대비<\/span><strong class="positive">\+100\.0%/,'mixed share availability must compare whole cash payments on both sides');
+assert.match(mixedHTML,/<b>\$2<\/b>/);assert.match(mixedHTML,/<b>\$4<\/b>/);
+assert.doesNotMatch(mixedHTML,/직전 지급 대비<\/span><strong class="positive">\+1,900/);

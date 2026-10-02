@@ -79,6 +79,7 @@ export interface Project {
   brokerLinks: Array<{provider:'toss';assetKey:string;market?:string;securityId?:string}>;
   status: SecurityStatus;
   corporateActions: CorporateAction[];
+  dividendAnnouncement?: {exDate:string;payDate:string;sourceURL:string;recordedAt:string;verification:'user'};
   colorIndex: number;
   archived: boolean;
 }

@@ -377,3 +377,10 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .five-year-summary span{color:var(--muted);font-size:10px}
 .five-year-summary strong{margin-top:5px;font-size:13px}
 @media(max-width:380px){.strategy-metrics{grid-template-columns:1fr 1fr;row-gap:14px}.strategy-metrics>div:nth-child(3){padding-left:0;border-left:0}}
+
+/* Keep the compact action reachable on small screens. */
+.dividend-analysis-card .overview-heading{flex-wrap:wrap}
+.dividend-analysis-card .overview-heading>span{flex-basis:100%}
+.analysis-details>summary,.toss-details>summary{cursor:pointer;color:var(--muted);font-size:13px;padding:12px 0}
+.analysis-details[open]>summary,.toss-details[open]>summary{color:var(--text)}
+.analysis-details .analysis-divider{margin-top:10px}
