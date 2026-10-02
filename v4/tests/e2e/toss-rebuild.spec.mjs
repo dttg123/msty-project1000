@@ -148,7 +148,7 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   await page.locator('#dividendForm [name="amountUSD"]').fill('10');
   await page.locator('#dividendForm button[type="submit"].primary').click();await expect(page.locator('#dividendForm')).toBeHidden();
   const before=await readLedger(page);
-  const snapshot={syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:251}],orders:[{id:'old-manual-match',symbol:'MSTY',currency:'USD',date:'2025-12-01',type:'buy',shares:247,price:18.01},{id:'new-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16.25}]};
+  const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-02-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:251}],orders:[{id:'old-manual-match',symbol:'MSTY',currency:'USD',date:'2025-12-01',type:'buy',shares:247,price:18.01},{id:'new-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16.25}]};
   const load=()=>page.locator('#tossImportInput').setInputFiles({name:'incremental.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-01T00:00:00Z',snapshot}))});
   await load();await expect(page.locator('.toast')).toContainText('매수 1건');
   const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
