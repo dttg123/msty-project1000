@@ -114,9 +114,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         if (!manual && (state.settings.exchangeRateMode !== 'auto' || Date.now() - Date.parse(state.settings.exchangeRateUpdatedAt || '') < 6 * 3600000 || Date.now() - lastExchangeRateAttempt < 60000))
             return;
+        const opened = new Set([...document.querySelectorAll('#page-settings details.settings-section[open]')].map((section) => section.querySelector('.card-title')?.textContent));
+        const renderRateSettings = () => { renderSettings(); document.querySelectorAll('#page-settings details.settings-section').forEach((section) => { if (opened.has(section.querySelector('.card-title')?.textContent))
+            section.open = true; }); };
         if (!navigator.onLine) {
             exchangeRateError = '오프라인 · 마지막 저장 환율 유지';
-            renderSettings();
+            renderRateSettings();
             if (manual)
                 toast(exchangeRateError);
             return;
@@ -124,7 +127,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         exchangeRateBusy = true;
         exchangeRateError = '';
         lastExchangeRateAttempt = Date.now();
-        renderSettings();
+        renderRateSettings();
         try {
             const value = await fetchReferenceExchangeRate();
             if (!manual && state.settings.exchangeRateMode !== 'auto')
@@ -149,7 +152,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         finally {
             exchangeRateBusy = false;
-            renderSettings();
+            renderRateSettings();
         }
     }
     function setSaveStatus(text, kind = '') { const el = document.getElementById('saveStatus'); if (el) {

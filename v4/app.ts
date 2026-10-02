@@ -86,8 +86,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   async function refreshExchangeRate(manual=false): Promise<void> {
     if(exchangeRateBusy||demoMode)return;
     if(!manual&&(state.settings.exchangeRateMode!=='auto'||Date.now()-Date.parse(state.settings.exchangeRateUpdatedAt||'')<6*3600000||Date.now()-lastExchangeRateAttempt<60000))return;
-    if(!navigator.onLine){exchangeRateError='오프라인 · 마지막 저장 환율 유지';renderSettings();if(manual)toast(exchangeRateError);return;}
-    exchangeRateBusy=true;exchangeRateError='';lastExchangeRateAttempt=Date.now();renderSettings();
+    const opened=new Set([...document.querySelectorAll('#page-settings details.settings-section[open]')].map((section: any)=>section.querySelector('.card-title')?.textContent));
+    const renderRateSettings=()=>{renderSettings();document.querySelectorAll('#page-settings details.settings-section').forEach((section: any)=>{if(opened.has(section.querySelector('.card-title')?.textContent))section.open=true;});};
+    if(!navigator.onLine){exchangeRateError='오프라인 · 마지막 저장 환율 유지';renderRateSettings();if(manual)toast(exchangeRateError);return;}
+    exchangeRateBusy=true;exchangeRateError='';lastExchangeRateAttempt=Date.now();renderRateSettings();
     try{
       const value=await fetchReferenceExchangeRate();
       if(!manual&&state.settings.exchangeRateMode!=='auto')return;
@@ -96,7 +98,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       try{await saveState(true);}catch(error){state.settings=before;throw error;}
       renderAll();if(manual)toast('참고 환율을 갱신했습니다.');
     }catch(error: any){exchangeRateError='환율 조회 실패 · 마지막 저장 환율 유지';if(manual)toast(exchangeRateError);}
-    finally{exchangeRateBusy=false;renderSettings();}
+    finally{exchangeRateBusy=false;renderRateSettings();}
   }
 
   function setSaveStatus(text: any,kind: any =''): any { const el: any=document.getElementById('saveStatus'); if(el){el.textContent=text;el.className=`save-pill ${kind}`;} }

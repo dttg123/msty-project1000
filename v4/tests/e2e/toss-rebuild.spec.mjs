@@ -96,7 +96,7 @@ test('예외 삭제는 저장 장부를 유지하고 재조회와 앱 재시작�
   expect(deleted.integrations.toss.sourceLedger).toEqual(before.integrations.toss.sourceLedger);
   expect(deleted.integrations.toss.candidates).toHaveLength(0);
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
-  await page.locator('#tossImportInput').setInputFiles({name:'repeated.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-01-02T00:00:00.000Z',snapshot:{accountScopeId:deleted.integrations.toss.accountScopeId,orders:[{id:'synthetic-authoritative',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:247,price:11}],holdings:[{symbol:'MSTY',currency:'USD',shares:247}],capabilities:{orders:true,holdings:true,dividends:false},syncStatus:'complete'}}))});
+  await page.locator('#tossImportInput').setInputFiles({name:'repeated.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-01-02T00:00:00.000Z',snapshot:{prices:[],dividends:[],accountResults:[],syncCursor:{ordersThrough:'2026-01-02'},accountScopeId:deleted.integrations.toss.accountScopeId,orders:[{id:'synthetic-authoritative',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:247,price:11}],holdings:[{symbol:'MSTY',currency:'USD',shares:247}],capabilities:{orders:true,holdings:true,dividends:false},syncStatus:'complete'}}))});
   await expect.poll(async()=> (await readLedger(page)).integrations.toss.syncSequence).toBeGreaterThan(deleted.integrations.toss.syncSequence);
   expect((await readLedger(page)).integrations.toss.candidates).toHaveLength(0);
 });
