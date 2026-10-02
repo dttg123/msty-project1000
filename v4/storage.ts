@@ -20,7 +20,9 @@ function enableFallback(): void {
 export function openStorage(): Promise<IDBDatabase | null> {
   return new Promise<IDBDatabase | null>((resolve, reject) => {
     if(typeof indexedDB==='undefined'){enableFallback();resolve(null);return;}
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let request: IDBOpenDBRequest;
+    try { request = indexedDB.open(DB_NAME, DB_VERSION); }
+    catch (_) { enableFallback(); resolve(null); return; }
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
@@ -84,7 +86,9 @@ export async function readLegacyState(key: string = 'state'): Promise<unknown> {
   } catch (_) {}
   return new Promise(resolve => {
     // Omit the version so a harmless V3 schema upgrade remains readable.
-    const request = indexedDB.open(LEGACY_DB_NAME);
+    let request: IDBOpenDBRequest;
+    try { request = indexedDB.open(LEGACY_DB_NAME); }
+    catch (_) { resolve(null); return; }
     request.onupgradeneeded = () => { request.transaction?.abort(); resolve(null); };
     request.onerror = () => resolve(null);
     request.onsuccess = () => {

@@ -82,7 +82,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     finally{officialBusy=false;renderProjects();}
   }
   let pendingTossIp: any='';
-  let localOnlySession: any = sessionStorage.getItem('dividend-os-local-mode') === '1';
+  function readLocalMode(): boolean {try{return sessionStorage.getItem('dividend-os-local-mode')==='1';}catch{return false;}}
+  function persistLocalMode(enabled: boolean): void {try{if(enabled)sessionStorage.setItem('dividend-os-local-mode','1');else sessionStorage.removeItem('dividend-os-local-mode');}catch{}}
+  let localOnlySession: any = readLocalMode();
   let autoBackupStatus: any={count:0,lastAt:'',error:''},autoBackupPromise: any=null;
 
   const portfolio: any = createPortfolioEngine(() => state, () => selectedProjectId);
@@ -92,7 +94,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function applyTheme(pref: any =state?.settings?.appearance || 'system'): any {
     const dark: any=pref==='dark'||(pref==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);
     document.documentElement.dataset.theme=dark?'dark':'light';
-    localStorage.setItem('dividend-os-theme',pref);
+    try{localStorage.setItem('dividend-os-theme',pref);}catch{}
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content',dark?'#0f1117':'#f4f5f9');
   }
   function hideSplash(): any {
@@ -138,17 +140,20 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(demoMode||!currentUser||!cloudReady||applyingCloudState)return;
     if(cloudWritePending){cloudPushQueued=true;return;}
     if(!navigator.onLine){setSaveStatus('오프라인','cloud-error');return;}
+    const uid=currentUser.uid,generation=cloudConnectGeneration;
+    const isCurrent=()=>currentUser?.uid===uid&&generation===cloudConnectGeneration;
     try {
       setSaveStatus('동기화 중','cloud-busy');
-      const now=new Date().toISOString(),uid=currentUser.uid;state.meta.lastCloudAttemptAt=now;cloudWritePending=true;
+      const now=new Date().toISOString();state.meta.lastCloudAttemptAt=now;cloudWritePending=true;
       const sent=clone(state);sent.meta.lastCloudSaveAt=now;const sentSignature=syncSignature(sent);
       const saved: any=await saveCloudDocument(uid,sent,{expectedRevision:cloudRevision,appVersion:APP_VERSION});
-      if(currentUser?.uid!==uid)return;cloudRevision=saved.revision;
+      if(!isCurrent())return;cloudRevision=saved.revision;
       cloudWritePending=false;state.meta.lastCloudSaveAt=now;await storageSet(STATE_KEY,state);cloudBaseSignature=sentSignature;await storageSet('cloudSyncBase:'+uid,cloudBaseSignature); setSaveStatus('','cloud-ok');
     } catch (error: any) {
+      if(!isCurrent())return;
       cloudWritePending=false;console.error(error);
       if(error?.code==='cloud-conflict'){
-        const latest: any=await getCloudDocument(currentUser.uid).catch(()=>null);pendingCloudState=latest?.state?migrate(latest.state):null;cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
+        const latest: any=await getCloudDocument(uid).catch(()=>null);if(!isCurrent())return;pendingCloudState=latest?.state?migrate(latest.state):null;cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
       }
       setSaveStatus('클라우드 오류','cloud-error');toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true});
     }finally{cloudWritePending=false;if(cloudPushQueued){cloudPushQueued=false;if(currentUser&&cloudReady)cloudTimer=setTimeout(pushCloudState,0);}}
@@ -548,8 +553,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('authGate')?.classList.add('hidden');
     currentUser=user;cloudReady=false;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('동기화 확인','cloud-busy');
     try{
-      cloudBaseSignature=await storageGet<string>('cloudSyncBase:'+user.uid)||null;
-      let cloudData: any=await getCloudDocument(user.uid),cloudState=cloudData?.state?migrate(cloudData.state):null,usingLegacyCloud=false,usingSingleDocument=!!cloudData?.legacySingleDocument;cloudRevision=Math.max(0,n(cloudData?.revision));
+      const baseSignature=await storageGet<string>('cloudSyncBase:'+user.uid)||null;
+      if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudBaseSignature=baseSignature;
+      let cloudData: any=await getCloudDocument(user.uid),cloudState=cloudData?.state?migrate(cloudData.state):null,usingLegacyCloud=false,usingSingleDocument=!!cloudData?.legacySingleDocument;
+      if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudRevision=Math.max(0,n(cloudData?.revision));
       if(!cloudState){const legacy: any=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;cloudState=prepareLegacyMigration(legacy.state).candidate;usingLegacyCloud=true;}}
       else if(!cloudState.meta?.migrationAudit){const legacy: any=await getLegacyCloudDocument(user.uid);if(legacy?.state){legacyMigrationSource=legacy.state;const audit: any=auditLegacyAgainstState(legacy.state,cloudState);if(audit?.passed)cloudState.meta.migrationAudit=audit;else cloudState.meta.legacyMigrationAvailable=true;}}
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
@@ -560,13 +567,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(review&&choice==='local'&&cloudState&&syncSignature(state)!==syncSignature(cloudState))await storageSet(SAFETY_KEY,clone(cloudState));
       pendingCloudState=null;
       if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudBaseSignature=syncSignature(state);await storageSet('cloudSyncBase:'+user.uid,cloudBaseSignature);cloudReady=true;if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
+      if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
-      cloudUnsubscribe=await subscribeCloudDocument(user.uid,(data: any)=>{
+      const unsubscribe=await subscribeCloudDocument(user.uid,(data: any)=>{
         if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid||!data?.state||applyingCloudState||cloudWritePending||n(data.revision)<=cloudRevision)return;
         const remote: any=migrate(data.state);pendingCloudState=remote;cloudRevision=n(data.revision);cloudReady=false;clearTimeout(cloudTimer);autoBackup('remote-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');renderAll();
-      },(error: any)=>{console.error(error);cloudReady=false;setSaveStatus('동기화 오류','cloud-error');});
+      },(error: any)=>{if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;console.error(error);cloudReady=false;setSaveStatus('동기화 오류','cloud-error');});
+      if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid){unsubscribe?.();return;}cloudUnsubscribe=unsubscribe;
       setSaveStatus('','cloud-ok');
-    }catch (error: any){cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
+    }catch (error: any){if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
   async function initAuth(): Promise<any>{await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{cloudConnectGeneration++;currentUser=null;cloudBaseSignature=null;pendingCloudState=null;cloudReady=false;cloudRevision=0;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:(message: any)=>toast(message,{haptic:true})});}
 
@@ -853,8 +862,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(button.dataset.lockRecovery){lockRecovery(button.dataset.lockRecovery);return;}
     if(button.dataset.editRecovery){lockRecovery(button.dataset.editRecovery,true);return;}
     if(button.dataset.restoreProject){const project: any=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
-    if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
-    if('showLogin'in button.dataset){if(currentUser){document.getElementById('authGate')?.classList.add('hidden');showPage('settings');return;}if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
+    if('localMode'in button.dataset){localOnlySession=true;persistLocalMode(true);document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
+    if('showLogin'in button.dataset){if(currentUser){document.getElementById('authGate')?.classList.add('hidden');showPage('settings');return;}if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;persistLocalMode(false);const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('backupDownload'in button.dataset){downloadPreparedBackup();return;}
     if('backupSave'in button.dataset){saveBackupToChosenLocation();return;}
@@ -882,7 +891,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('clearTossCorrections'in button.dataset){confirmAction('원본 변경 알림 확인','토스 원본 변경 알림만 정리합니다. 기존 원장과 원본 보존 기록은 바꾸지 않습니다.',async()=>{state.integrations.toss.correctionCandidates=[];state.integrations.toss.dividendCorrectionCandidates=[];await saveState(true);renderSettings();showPage('settings');toast('원본 변경 알림을 확인 처리했습니다.');},'확인 처리');return;}
     if('disconnectToss'in button.dataset){confirmAction('토스 화면 연결 해제','가져온 거래·배당과 원본 보존 기록은 유지하고 현재 조회 상태와 미승인 후보만 정리합니다.',async()=>{state.integrations.toss=disconnectedTossState(state.integrations.toss);await saveState(true);renderAll();showPage('settings');toast('토스 조회 화면 연결을 해제했습니다.');},'연결 해제');return;}
     if('migrateV3'in button.dataset){previewLegacyMigration();return;}
-    if('logout'in button.dataset){localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');logoutGoogle();return;}
+    if('logout'in button.dataset){localOnlySession=false;persistLocalMode(false);logoutGoogle();return;}
     if('reset'in button.dataset){confirmAction('V4 전체 초기화','V4 거래·배당·프로젝트를 초기화합니다. V3.2.1 원본은 유지됩니다.',async()=>{await storageSet(SAFETY_KEY,clone(state));await storageDelete(STATE_KEY);state=blankState();selectedProjectId=state.projects[0].id;await saveState(true);renderAll();showPage('home');toast('V4 데이터를 초기화했습니다.');},'초기화');return;}
     if('discardModal'in button.dataset){closeModal();return;}
     if('keepModal'in button.dataset){document.querySelector('.modal-unsaved')?.remove();return;}

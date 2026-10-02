@@ -15,7 +15,7 @@ const suites={
     'hot-update.test.mjs','static.test.mjs','tooling-gates.test.mjs'
   ],
   core:[
-    'fixture-contracts.test.mjs','activity.test.mjs','toss.test.mjs','cloud-contract.test.mjs',
+    'fixture-contracts.test.mjs','activity.test.mjs','resilience-contract.test.mjs','toss.test.mjs','cloud-contract.test.mjs',
     'home-metrics.test.mjs','demo.test.mjs','views.test.mjs',
     'interaction-contract.test.mjs','replacement.test.mjs','golden-contract.test.mjs'
   ],

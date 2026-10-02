@@ -11,7 +11,7 @@ async function cleanupOldRevisions(uid, currentManifest) {
     const snapshots = await getDocs(revisionsRef(uid));
     const rows = snapshots.docs.map((item) => ({ id: item.id, ref: item.ref, ...item.data() }));
     const previous = rows.filter((row) => row.id !== currentManifest.revisionId && Number(row.revision) < Number(currentManifest.revision)).sort((a, b) => Number(b.revision) - Number(a.revision))[0];
-    const keep = new Set([currentManifest.revisionId, previous?.id].filter(Boolean)), remove = rows.filter((row) => !keep.has(row.id));
+    const keep = new Set([currentManifest.revisionId, previous?.id].filter(Boolean)), remove = rows.filter((row) => !keep.has(row.id) && Number(row.revision) < Number(currentManifest.revision));
     const writes = [];
     for (const row of remove) {
         const segments = await getDocs(segmentsRef(uid, row.id));

@@ -120,7 +120,20 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
     }
     let pendingTossIp = '';
-    let localOnlySession = sessionStorage.getItem('dividend-os-local-mode') === '1';
+    function readLocalMode() { try {
+        return sessionStorage.getItem('dividend-os-local-mode') === '1';
+    }
+    catch {
+        return false;
+    } }
+    function persistLocalMode(enabled) { try {
+        if (enabled)
+            sessionStorage.setItem('dividend-os-local-mode', '1');
+        else
+            sessionStorage.removeItem('dividend-os-local-mode');
+    }
+    catch { } }
+    let localOnlySession = readLocalMode();
     let autoBackupStatus = { count: 0, lastAt: '', error: '' }, autoBackupPromise = null;
     const portfolio = createPortfolioEngine(() => state, () => selectedProjectId);
     const { activeProjects, projectById, projectRows, sharesAtDate, computeProject, recoveryStats, totals } = portfolio;
@@ -129,7 +142,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     function applyTheme(pref = state?.settings?.appearance || 'system') {
         const dark = pref === 'dark' || (pref === 'system' && matchMedia('(prefers-color-scheme:dark)').matches);
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-        localStorage.setItem('dividend-os-theme', pref);
+        try {
+            localStorage.setItem('dividend-os-theme', pref);
+        }
+        catch { }
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0f1117' : '#f4f5f9');
     }
     function hideSplash() {
@@ -227,16 +243,18 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             setSaveStatus('오프라인', 'cloud-error');
             return;
         }
+        const uid = currentUser.uid, generation = cloudConnectGeneration;
+        const isCurrent = () => currentUser?.uid === uid && generation === cloudConnectGeneration;
         try {
             setSaveStatus('동기화 중', 'cloud-busy');
-            const now = new Date().toISOString(), uid = currentUser.uid;
+            const now = new Date().toISOString();
             state.meta.lastCloudAttemptAt = now;
             cloudWritePending = true;
             const sent = clone(state);
             sent.meta.lastCloudSaveAt = now;
             const sentSignature = syncSignature(sent);
             const saved = await saveCloudDocument(uid, sent, { expectedRevision: cloudRevision, appVersion: APP_VERSION });
-            if (currentUser?.uid !== uid)
+            if (!isCurrent())
                 return;
             cloudRevision = saved.revision;
             cloudWritePending = false;
@@ -247,10 +265,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             setSaveStatus('', 'cloud-ok');
         }
         catch (error) {
+            if (!isCurrent())
+                return;
             cloudWritePending = false;
             console.error(error);
             if (error?.code === 'cloud-conflict') {
-                const latest = await getCloudDocument(currentUser.uid).catch(() => null);
+                const latest = await getCloudDocument(uid).catch(() => null);
+                if (!isCurrent())
+                    return;
                 pendingCloudState = latest?.state ? migrate(latest.state) : null;
                 cloudRevision = Math.max(cloudRevision, n(latest?.revision));
                 cloudReady = false;
@@ -1013,8 +1035,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         cloudUnsubscribe = null;
         setSaveStatus('동기화 확인', 'cloud-busy');
         try {
-            cloudBaseSignature = await storageGet('cloudSyncBase:' + user.uid) || null;
+            const baseSignature = await storageGet('cloudSyncBase:' + user.uid) || null;
+            if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
+                return;
+            cloudBaseSignature = baseSignature;
             let cloudData = await getCloudDocument(user.uid), cloudState = cloudData?.state ? migrate(cloudData.state) : null, usingLegacyCloud = false, usingSingleDocument = !!cloudData?.legacySingleDocument;
+            if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
+                return;
             cloudRevision = Math.max(0, n(cloudData?.revision));
             if (!cloudState) {
                 const legacy = await getLegacyCloudDocument(user.uid);
@@ -1068,11 +1095,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 cloudReady = true;
                 await pushCloudState();
             }
+            if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
+                return;
             selectedProjectId = activeProjects()[0]?.id || '';
             renderAll();
             showPage(currentPage);
             document.getElementById('authGate')?.classList.add('hidden');
-            cloudUnsubscribe = await subscribeCloudDocument(user.uid, (data) => {
+            const unsubscribe = await subscribeCloudDocument(user.uid, (data) => {
                 if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid || !data?.state || applyingCloudState || cloudWritePending || n(data.revision) <= cloudRevision)
                     return;
                 const remote = migrate(data.state);
@@ -1084,10 +1113,18 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 setSaveStatus('다른 기기 변경 · 확인 필요', 'cloud-error');
                 toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');
                 renderAll();
-            }, (error) => { console.error(error); cloudReady = false; setSaveStatus('동기화 오류', 'cloud-error'); });
+            }, (error) => { if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
+                return; console.error(error); cloudReady = false; setSaveStatus('동기화 오류', 'cloud-error'); });
+            if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid) {
+                unsubscribe?.();
+                return;
+            }
+            cloudUnsubscribe = unsubscribe;
             setSaveStatus('', 'cloud-ok');
         }
         catch (error) {
+            if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
+                return;
             cloudReady = false;
             clearTimeout(cloudTimer);
             console.error(error);
@@ -1761,7 +1798,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         if ('localMode' in button.dataset) {
             localOnlySession = true;
-            sessionStorage.setItem('dividend-os-local-mode', '1');
+            persistLocalMode(true);
             document.getElementById('authGate')?.classList.add('hidden');
             setSaveStatus('');
             return;
@@ -1777,7 +1814,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 return;
             }
             localOnlySession = false;
-            sessionStorage.removeItem('dividend-os-local-mode');
+            persistLocalMode(false);
             const gate = document.getElementById('authGate');
             gate?.classList.remove('hidden');
             initAuth().catch(() => { document.getElementById('authGateStatus').textContent = '로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.'; });
@@ -1900,7 +1937,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         if ('logout' in button.dataset) {
             localOnlySession = false;
-            sessionStorage.removeItem('dividend-os-local-mode');
+            persistLocalMode(false);
             logoutGoogle();
             return;
         }

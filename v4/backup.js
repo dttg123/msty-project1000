@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.12.18';
+export const APP_VERSION = '0.12.19';
 export const DATA_SCHEMA_VERSION = 4;
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
 const APP_FILES = [
