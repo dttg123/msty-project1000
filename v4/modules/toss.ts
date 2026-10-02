@@ -379,3 +379,18 @@ export function automaticTossDividendAdoptions(candidates: any=[]): any{
 export function disconnectedTossState(toss: any ={}): any{
   return {...toss,status:'not_connected',lastError:'',accountLabel:'',holdings:[],comparisons:[],candidates:[],dividendCandidates:[],correctionCandidates:[],dividendCorrectionCandidates:[],accountResults:[],failedAccountCount:0};
 }
+
+export const TOSS_EXCEPTION_FIELDS = ['candidates','dividendCandidates','correctionCandidates','dividendCorrectionCandidates'] as const;
+export function tossExceptionKey(field: string,row: any,scope: string=''): string {
+  return JSON.stringify([scope,field,String(row?.externalId||''),String(row?.sourceFingerprint||'')]);
+}
+export function filterDismissedTossExceptions(toss: any,keys: string[]=toss.dismissedExceptionKeys||[]): any {
+  const dismissed=new Set(keys),result={...toss};
+  for(const field of TOSS_EXCEPTION_FIELDS)result[field]=(toss[field]||[]).filter((row: any)=>!dismissed.has(tossExceptionKey(field,row,toss.accountScopeId||'')));
+  return result;
+}
+export function dismissTossExceptions(toss: any,selectedKeys: string[]): any {
+  const available=new Set(TOSS_EXCEPTION_FIELDS.flatMap(field=>(toss[field]||[]).map((row: any)=>tossExceptionKey(field,row,toss.accountScopeId||''))));
+  const dismissedExceptionKeys=[...new Set([...(toss.dismissedExceptionKeys||[]),...selectedKeys.filter(key=>available.has(key))])];
+  return filterDismissedTossExceptions({...toss,dismissedExceptionKeys});
+}

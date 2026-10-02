@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         HotUpdatePlugin.rollbackPendingUpdate(this);
         registerPlugin(TossReadOnlyPlugin.class);
+        registerPlugin(BackupFilePlugin.class);
         registerPlugin(HotUpdatePlugin.class);
         registerPlugin(NativeGoogleAuthPlugin.class);
         super.onCreate(savedInstanceState);

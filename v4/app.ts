@@ -4,6 +4,7 @@ declare const navigator: any;
 declare const location: any;
 declare const localStorage: any;
 declare const sessionStorage: any;
+import { fetchReferenceExchangeRate } from './modules/finance.js';
 import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js';
@@ -15,7 +16,7 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, rebuildProjectFromTossSource, refreshTossCandidateConflicts, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { TOSS_EXCEPTION_FIELDS, tossExceptionKey, dismissTossExceptions, filterDismissedTossExceptions, accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, rebuildProjectFromTossSource, refreshTossCandidateConflicts, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
@@ -59,6 +60,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   let tossSyncRunning: any = false;
   let nativeTossStatus: any={available:isNativeTossAvailable(),configured:false,publicIp:'',lastPublicIp:'',checking:false};
   let appUpdateStatus: any={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:APP_VERSION,updateAvailable:false,nativeUpdateRequired:false,error:''};
+  let exchangeRateBusy=false,exchangeRateError='',lastExchangeRateAttempt=0;
   let pendingTossIp: any='';
   let localOnlySession: any = sessionStorage.getItem('dividend-os-local-mode') === '1';
   let autoBackupStatus: any={count:0,lastAt:'',error:''},autoBackupPromise: any=null;
@@ -81,6 +83,24 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const el: any=document.getElementById('toast'); clearTimeout(toastTimer); el.textContent=message; el.classList.add('show');
     if(haptic)try{navigator.vibrate?.(18)}catch (_: any){} toastTimer=setTimeout(()=>el.classList.remove('show'),2300);
   }
+  async function refreshExchangeRate(manual=false): Promise<void> {
+    if(exchangeRateBusy||demoMode)return;
+    if(!manual&&(state.settings.exchangeRateMode!=='auto'||Date.now()-Date.parse(state.settings.exchangeRateUpdatedAt||'')<6*3600000||Date.now()-lastExchangeRateAttempt<60000))return;
+    const opened=new Set([...document.querySelectorAll('#page-settings details.settings-section[open]')].map((section: any)=>section.querySelector('.card-title')?.textContent));
+    const renderRateSettings=()=>{renderSettings();document.querySelectorAll('#page-settings details.settings-section').forEach((section: any)=>{if(opened.has(section.querySelector('.card-title')?.textContent))section.open=true;});};
+    if(!navigator.onLine){exchangeRateError='오프라인 · 마지막 저장 환율 유지';renderRateSettings();if(manual)toast(exchangeRateError);return;}
+    exchangeRateBusy=true;exchangeRateError='';lastExchangeRateAttempt=Date.now();renderRateSettings();
+    try{
+      const value=await fetchReferenceExchangeRate();
+      if(!manual&&state.settings.exchangeRateMode!=='auto')return;
+      const before=clone(state.settings);
+      Object.assign(state.settings,{exchangeRate:value.rate,exchangeRateMode:'auto',exchangeRateDate:value.date,exchangeRateUpdatedAt:new Date().toISOString(),exchangeRateSource:'Frankfurter'});
+      try{await saveState(true);}catch(error){state.settings=before;throw error;}
+      renderAll();if(manual)toast('참고 환율을 갱신했습니다.');
+    }catch(error: any){exchangeRateError='환율 조회 실패 · 마지막 저장 환율 유지';if(manual)toast(exchangeRateError);}
+    finally{exchangeRateBusy=false;renderRateSettings();}
+  }
+
   function setSaveStatus(text: any,kind: any =''): any { const el: any=document.getElementById('saveStatus'); if(el){el.textContent=text;el.className=`save-pill ${kind}`;} }
   function hasMeaningfulData(value: any =state): any { return !!(value&&(value.trades?.length||value.dividends?.length||value.splits?.length||value.cashAdjustments?.length||value.projects?.some((p: any)=>n(p.currentPrice)||n(p.monthlyPlanShares)||n(p.initialDividendBalance)))); }
 
@@ -117,7 +137,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   const views: any = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value: any) => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value: any) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,isTossBridgeConfigured,
+    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value: any) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -366,9 +386,29 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   function downloadFile(filename: any,content: any,type: any ='application/octet-stream'): any { const blob: any=content instanceof Blob?content:new Blob([content],{type});const url: any=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
   let backupRunning: any=false,backupObjectUrl='',preparedBackup: any=null,preparedBackupFilename='';
+  async function nativeBackupFile(download=false): Promise<boolean> {
+    const native=window?.Capacitor?.Plugins?.BackupFile;
+    if(!native)return false;
+    const data=await preparedBackup.arrayBuffer();
+    if(data.byteLength>32*1024*1024)throw new Error('백업 파일이 너무 큽니다.');
+    const bytes=new Uint8Array(data);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+    const result=await native[download?'download':'save']({filename:preparedBackupFilename,base64:btoa(binary)});
+    if(!result?.cancelled&&result?.saved){state.meta.lastBackupAt=new Date().toISOString();await saveState(true);closeModal();toast(download?'다운로드 폴더에 ZIP 백업을 저장했습니다.':'선택한 위치에 ZIP 백업을 저장했습니다.');}
+    return true;
+  }
+  async function downloadPreparedBackup(): Promise<void> {
+    if(!preparedBackup){toast('백업을 다시 준비해 주세요.');return;}
+    try{
+      if(await nativeBackupFile(true))return;
+      if(window?.Capacitor?.isNativePlatform?.()){toast('파일 저장을 지원하는 새 APK로 업데이트해 주세요. 앱은 삭제하지 마세요.');return;}
+      downloadFile(preparedBackupFilename,preparedBackup,'application/zip');toast('브라우저에 백업 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
+    }catch(error: any){toast('백업 저장에 실패했습니다. 다시 시도해 주세요.');}
+  }
   async function saveBackupToChosenLocation(): Promise<any> {
     if(!preparedBackup||!preparedBackupFilename){toast('백업을 다시 준비해 주세요.');return;}
     try{
+      if(await nativeBackupFile())return;
+      if(window?.Capacitor?.isNativePlatform?.()){toast('저장 위치 선택은 새 APK에서 지원합니다. 앱은 삭제하지 말고 업데이트해 주세요.');return;}
       const picker: any=(window as any).showSaveFilePicker;
       if(typeof picker==='function'){
         const handle: any=await picker({suggestedName:preparedBackupFilename,types:[{description:'DividendOS ZIP 백업',accept:{'application/zip':['.zip']}}]});
@@ -379,7 +419,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(typeof nav.share==='function'&&typeof nav.canShare==='function'&&nav.canShare({files:[file]})){
         await nav.share({files:[file],title:'DividendOS 백업'});closeModal();toast('선택한 앱으로 ZIP 백업을 전달했습니다.');return;
       }
-      downloadFile(preparedBackupFilename,preparedBackup,'application/zip');closeModal();toast('다운로드 폴더에 ZIP 백업을 저장했습니다.');
+      downloadFile(preparedBackupFilename,preparedBackup,'application/zip');toast('브라우저에 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
     }catch(error: any){
       if(error?.name==='AbortError')return;
       console.error(error);toast('위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
@@ -394,8 +434,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       backupObjectUrl=URL.createObjectURL(zip);
       const stamp: any=new Date().toISOString().replace(/[-:]/g,'').replace(/\\.\\d{3}Z$/,'Z').replace('T','_'),filename=`DividendOS_v${APP_VERSION}_${stamp}.zip`;
       preparedBackup=zip;preparedBackupFilename=filename;
-      openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 직접 선택하거나 다운로드 폴더에 바로 저장할 수 있습니다.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><a class="btn soft backup-download" href="${backupObjectUrl}" download="${filename}">다운로드 폴더에 저장</a></div><p class="detail-note">기기에서 위치 선택을 지원하지 않으면 공유 화면 또는 기본 다운로드로 안전하게 전환됩니다.</p>`);
-      state.meta.lastBackupAt=new Date().toISOString();await saveState(true);
+      openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 직접 선택하거나 다운로드 폴더에 바로 저장할 수 있습니다.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button></div><p class="detail-note">설치 앱은 Android 저장 창을 사용합니다. 웹에서는 지원되는 저장 창·공유·다운로드를 사용합니다. 저장 후 파일을 확인해 주세요.</p>`);
+      state.meta.lastBackupPreparedAt=new Date().toISOString();await saveState(true);
     }catch (error: any){console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
     finally{backupRunning=false;}
   }
@@ -590,7 +630,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(accountScopeChanged(toss.accountScopeId,snapshot.accountScopeId))throw Object.assign(new Error('연결된 토스 계좌 구성이 바뀌었습니다. 기존 계정 데이터와 섞지 않도록 가져오기를 중단했습니다.'),{code:'account-scope-changed'});
     const syncProjects: any=activeProjects(),symbolCounts=new Map();for(const project of syncProjects)symbolCounts.set(project.symbol,(symbolCounts.get(project.symbol)||0)+1);
     const appPositions: any=syncProjects.flatMap((project: any)=>{const shares: any=computeProject(project).shares,links=(project.brokerLinks||[]).filter((link: any)=>link.provider==='toss').map((link: any)=>({symbol:project.symbol,assetKey:link.assetKey,shares})),symbolFallback=symbolCounts.get(project.symbol)===1?[{symbol:project.symbol,shares}]:[];return [...links,...symbolFallback];});
-    const result: any=buildTossSync(snapshot,{existingTrades:state.trades,existingDividends:state.dividends,appPositions});
+    const result: any=filterDismissedTossExceptions(buildTossSync(snapshot,{existingTrades:state.trades,existingDividends:state.dividends,appPositions}),toss.dismissedExceptionKeys||[]);
     const progress: any=tossSyncProgress(toss,result);
     Object.assign(toss,{status:result.syncStatus==='partial'?'partial':'connected',syncStatus:result.syncStatus,lastSyncAt:result.fetchedAt,...progress,lastAttemptAt:attemptAt,lastError:'',accountLabel:result.accountLabel,accountScopeId:result.accountScopeId,accountResults:result.accountResults,failedAccountCount:result.failedAccountCount,capabilities:result.capabilities,holdings:result.holdings,comparisons:result.comparisons,ignoredCount:result.ignoredCount,matchedExistingCount:result.matchedExistingCount,matchedExistingDividendCount:result.matchedExistingDividendCount,unsupportedCurrencyCount:result.unsupportedCurrencyCount,historyTruncated:result.historyTruncated,candidates:mergeTossCandidates(toss.candidates,result.candidates),dividendCandidates:mergeTossDividendCandidates(toss.dividendCandidates,result.dividendCandidates),correctionCandidates:mergeTossCorrectionCandidates(toss.correctionCandidates,result.correctionCandidates),dividendCorrectionCandidates:mergeTossDividendCandidates(toss.dividendCorrectionCandidates,result.dividendCorrectionCandidates),syncSequence:n(toss.syncSequence)+1,sourceLedger:mergeTossSourceLedger(toss.sourceLedger,snapshot,result.fetchedAt)});
     for(const price of result.prices||[]){
@@ -647,6 +687,23 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     catch(error: any){state=before;console.error('MSTY rebuild save failed',error);renderAll();toast('재구축 기록을 저장하지 못해 기존 기록을 유지했습니다.');return;}
     renderAll();showPage('settings');
     toast(`MSTY 거래 ${rebuilt.replacedTrades}건을 토스 원본 ${rebuilt.importedTrades}건으로 다시 만들었습니다.${rebuilt.preservedDividends?` 배당 ${rebuilt.preservedDividends}건은 유지했습니다.`:''}`);
+  }
+
+  function openTossExceptionDeletion(): any {
+    const toss=state.integrations.toss;
+    const rows=TOSS_EXCEPTION_FIELDS.flatMap(field=>(toss[field]||[]).map((row: any)=>({field,row,key:tossExceptionKey(field,row,toss.accountScopeId||'')})));
+    if(!rows.length){toast('삭제할 예외가 없습니다.');return;}
+    openModal(`<h3 class="modal-title">예외 삭제</h3><p class="modal-desc">선택한 예외만 목록에서 삭제합니다. 저장된 거래·배당과 토스 원본은 유지합니다. 같은 내역은 다음 갱신에도 다시 표시하지 않으며, 토스 원본이 변경되면 다시 확인합니다.</p><form id="tossDeleteForm" class="form-grid"><button class="btn soft" type="button" id="selectAllTossExceptions">전체 선택</button><div class="list">${rows.map(({field,row},index)=>`<label class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${field.includes('Correction')||field==='correctionCandidates'?'원본 변경':field==='dividendCandidates'?'배당':row.type==='sell'?'매도':'매수'}</div><div class="row-sub">${fmtDate(row.date)} · ${field.includes('dividend')?fmtMoney(row.amountUSD,2):fmtShares(row.shares)+'주'}</div></div><input type="checkbox" name="exception" value="${index}"></label>`).join('')}</div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">선택 예외 삭제</button></div></form>`);
+    document.getElementById('selectAllTossExceptions').onclick=()=>{document.querySelectorAll('#tossDeleteForm input[name="exception"]').forEach((input: any)=>{input.checked=true;});};
+    document.getElementById('tossDeleteForm').onsubmit=(event: any)=>{
+      event.preventDefault();const selected=new FormData(event.currentTarget).getAll('exception').map(Number).map(index=>rows[index]?.key).filter(Boolean) as string[];
+      if(!selected.length){toast('삭제할 예외를 선택해 주세요.');return;}
+      confirmAction('예외 삭제 확인',`${selected.length}건을 예외 목록에서 삭제합니다. 이미 저장된 거래·배당과 보유주수는 바뀌지 않습니다.`,async()=>{
+        const before=clone(state);
+        try{await storageSet(SAFETY_KEY,before);state.integrations.toss=dismissTossExceptions(state.integrations.toss,selected);if(!TOSS_EXCEPTION_FIELDS.some(field=>state.integrations.toss[field]?.length))state.integrations.toss.lastAutoImportReason='';await saveState(true);closeModal();renderAll();showPage('settings');toast(`${selected.length}건의 예외를 삭제했습니다.`);}
+        catch(error: any){state=before;renderAll();toast('예외 삭제를 저장하지 못해 기존 목록을 유지했습니다.');}
+      },'삭제');
+    };
   }
 
   function reviewTossCandidates(): any {
@@ -723,6 +780,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('localMode'in button.dataset){localOnlySession=true;sessionStorage.setItem('dividend-os-local-mode','1');document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
     if('showLogin'in button.dataset){if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;sessionStorage.removeItem('dividend-os-local-mode');const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
+    if('backupDownload'in button.dataset){downloadPreparedBackup();return;}
     if('backupSave'in button.dataset){saveBackupToChosenLocation();return;}
     if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
     if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
@@ -739,6 +797,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('rebuildMstyToss'in button.dataset){confirmAction('MSTY 기록 다시 만들기','기존 MSTY 거래만 지우고 보존된 토스 전체 체결 원본으로 다시 만듭니다. 분할 기록과 다른 종목은 유지하며, 토스 배당 조회가 지원되지 않으면 기존 배당도 유지합니다.',rebuildMstyFromToss,'다시 만들기');return;}
     if('installHotUpdate'in button.dataset){applyAppUpdate();return;}
     if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{renderSettings();showPage('settings');toast(appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':'현재 최신 버전입니다.');});return;}
+    if('refreshExchangeRate'in button.dataset){refreshExchangeRate(true);return;}
+    if('deleteTossExceptions'in button.dataset){openTossExceptionDeletion();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('clearTossCorrections'in button.dataset){confirmAction('원본 변경 알림 확인','토스 원본 변경 알림만 정리합니다. 기존 원장과 원본 보존 기록은 바꾸지 않습니다.',async()=>{state.integrations.toss.correctionCandidates=[];state.integrations.toss.dividendCorrectionCandidates=[];await saveState(true);renderSettings();showPage('settings');toast('원본 변경 알림을 확인 처리했습니다.');},'확인 처리');return;}
     if('disconnectToss'in button.dataset){confirmAction('토스 화면 연결 해제','가져온 거래·배당과 원본 보존 기록은 유지하고 현재 조회 상태와 미승인 후보만 정리합니다.',async()=>{state.integrations.toss=disconnectedTossState(state.integrations.toss);await saveState(true);renderAll();showPage('settings');toast('토스 조회 화면 연결을 해제했습니다.');},'연결 해제');return;}
@@ -751,6 +811,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   function bindStaticEvents(): any {
+    window.addEventListener('online',()=>refreshExchangeRate());
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshExchangeRate();});
     document.addEventListener('submit',(event: any)=>{
       const form: any=event.target;if(!(form instanceof HTMLFormElement))return;
       const futureDate: any=[...form.querySelectorAll('input[type="date"]')].find((input: any)=>input.value&&input.value>todayISO());
@@ -769,7 +831,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.addEventListener('keydown',(event: any)=>{const card: any=event.target.closest?.('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('restoreInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.getElementById('tossImportInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
-    document.addEventListener('submit',(event: any)=>{const id: any=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form: any=new FormData(event.target);let next: any={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW: any=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);});});
+    document.addEventListener('submit',(event: any)=>{const id: any=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form: any=new FormData(event.target);let next: any={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW: any=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
   }
@@ -787,6 +849,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
       await confirmHotUpdateReady().catch(()=>{});
       await Promise.all([refreshAutoBackupStatus().catch(()=>{}),refreshNativeTossStatus().catch(()=>{})]);restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
+      refreshExchangeRate();
       refreshAppUpdateStatus().then(()=>renderSettings()).catch(()=>{});
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner: any=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
