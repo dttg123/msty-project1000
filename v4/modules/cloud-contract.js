@@ -1,4 +1,18 @@
 const encoder = new TextEncoder();
+export function syncSignature(value) {
+    const state = value && typeof value === 'object' ? value : {};
+    return canonicalStringify(['projects', 'trades', 'dividends', 'splits', 'cashAdjustments', 'settings'].map(key => state[key]));
+}
+export function chooseCloudSync(local, remote, baseSignature) {
+    const localSignature = syncSignature(local), remoteSignature = syncSignature(remote);
+    if (localSignature === remoteSignature)
+        return 'local';
+    if (baseSignature === remoteSignature)
+        return 'local';
+    if (baseSignature === localSignature)
+        return 'cloud';
+    return 'review';
+}
 export const CLOUD_STORAGE_FORMAT = 'split-v1';
 export const CLOUD_SEGMENT_LIMIT_BYTES = 700_000;
 export function canonicalStringify(value) {

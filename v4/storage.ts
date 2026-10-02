@@ -1,34 +1,28 @@
-declare const document: any;
-declare const window: any;
-declare const navigator: any;
-declare const location: any;
-declare const localStorage: any;
-declare const sessionStorage: any;
-const demoMode: any=typeof location!=='undefined'&&new URLSearchParams(location.search).get('demo')==='1';
-const DB_NAME: any = demoMode?'DividendOSDB_QA':'DividendOSDB_V4';
-const DB_VERSION: any = 1;
-const STORE_NAME: any = 'kv';
-let database: any;
-let storageMode: any = 'indexeddb';
-const memoryStore: any = new Map();
-const FALLBACK_PREFIX: any = demoMode?'dividend-os-qa:':'dividend-os-v4:';
-const LEGACY_DB_NAME: any = 'MSTYProject1000DB_V3';
+const demoMode=typeof location!=='undefined'&&new URLSearchParams(location.search).get('demo')==='1';
+const DB_NAME = demoMode?'DividendOSDB_QA':'DividendOSDB_V4';
+const DB_VERSION = 1;
+const STORE_NAME = 'kv';
+let database: IDBDatabase | undefined;
+let storageMode: 'indexeddb' | 'localstorage' | 'memory' = 'indexeddb';
+const memoryStore = new Map<string, unknown>();
+const FALLBACK_PREFIX = demoMode?'dividend-os-qa:':'dividend-os-v4:';
+const LEGACY_DB_NAME = 'MSTYProject1000DB_V3';
 
-export const storageStatus: any = () => ({mode:storageMode,durable:storageMode!=='memory'});
+export const storageStatus = () => ({mode:storageMode,durable:storageMode!=='memory'});
 
-function enableFallback(): any {
+function enableFallback(): void {
   try {
-    const probe: any=`${FALLBACK_PREFIX}probe`;
+    const probe=`${FALLBACK_PREFIX}probe`;
     localStorage.setItem(probe,'1');localStorage.removeItem(probe);storageMode='localstorage';
-  } catch (_: any) { storageMode='memory'; }
+  } catch (_) { storageMode='memory'; }
 }
 
-export function openStorage(): any {
-  return new Promise<any>((resolve, reject) => {
+export function openStorage(): Promise<IDBDatabase | null> {
+  return new Promise<IDBDatabase | null>((resolve, reject) => {
     if(typeof indexedDB==='undefined'){enableFallback();resolve(null);return;}
-    const request: any = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
-      const db: any = request.result;
+      const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
     };
     request.onsuccess = () => {
@@ -40,26 +34,26 @@ export function openStorage(): any {
   });
 }
 
-export function storageGet(key: any): any {
-  if(storageMode==='memory')return Promise.resolve(memoryStore.get(key));
+export function storageGet<T = unknown>(key: string): Promise<T | undefined> {
+  if(storageMode==='memory')return Promise.resolve(memoryStore.get(key) as T | undefined);
   if(storageMode==='localstorage'){
-    try{const value: any=localStorage.getItem(`${FALLBACK_PREFIX}${key}`);return Promise.resolve(value?JSON.parse(value):undefined);}catch (error: any){return Promise.reject(error);}
+    try{const value=localStorage.getItem(`${FALLBACK_PREFIX}${key}`);return Promise.resolve(value?JSON.parse(value):undefined);}catch (error){return Promise.reject(error);}
   }
-  return new Promise<any>((resolve, reject) => {
-    const tx: any = database.transaction(STORE_NAME, 'readonly');
-    const request: any = tx.objectStore(STORE_NAME).get(key);
+  return new Promise<T | undefined>((resolve, reject) => {
+    const tx = database!.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).get(key);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
 
-export function storageSet(key: any, value: any): any {
+export function storageSet(key: string, value: unknown): Promise<void> {
   if(storageMode==='memory'){memoryStore.set(key,value);return Promise.resolve();}
   if(storageMode==='localstorage'){
-    try{localStorage.setItem(`${FALLBACK_PREFIX}${key}`,JSON.stringify(value));return Promise.resolve();}catch (error: any){return Promise.reject(error);}
+    try{localStorage.setItem(`${FALLBACK_PREFIX}${key}`,JSON.stringify(value));return Promise.resolve();}catch (error){return Promise.reject(error);}
   }
   return new Promise<void>((resolve, reject) => {
-    const tx: any = database.transaction(STORE_NAME, 'readwrite');
+    const tx = database!.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).put(value, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -67,40 +61,41 @@ export function storageSet(key: any, value: any): any {
   });
 }
 
-export function storageDelete(key: any): any {
+export function storageDelete(key: string): Promise<void> {
   if(storageMode==='memory'){memoryStore.delete(key);return Promise.resolve();}
   if(storageMode==='localstorage'){
-    try{localStorage.removeItem(`${FALLBACK_PREFIX}${key}`);return Promise.resolve();}catch (error: any){return Promise.reject(error);}
+    try{localStorage.removeItem(`${FALLBACK_PREFIX}${key}`);return Promise.resolve();}catch (error){return Promise.reject(error);}
   }
   return new Promise<void>((resolve, reject) => {
-    const tx: any = database.transaction(STORE_NAME, 'readwrite');
+    const tx = database!.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-export async function readLegacyState(key: any = 'state'): Promise<any> {
+export async function readLegacyState(key: string = 'state'): Promise<unknown> {
+  if (typeof indexedDB === 'undefined') return null;
   try {
     if (typeof indexedDB.databases === 'function') {
-      const databases: any=await indexedDB.databases();
-      if (!databases.some((item: any)=>item.name===LEGACY_DB_NAME)) return null;
+      const databases=await indexedDB.databases();
+      if (!databases.some((item)=>item.name===LEGACY_DB_NAME)) return null;
     }
-  } catch (_: any) {}
+  } catch (_) {}
   return new Promise(resolve => {
     // Omit the version so a harmless V3 schema upgrade remains readable.
-    const request: any = indexedDB.open(LEGACY_DB_NAME);
-    request.onupgradeneeded = () => { request.transaction.abort(); resolve(null); };
+    const request = indexedDB.open(LEGACY_DB_NAME);
+    request.onupgradeneeded = () => { request.transaction?.abort(); resolve(null); };
     request.onerror = () => resolve(null);
     request.onsuccess = () => {
-      const legacy: any = request.result;
+      const legacy = request.result;
       if (!legacy.objectStoreNames.contains(STORE_NAME)) {
         legacy.close();
         resolve(null);
         return;
       }
-      const tx: any = legacy.transaction(STORE_NAME, 'readonly');
-      const get: any = tx.objectStore(STORE_NAME).get(key);
+      const tx = legacy.transaction(STORE_NAME, 'readonly');
+      const get = tx.objectStore(STORE_NAME).get(key);
       get.onsuccess = () => { legacy.close(); resolve(get.result || null); };
       get.onerror = () => { legacy.close(); resolve(null); };
     };

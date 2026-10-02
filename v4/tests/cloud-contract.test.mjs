@@ -26,3 +26,18 @@ for(let index=0;index<9;index++){const next=structuredClone(state);next.meta.upd
 const index=memory.get('autoBackupIndexV1');assert.equal(index.length,AUTO_BACKUP_KEEP);assert.equal([...memory.keys()].filter(key=>key.startsWith('autoBackupV1:')).length,AUTO_BACKUP_KEEP);
 assert.equal(index[0].createdAt,'2026-09-09T00:00:00.000Z');
 console.log(`Cloud contract PASS: ${prepared.manifest.stateBytes} bytes split into ${prepared.documents.length} verified documents; revision conflict and 7-copy rotation protected`);
+
+const {chooseCloudSync,syncSignature}=await import('../modules/cloud-contract.js');
+const localSync={projects:[{id:'p',symbol:'MSTY'}],trades:[],dividends:[{id:'d',amountUSD:1}],settings:{exchangeRate:1380},meta:{lastLocalSaveAt:'local'}};
+const remoteSync=structuredClone(localSync);remoteSync.meta={lastCloudSaveAt:'remote'};
+assert.equal(chooseCloudSync(localSync,remoteSync,null),'local','save timestamps must not create conflicts');
+const reordered={...remoteSync,settings:{exchangeRate:1380},projects:[{symbol:'MSTY',id:'p'}]};
+assert.equal(syncSignature(localSync),syncSignature(reordered),'JSON key order is not a user change');
+remoteSync.dividends[0].amountUSD=2;
+assert.equal(chooseCloudSync(localSync,remoteSync,null),'review','equal counts cannot prove equal cash amounts');
+const base=syncSignature(localSync);
+assert.equal(chooseCloudSync(localSync,remoteSync,base),'cloud','unchanged local permits remote restore');
+localSync.dividends[0].amountUSD=3;
+assert.equal(chooseCloudSync(localSync,remoteSync,base),'review','both sides changed requires review');
+assert.equal(chooseCloudSync(localSync,remoteSync,syncSignature(remoteSync)),'local','known unchanged remote accepts local import');
+console.log('Three-way cloud sync: PASS');
