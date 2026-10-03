@@ -7,7 +7,7 @@ export const FREQUENCIES = {
     semiannual: { label: '반기배당', year: 2, months: 6, stable: 2, short: 1, maxAge: 240, maxGap: 240 },
     annual: { label: '연배당', year: 1, months: 12, stable: 2, short: 1, maxAge: 430, maxGap: 430 }
 };
-const validFrequency = (value) => FREQUENCIES[value] ? value : 'monthly';
+const validFrequency = (value) => typeof value === 'string' && Object.hasOwn(FREQUENCIES, value) ? value : 'monthly';
 export function detectDistributionFrequency(dividends = [], fallback = 'monthly') {
     const dates = [...new Set((Array.isArray(dividends) ? dividends : []).filter(row => isDate(row?.date) && dividendCashBreakdown(row).status === 'actual' && dividendCashBreakdown(row).netUSD > 0).map(row => row.date))]
         .sort((a, b) => b.localeCompare(a)).slice(0, 13);

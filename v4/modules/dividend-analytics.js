@@ -29,7 +29,10 @@ export function buildDividendAnalytics(project, dividends, splits = [], avgCost 
     const cagrFor = (count) => {
         if (completed.length < count + 1)
             return null;
-        const end = completed.at(-1), startYear = String(Number(end.year) - count), start = completed.find((item) => item.year === startYear);
+        const end = completed.at(-1);
+        if (!end)
+            return null;
+        const startYear = String(Number(end.year) - count), start = completed.find((item) => item.year === startYear);
         if (!start)
             return null;
         return cagr(end.dps, start.dps, count);

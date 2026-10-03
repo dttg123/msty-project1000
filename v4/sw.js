@@ -1,7 +1,9 @@
 "use strict";
+/// <reference lib="webworker" />
+// This module is loaded only as a Service Worker, never as a window script.
 const serviceWorker = globalThis;
 const CACHE_PREFIX = 'dividend-os-' + new URL(serviceWorker.registration.scope).pathname + '-';
-const CACHE = CACHE_PREFIX + 'dividend-os-v0.12.21-r82';
+const CACHE = CACHE_PREFIX + 'dividend-os-v0.12.22-r83';
 const ASSETS = [
     './', './index.html', './styles.css', './styles-refined.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
     './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js', './hot-update.js', './runtime-config.js', './toss-client.js', './toss-native.js',
@@ -31,5 +33,5 @@ serviceWorker.addEventListener('fetch', (event) => {
         caches.open(CACHE).then(cache => cache.put(event.request, copy));
         return response;
     })
-        .catch(async () => (await caches.match(event.request)) || (await caches.match(url.pathname)) || (event.request.mode === 'navigate' ? await caches.match('./index.html') : Response.error())));
+        .catch(async () => (await caches.match(event.request)) || (await caches.match(url.pathname)) || (event.request.mode === 'navigate' ? (await caches.match('./index.html')) || Response.error() : Response.error())));
 });

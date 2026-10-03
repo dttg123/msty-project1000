@@ -34,6 +34,10 @@ assert.deepEqual(await readStateFromBackupFile({name:'verified.zip',arrayBuffer:
 const altered=structuredClone(state);altered.trades[0].price+=1;
 const forged=createStoreZip([{name:'backup-info.json',data:JSON.stringify(info)},{name:'data/state.json',data:canonicalStringify(altered)}]);
 await assert.rejects(readStateFromBackupFile({name:'forged.zip',arrayBuffer:()=>forged.arrayBuffer()}),/전체 무결성/);
+for(const invalidInfo of [null,[],42]){
+  const broken=createStoreZip([{name:'backup-info.json',data:JSON.stringify(invalidInfo)},{name:'data/state.json',data:canonicalStringify(state)}]);
+  await assert.rejects(readStateFromBackupFile({name:'bad-info.zip',arrayBuffer:()=>broken.arrayBuffer()}),/백업 정보 형식/);
+}
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response('portable-runtime-file',{status:200});
 try{const portable=await buildPortableBackup(state);assert.deepEqual(await readStateFromBackupFile({name:'portable.zip',arrayBuffer:()=>portable.arrayBuffer()}),state);}finally{globalThis.fetch=originalFetch;}
 console.log('Golden contract PASS: ledger totals and backup round trip unchanged');

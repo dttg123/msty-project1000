@@ -1,3 +1,4 @@
+import { isRecord } from './modules/utils.js';
 import { getGoogleIdToken } from './modules/cloud-api.js';
 import { TOSS_BRIDGE_URL, TOSS_SYNC_FROM } from './runtime-config.js';
 // Removed in the server-only migration. Never read or return the old value.
@@ -34,16 +35,24 @@ function validDate(value, fallback) {
 function cleanSymbols(values = []) {
     return [...new Set(values.map((value) => String(value || '').trim().toUpperCase()).filter((value) => /^[A-Z0-9.-]{1,16}$/.test(value)))].slice(0, 200);
 }
-function object(value) { return value && typeof value === 'object' && !Array.isArray(value); }
+const object = isRecord;
 export function validateTossSnapshotPayload(value) {
     if (!object(value))
         throw Object.assign(new Error('토스 중계 서버 응답 형식이 올바르지 않습니다.'), { code: 'invalid-bridge-response' });
-    const limits = { holdings: 25000, prices: 200, orders: 50000, dividends: 25000, accountResults: 5 };
-    for (const [key, limit] of Object.entries(limits))
-        if (!Array.isArray(value[key]) || value[key].length > Number(limit) || value[key].some((row) => !object(row)))
+    const rows = (key, limit) => {
+        const items = value[key];
+        if (!Array.isArray(items) || items.length > limit || !items.every(isRecord))
             throw Object.assign(new Error('토스 중계 서버 응답 형식이 올바르지 않습니다.'), { code: 'invalid-bridge-response' });
-    if (!/^[a-f0-9]{24}$/.test(String(value.accountScopeId || '')) || !['complete', 'partial'].includes(value.syncStatus) || !object(value.syncCursor) || !object(value.capabilities))
+        return items;
+    };
+    rows('holdings', 25000);
+    rows('prices', 200);
+    rows('orders', 50000);
+    rows('dividends', 25000);
+    rows('accountResults', 5);
+    if (typeof value.accountScopeId !== 'string' || !/^[a-f0-9]{24}$/.test(value.accountScopeId) || value.syncStatus !== 'complete' && value.syncStatus !== 'partial' || !object(value.syncCursor) || !object(value.capabilities))
         throw Object.assign(new Error('토스 중계 서버 응답 형식이 올바르지 않습니다.'), { code: 'invalid-bridge-response' });
+    // Every required field is checked above. Preserve the validated object identity.
     return value;
 }
 const TOSS_SNAPSHOT_MAX_BYTES = 16 * 1024 * 1024;
@@ -80,11 +89,11 @@ export async function readTossSnapshotFile(file) {
     assertSafeImportTree(envelope);
     if (!object(envelope) || envelope.format !== 'dividend-os-toss-snapshot' || envelope.version !== 1 || !object(envelope.snapshot))
         throw Object.assign(new Error('DividendOS 토스 조회 파일 형식 또는 버전이 올바르지 않습니다.'), { code: 'invalid-toss-file' });
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(String(envelope.exportedAt || '')) || Number.isNaN(Date.parse(envelope.exportedAt)))
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(String(envelope.exportedAt || '')) || Number.isNaN(Date.parse(String(envelope.exportedAt))))
         throw Object.assign(new Error('토스 조회 파일의 생성 시각이 올바르지 않습니다.'), { code: 'invalid-toss-file' });
     return validateTossSnapshotPayload(envelope.snapshot);
 }
-function publicBridgeError(status, body = {}) {
+function publicBridgeError(status, value = {}) {
     if (status === 401)
         return Object.assign(new Error('Google 로그인이 만료되었습니다. 다시 로그인해 주세요.'), { code: 'invalid-login' });
     if (status === 403)
@@ -97,7 +106,7 @@ function publicBridgeError(status, body = {}) {
         'toss-rate-limit': '토스 조회 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.',
         'toss-unavailable': '토스 조회 서버가 일시적으로 응답하지 않습니다.'
     };
-    const code = Object.hasOwn(messages, body?.code) ? body.code : 'toss-bridge';
+    const body = isRecord(value) ? value : {}, code = typeof body.code === 'string' && Object.hasOwn(messages, body.code) ? body.code : 'toss-bridge';
     return Object.assign(new Error(messages[code] || '토스 조회 서버에서 안전하게 처리하지 못했습니다.'), { code, status });
 }
 export async function fetchTossSnapshot({ from = TOSS_SYNC_FROM, symbols = [] } = {}) {
@@ -122,7 +131,7 @@ export async function fetchTossSnapshot({ from = TOSS_SYNC_FROM, symbols = [] } 
         return validateTossSnapshotPayload(body);
     }
     catch (error) {
-        if (error?.name === 'AbortError')
+        if (isRecord(error) && error.name === 'AbortError' || error instanceof Error && error.name === 'AbortError')
             throw Object.assign(new Error('토스 조회 시간이 초과되었습니다.'), { code: 'timeout' });
         if (error instanceof TypeError)
             throw Object.assign(new Error('토스 중계 서버에 연결하지 못했습니다.'), { code: 'bridge-unavailable' });

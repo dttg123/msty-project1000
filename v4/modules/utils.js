@@ -17,3 +17,4 @@ export const isDate = (value) => {
     const date = new Date(`${text}T00:00:00Z`);
     return !Number.isNaN(date.getTime()) && date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() + 1 === Number(match[2]) && date.getUTCDate() === Number(match[3]);
 };
+export const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);

@@ -27,7 +27,7 @@ assert.equal(await nativePublicIp(),'118.235.25.74');
 await markNativeTossPublicIp('118.235.25.74');
 assert.equal((await nativeTossCredentialStatus()).lastPublicIp,'118.235.25.74');
 
-const snapshot=await fetchNativeTossSnapshot({from:'2026-01-01',symbols:['MSTY']});
+const snapshot=await fetchNativeTossSnapshot({from:'2026-01-01',symbols:['MSTY','','bad symbol',null]});
 assert.equal(snapshot.syncStatus,'complete');
 assert.equal(snapshot.accountResults.length,1);
 assert.equal(snapshot.holdings[0].symbol,'MSTY');
@@ -36,6 +36,7 @@ assert.equal(snapshot.prices[0].lastPrice,'11');
 assert.equal(snapshot.capabilities.dividends,false);
 assert.ok(requests.every(row=>row.path==='/api/v1/accounts'||row.path==='/api/v1/holdings'||row.path.startsWith('/api/v1/orders?')||row.path.startsWith('/api/v1/prices?')));
 assert.equal(requests.find(row=>row.path==='/api/v1/holdings').accountSeq,'7');
+assert.equal(requests.find(row=>row.path.startsWith('/api/v1/prices?')).path,'/api/v1/prices?symbols=MSTY','invalid and empty symbols must not reach the native API');
 
 await clearNativeTossCredentials();
 assert.equal(cleared,true);

@@ -110,7 +110,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.21/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.22/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 최신 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
@@ -170,7 +170,7 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v0.12.21 view QA: PASS');
+console.log('DividendOS v0.12.22 view QA: PASS');
 
 state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioGroup='highYield';
 state.dividends=[{id:'known',projectId:'p-msty',date:'2026-01-02',amountUSD:2,sharesAtPayment:10},{id:'unknown',projectId:'p-msty',date:'2026-01-09',amountUSD:4,sharesAtPayment:0}];

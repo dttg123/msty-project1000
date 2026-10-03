@@ -1,52 +1,54 @@
+import type { DividendRecord } from '../types/domain.js';
+import type { ProjectCalculation } from './portfolio.js';
 import { isDate, n } from './utils.js';
 import { dividendCashBreakdown } from './finance.js';
 
-const iso: any = (date: any) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-const monthKey: any = (date: any) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
 
-export function nextMilestone(calc: any): any {
-  const target: any=Math.max(1,n(calc.currentTarget));
-  const thresholds: any=[.25,.5,.75,1].map(ratio=>({ratio,shares:target*ratio}));
-  const next: any=thresholds.find((item: any)=>calc.shares<item.shares-.000001);
+export function nextMilestone(calc: Pick<ProjectCalculation, 'currentTarget'|'shares'>) {
+  const target=Math.max(1,n(calc.currentTarget));
+  const thresholds=[.25,.5,.75,1].map(ratio=>({ratio,shares:target*ratio}));
+  const next=thresholds.find((item)=>calc.shares<item.shares-.000001);
   return next?{...next,remaining:Math.max(0,next.shares-calc.shares),reached:false}:{ratio:1,shares:target,remaining:0,reached:true};
 }
 
-export function buildHomeMetrics(calcs: any, dividendRows: any, now=new Date()) {
-  const today: any=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12),todayString=iso(today),currentMonth=monthKey(today),currentYear=String(today.getFullYear());
-  const actual: any=(dividendRows||[]).filter((row: any)=>isDate(row.date)&&row.date<=todayString&&dividendCashBreakdown(row).status==='actual'&&dividendCashBreakdown(row).netUSD>0);
-  const sum: any=(rows: any)=>rows.reduce((total: any,row: any)=>total+dividendCashBreakdown(row).netUSD,0);
-  const monthRows: any=actual.filter((row: any)=>row.date.startsWith(currentMonth));
-  const yearRows: any=actual.filter((row: any)=>row.date.startsWith(currentYear));
-  const previousMonthDate: any=new Date(today.getFullYear(),today.getMonth()-1,1,12),previousMonthKey=monthKey(previousMonthDate);
-  const previousMonth: any=sum(actual.filter((row: any)=>row.date.startsWith(previousMonthKey)));
-  const previousYear: any=sum(actual.filter((row: any)=>row.date.startsWith(String(today.getFullYear()-1))));
-  const months: any=Array.from({length:12},(_,index)=>{
-    const key: any=`${currentYear}-${String(index+1).padStart(2,'0')}`,rows=actual.filter((row: any)=>row.date.startsWith(key));
+export function buildHomeMetrics(calcs: ProjectCalculation[], dividendRows: DividendRecord[], now=new Date()) {
+  const today=new Date(now.getFullYear(),now.getMonth(),now.getDate(),12),todayString=iso(today),currentMonth=monthKey(today),currentYear=String(today.getFullYear());
+  const actual=(dividendRows||[]).filter((row)=>isDate(row.date)&&row.date<=todayString&&dividendCashBreakdown(row).status==='actual'&&dividendCashBreakdown(row).netUSD>0);
+  const sum=(rows: DividendRecord[])=>rows.reduce((total,row)=>total+dividendCashBreakdown(row).netUSD,0);
+  const monthRows=actual.filter((row)=>row.date.startsWith(currentMonth));
+  const yearRows=actual.filter((row)=>row.date.startsWith(currentYear));
+  const previousMonthDate=new Date(today.getFullYear(),today.getMonth()-1,1,12),previousMonthKey=monthKey(previousMonthDate);
+  const previousMonth=sum(actual.filter((row)=>row.date.startsWith(previousMonthKey)));
+  const previousYear=sum(actual.filter((row)=>row.date.startsWith(String(today.getFullYear()-1))));
+  const months=Array.from({length:12},(_,index)=>{
+    const key=`${currentYear}-${String(index+1).padStart(2,'0')}`,rows=actual.filter((row)=>row.date.startsWith(key));
     return {key,label:`${index+1}월`,actual:sum(rows),estimated:0,count:rows.length};
   });
-  const yearMap: any=new Map();
-  actual.forEach((row: any)=>{const key: any=row.date.slice(0,4),item=yearMap.get(key)||{key,label:key,actual:0,count:0};item.actual+=dividendCashBreakdown(row).netUSD;item.count++;yearMap.set(key,item);});
-  const firstYear: any=yearMap.size?Math.min(...[...yearMap.keys()].map(Number)):null;
-  const years: any=firstYear===null?[]:Array.from({length:Number(currentYear)-firstYear+1},(_,index)=>{
-    const key: any=String(firstYear+index);return yearMap.get(key)||{key,label:key,actual:0,count:0};
+  const yearMap=new Map<string, {key:string;label:string;actual:number;count:number}>();
+  actual.forEach((row)=>{const key=row.date.slice(0,4),item=yearMap.get(key)||{key,label:key,actual:0,count:0};item.actual+=dividendCashBreakdown(row).netUSD;item.count++;yearMap.set(key,item);});
+  const firstYear=yearMap.size?Math.min(...[...yearMap.keys()].map(Number)):null;
+  const years=firstYear===null?[]:Array.from({length:Number(currentYear)-firstYear+1},(_,index)=>{
+    const key=String(firstYear+index);return yearMap.get(key)||{key,label:key,actual:0,count:0};
   });
-  const trailingMonths: any=Array.from({length:6},(_,index)=>{
-    const date: any=new Date(today.getFullYear(),today.getMonth()-5+index,1,12),key=monthKey(date);
-    return sum(actual.filter((row: any)=>row.date.startsWith(key)));
+  const trailingMonths=Array.from({length:6},(_,index)=>{
+    const date=new Date(today.getFullYear(),today.getMonth()-5+index,1,12),key=monthKey(date);
+    return sum(actual.filter((row)=>row.date.startsWith(key)));
   });
-  const previous3: any=trailingMonths.slice(0,3).reduce((a: any,b: any)=>a+b,0)/3,recent3=trailingMonths.slice(3).reduce((a: any,b: any)=>a+b,0)/3;
-  const projectMonth: any=calcs.map((calc: any)=>({
+  const previous3=trailingMonths.slice(0,3).reduce((a,b)=>a+b,0)/3,recent3=trailingMonths.slice(3).reduce((a,b)=>a+b,0)/3;
+  const projectMonth=calcs.map((calc)=>({
     projectId:calc.project.id,
     symbol:calc.project.symbol,
-    actual:sum(monthRows.filter((row: any)=>row.projectId===calc.project.id)),
-    count:monthRows.filter((row: any)=>row.projectId===calc.project.id).length
-  })).filter((row: any)=>row.actual>0).sort((a: any,b: any)=>b.actual-a.actual);
-  const goals: any=calcs.map((calc: any)=>({calc,milestone:nextMilestone(calc)})).sort((a: any,b: any)=>{
+    actual:sum(monthRows.filter((row)=>row.projectId===calc.project.id)),
+    count:monthRows.filter((row)=>row.projectId===calc.project.id).length
+  })).filter((row)=>row.actual>0).sort((a,b)=>b.actual-a.actual);
+  const goals=calcs.map((calc)=>({calc,milestone:nextMilestone(calc)})).sort((a,b)=>{
     if(a.milestone.reached!==b.milestone.reached)return a.milestone.reached?1:-1;
     return a.milestone.remaining/Math.max(1,a.calc.currentTarget)-b.milestone.remaining/Math.max(1,b.calc.currentTarget);
   });
-  const ownedGoals: any=goals.filter((item: any)=>item.calc.shares>0);
-  const monthActual: any=sum(monthRows),yearActual=sum(yearRows);
+  const ownedGoals=goals.filter((item)=>item.calc.shares>0);
+  const monthActual=sum(monthRows),yearActual=sum(yearRows);
   return {
     month:{actual:monthActual,count:monthRows.length,previous:previousMonth,change:previousMonth>0?(monthActual/previousMonth-1)*100:null,remaining:0,total:monthActual},
     year:{actual:yearActual,count:yearRows.length,previous:previousYear,change:previousYear>0?(yearActual/previousYear-1)*100:null,remaining:0,total:yearActual},

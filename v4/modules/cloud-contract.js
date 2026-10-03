@@ -1,3 +1,4 @@
+import { isRecord } from './utils.js';
 const encoder = new TextEncoder();
 export function syncSignature(value) {
     const state = value && typeof value === 'object' ? value : {};
@@ -35,7 +36,8 @@ export async function sha256Hex(value) {
     const digest = await crypto.subtle.digest('SHA-256', bytes);
     return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
-export function stateCounts(state = {}) {
+export function stateCounts(value = {}) {
+    const state = isRecord(value) ? value : {};
     return {
         securities: Array.isArray(state.projects) ? state.projects.length : 0,
         trades: Array.isArray(state.trades) ? state.trades.length : 0,
@@ -88,10 +90,12 @@ export async function prepareCloudRevision(state, { expectedRevision = 0, create
     return { manifest, documents: prepared, stateText };
 }
 export async function assembleCloudState(manifest, documents) {
-    if (manifest?.storageFormat !== CLOUD_STORAGE_FORMAT)
+    if (!isRecord(manifest) || manifest.storageFormat !== CLOUD_STORAGE_FORMAT)
         throw new Error('지원하지 않는 클라우드 저장 형식입니다.');
-    const byId = new Map((documents || []).map((document) => [document.id, document]));
-    for (const expected of manifest.segments || []) {
+    if (!Array.isArray(manifest.segments) || !manifest.segments.every(isRecord) || !Array.isArray(documents) || !documents.every(isRecord))
+        throw new Error('클라우드 조각 형식이 올바르지 않습니다.');
+    const segments = manifest.segments, byId = new Map(documents.map(document => [document.id, document]));
+    for (const expected of segments) {
         const actual = byId.get(expected.id);
         if (!actual)
             throw new Error(`클라우드 조각이 누락되었습니다: ${expected.id}`);
@@ -99,9 +103,9 @@ export async function assembleCloudState(manifest, documents) {
         if (await sha256Hex(payload) !== expected.hash)
             throw new Error(`클라우드 조각 무결성 검증에 실패했습니다: ${expected.id}`);
     }
-    const ordered = (key) => (manifest.segments || []).filter((segment) => segment.key === key).sort((a, b) => a.index - b.index).map((segment) => byId.get(segment.id));
-    const profile = ordered('profile')[0]?.value || {}, securities = ordered('securities')[0]?.rows || [], integrations = ordered('integrations')[0]?.value || {};
-    const rows = (key) => ordered(key).flatMap((document) => document.rows || []);
+    const ordered = (key) => segments.filter(segment => segment.key === key).sort((a, b) => Number(a.index) - Number(b.index)).map(segment => byId.get(segment.id));
+    const profileValue = ordered('profile')[0]?.value, profile = isRecord(profileValue) ? profileValue : {}, securities = ordered('securities')[0]?.rows || [], integrations = ordered('integrations')[0]?.value || {};
+    const rows = (key) => ordered(key).flatMap(document => Array.isArray(document?.rows) ? document.rows : []);
     const state = { version: profile.version, ...(profile.schemaVersion !== undefined ? { schemaVersion: profile.schemaVersion } : {}), settings: profile.settings || {}, projects: securities, trades: rows('trades'), dividends: rows('dividends'), splits: rows('splits'), cashAdjustments: rows('cashAdjustments'), integrations, meta: profile.meta || {} };
     if (await sha256Hex(canonicalStringify(state)) !== manifest.stateHash)
         throw new Error('클라우드 전체 데이터 무결성 검증에 실패했습니다.');

@@ -1,12 +1,13 @@
-export const STATE_KEY: any = 'state';
-export const SAFETY_KEY: any = 'safetyBackup';
-export const PAGES: any = ['home', 'projects', 'goal', 'settings'];
-export const PROJECT_CATEGORIES: any = [
+import type { ProjectCategory } from '../types/domain.js';
+export const STATE_KEY = 'state';
+export const SAFETY_KEY = 'safetyBackup';
+export const PAGES = ['home', 'projects', 'goal', 'settings'];
+export const PROJECT_CATEGORIES: Array<[ProjectCategory, string]> = [
   ['highYield','고배당·인컴'],
   ['growth','배당성장'],
   ['dividend','일반 배당']
 ];
-export const PROJECT_COLORS: any = [
+export const PROJECT_COLORS: Array<[string, string]> = [
   ['#6858f5', '#9a84ff'],
   ['#f06d38', '#ff9b68'],
   ['#2f7cf4', '#65a8ff'],
@@ -14,4 +15,4 @@ export const PROJECT_COLORS: any = [
   ['#db5570', '#f58aa0'],
   ['#b17816', '#e6ac47']
 ];
-export const PROJECT_COLOR_NAMES: any = ['보라','주황','파랑','초록','장미','골드'];
+export const PROJECT_COLOR_NAMES = ['보라','주황','파랑','초록','장미','골드'];

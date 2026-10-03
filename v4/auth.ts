@@ -1,9 +1,6 @@
-declare const document: any;
-declare const window: any;
-declare const navigator: any;
-declare const location: any;
-declare const localStorage: any;
-declare const sessionStorage: any;
+import type { User } from 'firebase/auth';
+import { isRecord } from './modules/utils.js';
+export interface GoogleAuthOptions {loginButtonId:string;statusElementId:string;onSignedIn?:(user:User)=>void|Promise<void>;onSignedOut?:()=>void|Promise<void>;onError?:(message:string,error:unknown)=>void;}
 import {
   browserLocalPersistence,
   getRedirectResult,
@@ -16,23 +13,23 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { auth, googleProvider, GoogleAuthProvider } from './firebase.js';
 
-let loginRunning: any = false;
-let authStarted: any = false;
+let loginRunning = false;
+let authStarted = false;
 
-function useRedirectAuth(): any {
+function useRedirectAuth() {
   // Capacitor serves the app from https://localhost inside its WebView.
   // Redirect auth opens that URL in Chrome, where no local server exists.
   if (window?.Capacitor?.isNativePlatform?.()) return false;
   return matchMedia('(max-width: 760px)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-function nativeGoogleAuth(): any {
+function nativeGoogleAuth() {
   if (!window?.Capacitor?.isNativePlatform?.()) return null;
   return window?.Capacitor?.Plugins?.NativeGoogleAuth || null;
 }
 
-function friendlyAuthError(error: any): any {
-  switch (error?.code) {
+function friendlyAuthError(error: unknown) {
+  switch (isRecord(error)?error.code:undefined) {
     case 'auth/unauthorized-domain': return 'Firebase 승인 도메인을 확인해 주세요.';
     case 'auth/network-request-failed': return '인터넷 연결을 확인한 뒤 다시 눌러 주세요.';
     case 'auth/popup-blocked': return '로그인 화면을 열지 못했습니다. 다시 눌러 주세요.';
@@ -45,19 +42,19 @@ function friendlyAuthError(error: any): any {
   }
 }
 
-export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedIn, onSignedOut, onError }: any): Promise<any> {
+export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedIn, onSignedOut, onError }: GoogleAuthOptions): Promise<void> {
   if (authStarted) return;
   authStarted = true;
 
-  const button: any = document.getElementById(loginButtonId);
-  const status: any = document.getElementById(statusElementId);
+  const button = document.getElementById(loginButtonId) as HTMLButtonElement | null;
+  const status = document.getElementById(statusElementId);
 
   try {
     await setPersistence(auth, browserLocalPersistence);
     if (!nativeGoogleAuth()) await getRedirectResult(auth);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Auth startup error', error);
-    const message: any=friendlyAuthError(error);
+    const message=friendlyAuthError(error);
     if (status) status.textContent = message;
     onError?.(message,error);
   }
@@ -68,16 +65,16 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
     button.disabled = true;
     if (status) status.textContent = 'Google 로그인 창을 여는 중…';
     try {
-      const native: any=nativeGoogleAuth();
+      const native=nativeGoogleAuth();
       if(native){
-        const result: any=await native.signIn();
+        const result=await native.signIn();
         if(!result?.idToken)throw {code:'native-auth-unavailable'};
         await signInWithCredential(auth,GoogleAuthProvider.credential(result.idToken));
       }else if(useRedirectAuth())await signInWithRedirect(auth,googleProvider);
       else await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Google login error', error);
-      const message: any = friendlyAuthError(error);
+      const message = friendlyAuthError(error);
       if (status) status.textContent = message;
       onError?.(message, error);
     } finally {
@@ -86,7 +83,7 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
     }
   });
 
-  onAuthStateChanged(auth, (user: any) => {
+  onAuthStateChanged(auth, (user) => {
     if (user) {
       if(status)status.textContent='클라우드 계정을 연결했습니다.';
       onSignedIn?.(user);
@@ -94,20 +91,20 @@ export async function initGoogleAuth({ loginButtonId, statusElementId, onSignedI
       if(status)status.textContent='로그인하지 않아도 모든 기능을 사용할 수 있습니다.';
       onSignedOut?.();
     }
-  }, (error: any) => {
+  }, (error) => {
     console.error('Auth state error', error);
-    const message: any = friendlyAuthError(error);
+    const message = friendlyAuthError(error);
     if (status) status.textContent = message;
     onError?.(message, error);
   });
 }
 
-export async function logoutGoogle(): Promise<any> {
+export async function logoutGoogle(): Promise<void> {
   await signOut(auth);
-  const native: any=nativeGoogleAuth();
+  const native=nativeGoogleAuth();
   if(native?.signOut)await native.signOut().catch(()=>{});
 }
 
-export function getGoogleIdToken(forceRefresh: any =false): any {
+export function getGoogleIdToken(forceRefresh: boolean =false) {
   return auth.currentUser ? auth.currentUser.getIdToken(forceRefresh) : null;
 }

@@ -1,3 +1,4 @@
+import { isRecord } from './modules/utils.js';
 import { browserLocalPersistence, getRedirectResult, onAuthStateChanged, setPersistence, signInWithCredential, signInWithPopup, signInWithRedirect, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import { auth, googleProvider, GoogleAuthProvider } from './firebase.js';
 let loginRunning = false;
@@ -15,7 +16,7 @@ function nativeGoogleAuth() {
     return window?.Capacitor?.Plugins?.NativeGoogleAuth || null;
 }
 function friendlyAuthError(error) {
-    switch (error?.code) {
+    switch (isRecord(error) ? error.code : undefined) {
         case 'auth/unauthorized-domain': return 'Firebase 승인 도메인을 확인해 주세요.';
         case 'auth/network-request-failed': return '인터넷 연결을 확인한 뒤 다시 눌러 주세요.';
         case 'auth/popup-blocked': return '로그인 화면을 열지 못했습니다. 다시 눌러 주세요.';

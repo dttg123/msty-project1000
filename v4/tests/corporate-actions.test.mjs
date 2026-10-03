@@ -30,4 +30,8 @@ assert.deepEqual(validateLedger(first),[]);
 const duplicate=structuredClone(first);duplicate.projects.push({...duplicate.projects[0],id:'p-second'});
 assert.ok(validateLedger(duplicate).includes('종목 장기 식별자가 없거나 중복됩니다.'));
 
+const malformed=structuredClone(first);malformed.projects[0].corporateActions=[null,42,'bad'];
+assert.doesNotThrow(()=>validateLedger(malformed),'malformed corporate actions must be reported without crashing validation');
+assert.ok(validateLedger(malformed).includes('기업행위 기록을 확인해 주세요.'));
+
 console.log('Corporate actions PASS: stable securityId, ticker history, liquidation cash, validation, and idempotent schema migration');

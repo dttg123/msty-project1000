@@ -1,4 +1,4 @@
 // Public runtime configuration only. Never place Toss client secrets here.
-export const TOSS_BRIDGE_URL: any = '';
-export const TOSS_SYNC_FROM: any = '2020-01-01';
+export const TOSS_BRIDGE_URL = '';
+export const TOSS_SYNC_FROM = '2020-01-01';
 

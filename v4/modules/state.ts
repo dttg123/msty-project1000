@@ -1,21 +1,22 @@
+import type {AppState,Project,ProjectCategory,RecoveryPlan} from '../types/domain.js';
 import { PROJECT_COLORS } from './constants.js';
 import { clone, n, todayISO, uid } from './utils.js';
 
-export function blankRecovery(): any {
+export function blankRecovery(): RecoveryPlan {
   return { locked:false, basis:0, startDate:'', targetReachedDate:'', calculatedBasisAtLock:0, confirmedAt:'', method:'withdrawnOnly' };
 }
 
-const HIGH_YIELD_SYMBOLS: any = new Set(['MSTY','CONY','NVDY','TSLY','ULTY','YMAX','YMAG','AMZY','APLY','GOOY','NFLY','OARK']);
-const DIVIDEND_GROWTH_SYMBOLS: any = new Set(['SCHD','VIG','DGRO','DGRW','NOBL','KO','PEP','PG','JNJ','MCD','O','LOW','HD']);
-export function inferProjectCategory(symbol: any =''): any {
-  const normalized: any=String(symbol).toUpperCase();
+const HIGH_YIELD_SYMBOLS = new Set(['MSTY','CONY','NVDY','TSLY','ULTY','YMAX','YMAG','AMZY','APLY','GOOY','NFLY','OARK']);
+const DIVIDEND_GROWTH_SYMBOLS = new Set(['SCHD','VIG','DGRO','DGRW','NOBL','KO','PEP','PG','JNJ','MCD','O','LOW','HD']);
+export function inferProjectCategory(symbol: unknown =''): ProjectCategory {
+  const normalized=String(symbol).toUpperCase();
   if(HIGH_YIELD_SYMBOLS.has(normalized))return 'highYield';
   if(DIVIDEND_GROWTH_SYMBOLS.has(normalized))return 'growth';
   return 'dividend';
 }
 
-export function blankProject(symbol: any = 'MSTY', name: any = 'YieldMax MSTR Option Income'): any {
-  const id: any=`p-${symbol.toLowerCase()}-${Date.now()}`;
+export function blankProject(symbol: string = 'MSTY', name: string = 'YieldMax MSTR Option Income'): Project {
+  const id=`p-${symbol.toLowerCase()}-${Date.now()}`;
   return {
     id, securityId:`local:${id}`,
     symbol: symbol.toUpperCase(), name, tag:'배당 프로젝트',
@@ -26,8 +27,8 @@ export function blankProject(symbol: any = 'MSTY', name: any = 'YieldMax MSTR Op
   };
 }
 
-export function blankState(): any {
-  const project: any = blankProject();
+export function blankState(): AppState {
+  const project = blankProject();
   return {
     version:4, schemaVersion:4,
     settings:{ exchangeRate:1370, exchangeRateMode:'manual', displayCurrency:'KRW', targetMonthlyDividend:500, warningKRW:18000000, thresholdKRW:20000000, appearance:'system' },
@@ -37,15 +38,15 @@ export function blankState(): any {
   };
 }
 
-export function repairLegacy(raw: any): any {
+export function repairLegacy(raw: any) {
   if (!raw || raw.meta?.ledgerRepairV321) return raw;
-  const dividends: any = Array.isArray(raw.dividends) ? raw.dividends : [];
-  const trades: any = Array.isArray(raw.trades) ? raw.trades : [];
-  const near: any = (a: any,b: any) => Math.abs(n(a)-n(b)) <= .011;
-  const hasDividend: any = (date: any, amount: any) => dividends.some((d: any) => d.date===date && near(d.amountUSD,amount));
-  const t1: any = trades.find((t: any) => t.type==='buy' && t.date==='2026-07-25' && t.buyType==='mixed' && near(t.reinvestAmountUSD,40.77) && near(n(t.shares)*n(t.price),49.32));
-  const t2: any = trades.find((t: any) => t.type==='buy' && t.date==='2026-08-05' && t.buyType==='reinvest' && near(n(t.shares)*n(t.price),38.49));
-  const t3: any = trades.find((t: any) => t.type==='buy' && t.date==='2026-08-13' && t.buyType==='reinvest' && near(n(t.shares)*n(t.price),36.51));
+  const dividends = Array.isArray(raw.dividends) ? raw.dividends : [];
+  const trades = Array.isArray(raw.trades) ? raw.trades : [];
+  const near = (a: any,b: any) => Math.abs(n(a)-n(b)) <= .011;
+  const hasDividend = (date: any, amount: any) => dividends.some((d: any) => d.date===date && near(d.amountUSD,amount));
+  const t1 = trades.find((t: any) => t.type==='buy' && t.date==='2026-07-25' && t.buyType==='mixed' && near(t.reinvestAmountUSD,40.77) && near(n(t.shares)*n(t.price),49.32));
+  const t2 = trades.find((t: any) => t.type==='buy' && t.date==='2026-08-05' && t.buyType==='reinvest' && near(n(t.shares)*n(t.price),38.49));
+  const t3 = trades.find((t: any) => t.type==='buy' && t.date==='2026-08-13' && t.buyType==='reinvest' && near(n(t.shares)*n(t.price),36.51));
   if (!(hasDividend('2026-07-24',40.77) && hasDividend('2026-07-31',41.36) && hasDividend('2026-08-07',39.30) && t1 && t2 && t3)) return raw;
   raw.settings = raw.settings || {};
   raw.settings.initialDividendBalance = 10.78;
@@ -57,10 +58,10 @@ export function repairLegacy(raw: any): any {
   return raw;
 }
 
-export function migrateLegacy(input: any): any {
-  const raw: any = repairLegacy(clone(input));
-  const state: any = blankState();
-  const project: any = state.projects[0];
+export function migrateLegacy(input: any) {
+  const raw = repairLegacy(clone(input));
+  const state = blankState();
+  const project = state.projects[0];
   project.id = 'p-msty';
   project.securityId = 'local:p-msty';
   project.targetUnits = Math.max(.000001,n(raw.settings?.targetUnits) || 500);
@@ -83,15 +84,15 @@ export function migrateLegacy(input: any): any {
   return state;
 }
 
-export function normalizeV4(raw: any): any {
-  const base: any = blankState();
-  const result: any = {...base, ...raw};
+export function normalizeV4(raw: any) {
+  const base = blankState();
+  const result = {...base, ...raw};
   result.version = 4;
   result.schemaVersion = 4;
   result.settings = {...base.settings, ...(raw.settings || {})};
   result.projects = Array.isArray(raw.projects) ? raw.projects.map((project: any,index: any) => {
-    const id: any=project.id||uid('p'),links=Array.isArray(project.brokerLinks)?project.brokerLinks.filter((link: any)=>link&&link.provider&&link.assetKey):[];
-    const linkedSecurityId: any=links.find((link: any)=>link.securityId)?.securityId;
+    const id=project.id||uid('p'),links=Array.isArray(project.brokerLinks)?project.brokerLinks.filter((link: any)=>link&&link.provider&&link.assetKey):[];
+    const linkedSecurityId=links.find((link: any)=>link.securityId)?.securityId;
     return {
       ...blankProject(project.symbol || `ASSET${index+1}`,project.name || project.symbol || '배당 종목'), ...project,
       id,securityId:String(project.securityId||linkedSecurityId||`local:${id}`),symbol:String(project.symbol || `ASSET${index+1}`).toUpperCase(),tag:/^PROJECT\s*1000$/i.test(String(project.tag||''))?'배당 프로젝트':(project.tag||'배당 프로젝트'),
@@ -104,7 +105,7 @@ export function normalizeV4(raw: any): any {
   return result;
 }
 
-export function migrate(raw: any): any {
+export function migrate(raw: any) {
   if (!raw || typeof raw !== 'object') return blankState();
   if (Array.isArray(raw.projects) || n(raw.version) >= 4) return normalizeV4(raw);
   if (Array.isArray(raw.trades) && Array.isArray(raw.dividends)) return migrateLegacy(raw);
