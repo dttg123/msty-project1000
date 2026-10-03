@@ -1,16 +1,17 @@
 import { repairLegacy } from './state.js';
-import { clone, n } from './utils.js';
+import { clone, isRecord, n } from './utils.js';
 const EPSILON = 1e-7;
 function legacyRows(raw, key) {
-    return Array.isArray(raw?.[key]) ? raw[key] : [];
+    return Array.isArray(raw[key]) ? raw[key].filter(isRecord) : [];
 }
 export function summarizeLegacyState(input) {
-    const raw = repairLegacy(clone(input));
+    const raw = repairLegacy(clone(input)), settings = isRecord(raw.settings) ? raw.settings : {}, recovery = isRecord(raw.recovery) ? raw.recovery : {};
     const trades = legacyRows(raw, 'trades'), dividends = legacyRows(raw, 'dividends'), splits = legacyRows(raw, 'splits');
     const events = [
         ...trades.map((row) => ({ ...row, eventType: 'trade' })),
         ...splits.map((row) => ({ ...row, eventType: 'split' }))
-    ].sort((a, b) => String(a.date).localeCompare(String(b.date)) || ((a.eventType === 'split' ? 0 : 1) - (b.eventType === 'split' ? 0 : 1)) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id)));
+    ];
+    events.sort((a, b) => String(a.date).localeCompare(String(b.date)) || ((a.eventType === 'split' ? 0 : 1) - (b.eventType === 'split' ? 0 : 1)) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id)));
     let factor = 1, shares = 0, normalizedShares = 0, costBasis = 0, realized = 0, directBuyCost = 0, sellProceeds = 0, reinvestAmount = 0;
     for (const event of events) {
         if (event.eventType === 'split') {
@@ -48,17 +49,17 @@ export function summarizeLegacyState(input) {
     }
     shares = Math.abs(shares) < 1e-9 ? 0 : shares;
     costBasis = Math.max(0, Math.abs(costBasis) < 1e-7 ? 0 : costBasis);
-    const currentPrice = Math.max(0, n(raw.settings?.currentPrice));
+    const currentPrice = Math.max(0, n(settings.currentPrice));
     const dividendsTotal = dividends.reduce((sum, row) => sum + n(row.amountUSD), 0);
-    const initialDividendBalance = Math.max(0, n(raw.settings?.initialDividendBalance));
+    const initialDividendBalance = Math.max(0, n(settings.initialDividendBalance));
     return {
         tradeCount: trades.length, dividendCount: dividends.length, splitCount: splits.length,
         factor, shares, normalizedShares, costBasis, realized, directBuyCost, sellProceeds,
-        currentTarget: Math.max(.000001, n(raw.settings?.targetUnits) || 500) * factor,
+        currentTarget: Math.max(.000001, n(settings.targetUnits) || 500) * factor,
         marketValue: shares * currentPrice, dividendsTotal, reinvestAmount,
         dividendAvailable: initialDividendBalance + dividendsTotal - reinvestAmount,
-        recoveryLocked: !!raw.recovery?.locked, recoveryBasis: Math.max(0, n(raw.recovery?.basis)),
-        recoveryStartDate: String(raw.recovery?.startDate || '')
+        recoveryLocked: !!recovery.locked, recoveryBasis: Math.max(0, n(recovery.basis)),
+        recoveryStartDate: String(recovery.startDate || '')
     };
 }
 function closeEnough(a, b) {

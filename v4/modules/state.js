@@ -1,5 +1,5 @@
 import { PROJECT_COLORS } from './constants.js';
-import { clone, n, todayISO, uid } from './utils.js';
+import { clone, isRecord, n, todayISO, uid } from './utils.js';
 export function blankRecovery() {
     return { locked: false, basis: 0, startDate: '', targetReachedDate: '', calculatedBasisAtLock: 0, confirmedAt: '', method: 'withdrawnOnly' };
 }
@@ -34,11 +34,14 @@ export function blankState() {
         meta: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), lastBackupAt: '', lastLocalSaveAt: '', lastCloudSaveAt: '', migratedFrom: '', migrationCheckedAt: '', celebratedMilestones: [] }
     };
 }
-export function repairLegacy(raw) {
-    if (!raw || raw.meta?.ledgerRepairV321)
+const record = (value) => isRecord(value) ? value : {};
+const legacyRows = (value) => Array.isArray(value) ? value.filter(isRecord) : [];
+export function repairLegacy(input) {
+    const raw = record(input);
+    if (!raw || record(raw.meta).ledgerRepairV321)
         return raw;
-    const dividends = Array.isArray(raw.dividends) ? raw.dividends : [];
-    const trades = Array.isArray(raw.trades) ? raw.trades : [];
+    const dividends = legacyRows(raw.dividends);
+    const trades = legacyRows(raw.trades);
     const near = (a, b) => Math.abs(n(a) - n(b)) <= .011;
     const hasDividend = (date, amount) => dividends.some((d) => d.date === date && near(d.amountUSD, amount));
     const t1 = trades.find((t) => t.type === 'buy' && t.date === '2026-07-25' && t.buyType === 'mixed' && near(t.reinvestAmountUSD, 40.77) && near(n(t.shares) * n(t.price), 49.32));
@@ -46,63 +49,67 @@ export function repairLegacy(raw) {
     const t3 = trades.find((t) => t.type === 'buy' && t.date === '2026-08-13' && t.buyType === 'reinvest' && near(n(t.shares) * n(t.price), 36.51));
     if (!(hasDividend('2026-07-24', 40.77) && hasDividend('2026-07-31', 41.36) && hasDividend('2026-08-07', 39.30) && t1 && t2 && t3))
         return raw;
-    raw.settings = raw.settings || {};
-    raw.settings.initialDividendBalance = 10.78;
-    raw.settings.initialDividendBalanceDate = '2026-07-23';
+    raw.settings = { ...record(raw.settings), initialDividendBalance: 10.78, initialDividendBalanceDate: '2026-07-23' };
     Object.assign(t1, { date: '2026-07-28', buyType: 'reinvest', shares: 4, price: 12.3475, reinvestAmountUSD: 0 });
     Object.assign(t2, { date: '2026-08-07', buyType: 'reinvest', shares: 3, price: 12.84, reinvestAmountUSD: 0 });
     Object.assign(t3, { date: '2026-08-17', buyType: 'reinvest', shares: 3, price: 12.19, reinvestAmountUSD: 0 });
-    raw.meta = { ...(raw.meta || {}), ledgerRepairV321: new Date().toISOString() };
+    raw.meta = { ...record(raw.meta), ledgerRepairV321: new Date().toISOString() };
     return raw;
 }
 export function migrateLegacy(input) {
     const raw = repairLegacy(clone(input));
     const state = blankState();
+    const settings = record(raw.settings);
     const project = state.projects[0];
     project.id = 'p-msty';
     project.securityId = 'local:p-msty';
-    project.targetUnits = Math.max(.000001, n(raw.settings?.targetUnits) || 500);
-    project.monthlyPlanShares = Math.max(0, n(raw.settings?.monthlyPlanShares));
-    project.projectStart = raw.settings?.projectStart || todayISO();
-    project.currentPrice = Math.max(0, n(raw.settings?.currentPrice));
-    project.initialDividendBalance = Math.max(0, n(raw.settings?.initialDividendBalance));
-    project.initialDividendBalanceDate = raw.settings?.initialDividendBalanceDate || '';
-    project.recovery = { ...blankRecovery(), ...(raw.recovery || {}) };
-    state.settings.exchangeRate = Math.max(0, n(raw.settings?.exchangeRate) || 1370);
-    state.settings.displayCurrency = raw.settings?.showKRW === false ? 'USD' : 'KRW';
-    state.settings.warningKRW = Math.max(0, n(raw.settings?.warningKRW) || 18000000);
-    state.settings.thresholdKRW = Math.max(1, n(raw.settings?.thresholdKRW) || 20000000);
-    state.settings.appearance = raw.settings?.appearance || 'system';
-    state.trades = (raw.trades || []).map((row) => ({ ...row, projectId: project.id, symbol: 'MSTY' }));
-    state.dividends = (raw.dividends || []).map((row) => ({ ...row, projectId: project.id, symbol: 'MSTY' }));
-    state.splits = (raw.splits || []).map((row) => ({ ...row, projectId: project.id, symbol: 'MSTY' }));
-    state.meta = { ...state.meta, ...(raw.meta || {}), migratedFrom: 'legacy-v3.2.1', migrationCheckedAt: new Date().toISOString() };
+    project.targetUnits = Math.max(.000001, n(settings.targetUnits) || 500);
+    project.monthlyPlanShares = Math.max(0, n(settings.monthlyPlanShares));
+    project.projectStart = String(settings.projectStart || todayISO());
+    project.currentPrice = Math.max(0, n(settings.currentPrice));
+    project.initialDividendBalance = Math.max(0, n(settings.initialDividendBalance));
+    project.initialDividendBalanceDate = String(settings.initialDividendBalanceDate || '');
+    project.recovery = { ...blankRecovery(), ...record(raw.recovery) };
+    state.settings.exchangeRate = Math.max(0, n(settings.exchangeRate) || 1370);
+    state.settings.displayCurrency = settings.showKRW === false ? 'USD' : 'KRW';
+    state.settings.warningKRW = Math.max(0, n(settings.warningKRW) || 18000000);
+    state.settings.thresholdKRW = Math.max(1, n(settings.thresholdKRW) || 20000000);
+    const appearance = settings.appearance;
+    state.settings.appearance = appearance === 'light' || appearance === 'dark' ? appearance : 'system';
+    const attachProject = (rows) => (Array.isArray(rows) ? rows : []).map(row => ({ ...record(row), projectId: project.id, symbol: 'MSTY' }));
+    const trades = attachProject(raw.trades), dividends = attachProject(raw.dividends), splits = attachProject(raw.splits);
+    state.meta = { ...state.meta, ...record(raw.meta), migratedFrom: 'legacy-v3.2.1', migrationCheckedAt: new Date().toISOString() };
     state.version = 4;
-    return state;
+    return { ...state, trades, dividends, splits };
 }
-export function normalizeV4(raw) {
+export function normalizeV4(input) {
+    const raw = record(input);
     const base = blankState();
     const result = { ...base, ...raw };
     result.version = 4;
     result.schemaVersion = 4;
-    result.settings = { ...base.settings, ...(raw.settings || {}) };
-    result.projects = Array.isArray(raw.projects) ? raw.projects.map((project, index) => {
-        const id = project.id || uid('p'), links = Array.isArray(project.brokerLinks) ? project.brokerLinks.filter((link) => link && link.provider && link.assetKey) : [];
+    result.settings = { ...base.settings, ...record(raw.settings) };
+    result.projects = Array.isArray(raw.projects) ? raw.projects.map((value, index) => {
+        if (!isRecord(value))
+            return value;
+        const project = record(value);
+        const id = project.id || uid('p'), links = Array.isArray(project.brokerLinks) ? project.brokerLinks.filter(isRecord).filter(link => link.provider && link.assetKey) : [];
         const linkedSecurityId = links.find((link) => link.securityId)?.securityId;
         return {
-            ...blankProject(project.symbol || `ASSET${index + 1}`, project.name || project.symbol || '배당 종목'), ...project,
+            ...blankProject(String(project.symbol || `ASSET${index + 1}`), String(project.name || project.symbol || '배당 종목')), ...project,
             id, securityId: String(project.securityId || linkedSecurityId || `local:${id}`), symbol: String(project.symbol || `ASSET${index + 1}`).toUpperCase(), tag: /^PROJECT\s*1000$/i.test(String(project.tag || '')) ? '배당 프로젝트' : (project.tag || '배당 프로젝트'),
-            recovery: { ...blankRecovery(), ...(project.recovery || {}) }, category: ['dividend', 'growth', 'highYield'].includes(project.category) ? project.category : inferProjectCategory(project.symbol), distributionFrequencyMode: project.distributionFrequencyMode === 'manual' ? 'manual' : 'auto', brokerLinks: links, status: ['active', 'inactive', 'liquidated'].includes(project.status) ? project.status : 'active', corporateActions: Array.isArray(project.corporateActions) ? project.corporateActions : [], colorIndex: Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
+            recovery: { ...blankRecovery(), ...record(project.recovery) }, category: ['dividend', 'growth', 'highYield'].includes(String(project.category)) ? project.category : inferProjectCategory(project.symbol), distributionFrequencyMode: project.distributionFrequencyMode === 'manual' ? 'manual' : 'auto', brokerLinks: links, status: ['active', 'inactive', 'liquidated'].includes(String(project.status)) ? project.status : 'active', corporateActions: Array.isArray(project.corporateActions) ? project.corporateActions : [], colorIndex: typeof project.colorIndex === 'number' && Number.isInteger(project.colorIndex) ? project.colorIndex : index % PROJECT_COLORS.length
         };
     }) : base.projects;
-    for (const key of ['trades', 'dividends', 'splits', 'cashAdjustments'])
-        result[key] = Array.isArray(raw[key]) ? raw[key] : [];
-    result.integrations = { toss: { ...base.integrations.toss, ...(raw.integrations?.toss || {}), syncCursor: { ...base.integrations.toss.syncCursor, ...(raw.integrations?.toss?.syncCursor || {}) }, capabilities: { ...base.integrations.toss.capabilities, ...(raw.integrations?.toss?.capabilities || {}) }, sourceLedger: { ...base.integrations.toss.sourceLedger, ...(raw.integrations?.toss?.sourceLedger || {}) } } };
-    result.meta = { ...base.meta, ...(raw.meta || {}) };
-    return result;
+    const rows = (key) => Array.isArray(raw[key]) ? raw[key] : [];
+    const trades = rows('trades'), dividends = rows('dividends'), splits = rows('splits'), cashAdjustments = rows('cashAdjustments');
+    const toss = record(record(raw.integrations).toss);
+    result.integrations = { toss: { ...base.integrations.toss, ...toss, syncCursor: { ...base.integrations.toss.syncCursor, ...record(toss.syncCursor) }, capabilities: { ...base.integrations.toss.capabilities, ...record(toss.capabilities) }, sourceLedger: { ...base.integrations.toss.sourceLedger, ...record(toss.sourceLedger) } } };
+    result.meta = { ...base.meta, ...record(raw.meta) };
+    return { ...result, meta: { ...base.meta, ...record(raw.meta) }, trades, dividends, splits, cashAdjustments };
 }
 export function migrate(raw) {
-    if (!raw || typeof raw !== 'object')
+    if (!isRecord(raw))
         return blankState();
     if (Array.isArray(raw.projects) || n(raw.version) >= 4)
         return normalizeV4(raw);

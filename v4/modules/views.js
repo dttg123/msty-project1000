@@ -3,14 +3,16 @@ import { reportingDividends, isPostedDividend } from './finance.js';
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n, todayISO } from './utils.js';
 import { buildHomeMetrics, nextMilestone } from './home-metrics.js';
+import { isRecord } from './utils.js';
+const records = (value) => Array.isArray(value) ? value.filter(isRecord) : [];
 export function createViews(context) {
     const { getState, getSelectedProjectId, setSelectedProjectId, getPortfolioGroup, setPortfolioGroup, getChartMode, getChartSelection, getHomeCashflowMode, getHomeYearRange, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getCurrentUser, getAutoBackupStatus, getNativeTossStatus, getAppUpdateStatus, getExchangeRateStatus, getSaveSummary, getOfficialDistributionStatus, isTossBridgeConfigured, activeProjects, projectById, projectRows, computeProject, recoveryStats, totals, displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors } = context;
-    const state = new Proxy({}, { get: (_, key) => getState()[key] });
+    const state = new Proxy({}, { get: (_, key) => Reflect.get(getState(), key) });
     function officialScheduleHTML(project) {
-        const status = getOfficialDistributionStatus?.() || {}, feed = project.symbol === 'MSTY' ? status.feed : null;
+        const status = getOfficialDistributionStatus?.() || { feed: null, busy: false, error: '' }, feed = project.symbol === 'MSTY' ? status.feed : null;
         const manual = project.dividendAnnouncement, official = feed?.rows.find((row) => row.payDate >= todayISO()) || feed?.rows[0];
-        const row = manual?.payDate >= todayISO() ? manual : official;
-        const content = row ? `<p>${row.payDate >= todayISO() ? '공시 지급 예정' : '최근 공시 지급'} ${esc(row.payDate)} · 배당락 ${esc(row.exDate)}</p><p class="tiny muted">${row === manual ? '직접 기록한 공시' : '운용사 공시 · 세전 주당 $' + Number(row.amountPerShareUSD).toFixed(4)} · 실제 계좌 입금일은 다를 수 있습니다.</p>${row === official ? `<p class="tiny muted">자료 확인 ${esc(syncTime(feed.retrievedAt))}${Date.now() - Date.parse(feed.retrievedAt) > 3 * 86400000 ? ' · 최신 공시 재확인 필요' : ''}</p><a class="text-link" href="${esc(feed.sourceURL)}" target="_blank" rel="noopener noreferrer">운용사 원문 보기</a>` : ''}${row.payDate < todayISO() ? '<p class="tiny muted">다음 지급일은 아직 확인되지 않았습니다.</p>' : ''}` : '<p class="tiny muted">확인된 공시가 없습니다. 공시 지급일을 기록하면 여기에 표시합니다.</p>';
+        const row = manual && manual.payDate >= todayISO() ? manual : official;
+        const content = row ? `<p>${row.payDate >= todayISO() ? '공시 지급 예정' : '최근 공시 지급'} ${esc(row.payDate)} · 배당락 ${esc(row.exDate)}</p><p class="tiny muted">${row === manual ? '직접 기록한 공시' : '운용사 공시 · 세전 주당 $' + Number(('amountPerShareUSD' in row ? row.amountPerShareUSD : 0)).toFixed(4)} · 실제 계좌 입금일은 다를 수 있습니다.</p>${row === official && feed ? `<p class="tiny muted">자료 확인 ${esc(syncTime(feed.retrievedAt))}${Date.now() - Date.parse(feed.retrievedAt) > 3 * 86400000 ? ' · 최신 공시 재확인 필요' : ''}</p><a class="text-link" href="${esc(feed.sourceURL)}" target="_blank" rel="noopener noreferrer">운용사 원문 보기</a>` : ''}${row.payDate < todayISO() ? '<p class="tiny muted">다음 지급일은 아직 확인되지 않았습니다.</p>' : ''}` : '<p class="tiny muted">확인된 공시가 없습니다. 공시 지급일을 기록하면 여기에 표시합니다.</p>';
         return content + (project.symbol === 'MSTY' ? `<button class="text-link" style="margin-top:10px" data-refresh-official-distributions ${status.busy ? 'disabled' : ''}>${status.busy ? '공시 확인 중…' : '공시 갱신'}</button>${status.error ? `<p class="tiny muted">${esc(status.error)}</p>` : ''}` : '');
     }
     function syncTime(value) { const date = new Date(String(value || '')); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date) + ' (한국 시간)' : '기록 없음'; }
@@ -30,7 +32,7 @@ export function createViews(context) {
     function annualDpsHTML(calc) {
         const analytics = calc.analytics, years = analytics.years.filter((row) => row.known && row.dps > 0).slice(-6), max = Math.max(1, ...years.map((row) => row.dps));
         const growthRates = [[3, analytics.cagr3], [5, analytics.cagr5], [10, analytics.cagr10]].filter(([, value]) => value !== null && value !== undefined && Number.isFinite(value));
-        return `<div class="strategy-metrics two"><div><span>내 입력 기록 기준 배당률</span><strong>${analytics.trailingYoc === null ? '기록 부족' : fmtPct(analytics.trailingYoc)}</strong></div><div><span>입력 기록상 연속 증가</span><strong>${analytics.increaseStreak ? analytics.increaseStreak + '년' : '확인 전'}</strong></div></div>${years.length ? `<div class="annual-chart-heading"><strong>연도별 주당 세후 배당금</strong><span>입력된 주당 세후 금액 · 연간 누락 여부 미확인</span></div><div class="annual-dps-chart" aria-label="연도별 실제 주당 세후 배당금">${years.map((row) => `<div><small>${fmtMoney(row.dps, 2)}</small><b style="height:${Math.max(10, row.dps / max * 70)}px"></b><span>${row.year}년</span></div>`).join('')}</div>` : '<p class="empty-inline">완료된 연도 기록이 쌓이면 주당배당 성장을 보여줍니다.</p>'}${growthRates.length ? `<div class="growth-rate-heading">입력 기록상 연평균 증가율</div><div class="growth-rate-row">${growthRates.map(([period, value]) => `<span><b>최근 ${period}년</b><strong>${value >= 0 ? '+' : ''}${fmtPct(value)}</strong></span>`).join('')}</div>` : ''}${analytics.cutCount ? `<p class="strategy-warning">기록상 배당 감소 ${analytics.cutCount}회</p>` : ''}`;
+        return `<div class="strategy-metrics two"><div><span>내 입력 기록 기준 배당률</span><strong>${analytics.trailingYoc === null ? '기록 부족' : fmtPct(analytics.trailingYoc)}</strong></div><div><span>입력 기록상 연속 증가</span><strong>${analytics.increaseStreak ? analytics.increaseStreak + '년' : '확인 전'}</strong></div></div>${years.length ? `<div class="annual-chart-heading"><strong>연도별 주당 세후 배당금</strong><span>입력된 주당 세후 금액 · 연간 누락 여부 미확인</span></div><div class="annual-dps-chart" aria-label="연도별 실제 주당 세후 배당금">${years.map((row) => `<div><small>${fmtMoney(row.dps, 2)}</small><b style="height:${Math.max(10, row.dps / max * 70)}px"></b><span>${row.year}년</span></div>`).join('')}</div>` : '<p class="empty-inline">완료된 연도 기록이 쌓이면 주당배당 성장을 보여줍니다.</p>'}${growthRates.length ? `<div class="growth-rate-heading">입력 기록상 연평균 증가율</div><div class="growth-rate-row">${growthRates.map(([period, value]) => `<span><b>최근 ${period}년</b><strong>${n(value) >= 0 ? '+' : ''}${fmtPct(value)}</strong></span>`).join('')}</div>` : ''}${analytics.cutCount ? `<p class="strategy-warning">기록상 배당 감소 ${analytics.cutCount}회</p>` : ''}`;
     }
     function strategyInsightHTML(calc) {
         if (calc.project.category === 'highYield')
@@ -61,7 +63,7 @@ export function createViews(context) {
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     }
     function chartSeries(projectId = null) {
-        const today = todayISO(), rows = reportingDividends((projectId ? projectRows('dividends', projectId) : state.dividends).filter((row) => isDate(row.date) && isPostedDividend(row, today)), n(state.settings.exchangeRate));
+        const today = todayISO(), rows = reportingDividends((projectId ? projectRows('dividends', projectId || '') : state.dividends).filter((row) => isDate(row.date) && isPostedDividend(row, today)), n(state.settings.exchangeRate));
         if (getChartMode() === 'month')
             return historicalIncome(rows, 'month', effectiveChartYear(rows), today);
         if (getChartMode() === 'year')
@@ -97,7 +99,7 @@ export function createViews(context) {
     }
     function chartHTML(projectId = null) {
         const chartMonth = getChartMonth?.() || todayISO().slice(0, 7);
-        const series = getChartMode() === 'monthWeeks' ? monthWeeks(reportingDividends(projectRows('dividends', projectId).filter((r) => isPostedDividend(r, todayISO())), n(state.settings.exchangeRate)), chartMonth).map((r) => ({ ...r, key: r.range })) : chartSeries(projectId), max = Math.max(1, ...series.map((x) => x.value));
+        const series = getChartMode() === 'monthWeeks' ? monthWeeks(reportingDividends(projectRows('dividends', projectId || '').filter((r) => isPostedDividend(r, todayISO())), n(state.settings.exchangeRate)), chartMonth).map((r) => ({ ...r, key: r.range })) : chartSeries(projectId), max = Math.max(1, ...series.map((x) => x.value));
         if (!series.length)
             return '<div class="empty">배당을 입력하면 실제 흐름이 표시됩니다.</div>';
         const selectedKey = selectedChartRow(series, getChartMode(), chartMonth)?.key || '';
@@ -114,11 +116,11 @@ export function createViews(context) {
         return `<div class="column-chart compact-chart ${modeClass}">${series.map((x) => `<button class="column-item ${selectedKey === x.key ? 'active' : ''}" type="button" data-chart-key="${esc(x.key)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value, 2))}"><div class="column-value" title="${esc(fmtMoney(x.value, 2))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${x.value > 0 ? Math.max(7, x.value / max * 100) : 0}%"></div></div><div class="column-label">${esc(getChartMode() === 'month' ? `${+x.key.slice(5)}월` : getChartMode() === 'week' ? x.label.slice(3) : x.label)}</div></button>`).join('')}</div>`;
     }
     function chartSelectionHTML(projectId) {
-        const chartMonth = getChartMonth?.() || todayISO().slice(0, 7), series = getChartMode() === 'monthWeeks' ? monthWeeks(reportingDividends(projectRows('dividends', projectId).filter((r) => isPostedDividend(r, todayISO())), n(state.settings.exchangeRate)), chartMonth).map((r) => ({ ...r, key: r.range })) : chartSeries(projectId);
+        const chartMonth = getChartMonth?.() || todayISO().slice(0, 7), series = getChartMode() === 'monthWeeks' ? monthWeeks(reportingDividends(projectRows('dividends', projectId || '').filter((r) => isPostedDividend(r, todayISO())), n(state.settings.exchangeRate)), chartMonth).map((r) => ({ ...r, key: r.range })) : chartSeries(projectId);
         if (!series.length)
             return '';
         const mode = getChartMode(), selected = selectedChartRow(series, mode, chartMonth), label = mode === 'year' ? `${selected.key}년` : mode === 'month' ? `${selected.key.replace('-', '년 ')}월` : selected.label;
-        const count = mode === 'year' || mode === 'month' ? projectRows('dividends', projectId).filter((row) => row.date <= todayISO() && row.date.startsWith(selected.key)).length : null;
+        const count = mode === 'year' || mode === 'month' ? projectRows('dividends', projectId || '').filter((row) => row.date <= todayISO() && row.date.startsWith(selected.key)).length : null;
         return `<div class="chart-selection-inline"><div><span>${esc(label)} 실제 입금</span><strong>${fmtMoney(selected.value, 2)}</strong>${count !== null ? `<small>${count}회</small>` : ''}</div>${mode === 'month' && count ? `<button class="btn soft small" data-income-month="${esc(selected.key)}" data-income-project="${esc(projectId)}">입금 ${count}건 보기</button>` : ''}</div>`;
     }
     function chartContextHTML(calc) {
@@ -216,6 +218,8 @@ export function createViews(context) {
             setSelectedProjectId(selectedProjectId);
         }
         const calc = projects.length ? computeProject(selectedProjectId) : null, page = document.getElementById('page-projects'), groupTabs = `<div class="portfolio-group-tabs" aria-label="포트폴리오 분류"><button type="button" data-portfolio-group="highYield" class="${group === 'highYield' ? 'active' : ''}"><span>고배당주</span><b>${counts.highYield}</b></button><button type="button" data-portfolio-group="dividend" class="${group === 'dividend' ? 'active' : ''}"><span>배당주</span><b>${counts.dividend}</b></button></div>`;
+        if (!page)
+            return;
         if (!allProjects.length) {
             page.innerHTML = `${sectionTitle('포트폴리오')}<article class="card empty-project"><p>아직 등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;
             return;
@@ -224,6 +228,8 @@ export function createViews(context) {
             page.innerHTML = `<div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>${groupTabs}<article class="card empty-project"><p>${group === 'highYield' ? '고배당주' : '배당주'}로 묶인 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;
             return;
         }
+        if (!calc)
+            return;
         const p = calc.project, colors = projectColors(p), rec = recoveryStats(calc), pct = calc.progress * 100, allRows = combinedRecords(calc), filter = getHistoryFilter?.() || {}, rows = selectRecords(allRows, filter), historyLimit = getHistoryLimit?.() || 10;
         const milestone = nextMilestone(calc), groupLabel = group === 'highYield' ? '고배당주' : '배당주';
         page.innerHTML = `
@@ -276,12 +282,12 @@ export function createViews(context) {
         const toss = state.integrations.toss;
         const nativeToss = getNativeTossStatus?.() || { available: false, configured: false, publicIp: '', checking: false };
         const appUpdate = getAppUpdateStatus?.() || { available: false, checking: false, currentVersion: APP_VERSION, latestVersion: APP_VERSION, updateAvailable: false, nativeUpdateRequired: false, error: '' };
-        const tossReady = isTossBridgeConfigured(), tossUser = !!getCurrentUser(), tossBusy = toss.status === 'syncing' || nativeToss.checking, canSync = nativeToss.available ? nativeToss.configured : tossReady && tossUser;
-        const tossStatus = tossBusy ? '처리 중' : toss.status === 'connected' ? '연결됨' : toss.status === 'partial' ? '일부 성공' : toss.status === 'error' ? '확인 필요' : nativeToss.available ? (nativeToss.configured ? '갱신 준비' : '최초 설정') : '파일 불러오기';
-        const tossComparisons = (toss.comparisons || []).slice(0, 6);
-        const tossOrders = (toss.sourceLedger?.orders || []).filter((row) => row.currency === 'USD' && row.importable !== false), tossBuys = tossOrders.filter((row) => row.type === 'buy').length, tossSells = tossOrders.filter((row) => row.type === 'sell').length;
-        const tossDescription = toss.status === 'error' ? (toss.lastError || '토스 조회 상태를 다시 확인해 주세요.') : toss.status === 'partial' ? '일부 계좌 또는 시세 조회가 실패했습니다. 성공한 데이터만 보존했으며 전체 성공으로 처리하지 않았습니다.' : nativeToss.available ? (nativeToss.configured ? '토스 갱신만 누르면 매수·매도를 가상 적용해 보유주수까지 맞는 경우 자동 저장합니다. 중복·과매도·원본 변경만 확인을 요청합니다.' : '처음 한 번만 Client ID와 Secret을 안전하게 저장하면 됩니다.') : '현재 IP를 토스에 등록해 만든 읽기 전용 JSON을 불러옵니다. Client ID와 Secret은 브라우저와 파일에 저장하지 않습니다.';
-        const autoImportReason = { duplicate: '수동 거래와 겹칠 가능성이 있어 확인이 필요합니다.', oversell: '체결만 적용하면 중간 보유주수가 음수가 되어 확인이 필요합니다.', reconciliation: '체결 합계와 현재 보유주수가 달라 확인이 필요합니다.', correction: '토스 원본이 변경된 체결이 있어 확인이 필요합니다.', truncated: '전체 체결을 받지 못해 자동 저장하지 않았습니다.', partial: '일부 계좌 조회가 실패해 자동 저장하지 않았습니다.', ledger: '장부 검증을 통과하지 못했습니다.', validation: '장부 검증을 통과하지 못했습니다.' }[toss.lastAutoImportReason] || '';
+        const tossReady = isTossBridgeConfigured(), tossUser = !!getCurrentUser(), tossBusy = String(toss.status) === 'syncing' || nativeToss.checking, canSync = nativeToss.available ? nativeToss.configured : tossReady && tossUser;
+        const tossStatus = tossBusy ? '처리 중' : toss.status === 'connected' ? '연결됨' : String(toss.status) === 'partial' ? '일부 성공' : toss.status === 'error' ? '확인 필요' : nativeToss.available ? (nativeToss.configured ? '갱신 준비' : '최초 설정') : '파일 불러오기';
+        const tossComparisons = records(toss.comparisons).slice(0, 6);
+        const tossOrders = records(toss.sourceLedger?.orders).filter((row) => row.currency === 'USD' && row.importable !== false), tossBuys = tossOrders.filter((row) => row.type === 'buy').length, tossSells = tossOrders.filter((row) => row.type === 'sell').length;
+        const tossDescription = toss.status === 'error' ? (toss.lastError || '토스 조회 상태를 다시 확인해 주세요.') : String(toss.status) === 'partial' ? '일부 계좌 또는 시세 조회가 실패했습니다. 성공한 데이터만 보존했으며 전체 성공으로 처리하지 않았습니다.' : nativeToss.available ? (nativeToss.configured ? '토스 갱신만 누르면 매수·매도를 가상 적용해 보유주수까지 맞는 경우 자동 저장합니다. 중복·과매도·원본 변경만 확인을 요청합니다.' : '처음 한 번만 Client ID와 Secret을 안전하게 저장하면 됩니다.') : '현재 IP를 토스에 등록해 만든 읽기 전용 JSON을 불러옵니다. Client ID와 Secret은 브라우저와 파일에 저장하지 않습니다.';
+        const autoImportReason = { duplicate: '수동 거래와 겹칠 가능성이 있어 확인이 필요합니다.', oversell: '체결만 적용하면 중간 보유주수가 음수가 되어 확인이 필요합니다.', reconciliation: '체결 합계와 현재 보유주수가 달라 확인이 필요합니다.', correction: '토스 원본이 변경된 체결이 있어 확인이 필요합니다.', truncated: '전체 체결을 받지 못해 자동 저장하지 않았습니다.', partial: '일부 계좌 조회가 실패해 자동 저장하지 않았습니다.', ledger: '장부 검증을 통과하지 못했습니다.', validation: '장부 검증을 통과하지 못했습니다.' }[String(toss.lastAutoImportReason || '')] || '';
         const migration = state.meta.migrationAudit, migrationAvailable = !!state.meta.legacyMigrationAvailable, archivedProjects = state.projects.filter((project) => project.archived), autoBackup = getAutoBackupStatus?.() || { count: 0, lastAt: '', error: '' };
         document.getElementById('page-settings').innerHTML = `${sectionTitle('내 Dividend OS', '설정')}
       <div class="stack">
@@ -306,19 +312,19 @@ export function createViews(context) {
           <p class="tiny muted">마지막 조회 ${esc(syncTime(toss.lastSyncAt))}<br>마지막 전체 성공 ${esc(syncTime(toss.lastSuccessfulAt))}${toss.lastAttemptAt ? `<br>마지막 연결 시도 ${esc(syncTime(toss.lastAttemptAt))}` : ''}</p>
           <details class="toss-details"><summary><strong>계좌 대조 · 조회 상세</strong><b class="chev">⌄</b></summary>
           ${toss.accountLabel ? `<div class="row-sub">${esc(toss.accountLabel)}${toss.lastSyncAt ? ` · ${fmtDate(toss.lastSyncAt.slice(0, 10))} 조회` : ''}</div>` : ''}
-          ${tossComparisons.length ? `<div class="list" style="margin-top:12px">${tossComparisons.map((row) => `<div class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${fmtShares(row.shares)}주</div><div class="row-sub">${row.accounts?.length > 1 ? `${row.accounts.length}계좌 합산 · ` : ''}앱 ${fmtShares(row.appShares)}주${row.supported ? '' : ' · 원화 종목은 대조만'}</div></div><div class="row-value ${Math.abs(n(row.difference)) < .0001 ? 'positive' : ''}">${Math.abs(n(row.difference)) < .0001 ? '일치' : `${n(row.difference) > 0 ? '+' : ''}${fmtShares(row.difference)}주`}</div></div>`).join('')}</div>` : ''}
+          ${tossComparisons.length ? `<div class="list" style="margin-top:12px">${tossComparisons.map((row) => `<div class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${fmtShares(row.shares)}주</div><div class="row-sub">${Array.isArray(row.accounts) && row.accounts.length > 1 ? `${row.accounts.length}계좌 합산 · ` : ''}앱 ${fmtShares(row.appShares)}주${row.supported ? '' : ' · 원화 종목은 대조만'}</div></div><div class="row-value ${Math.abs(n(row.difference)) < .0001 ? 'positive' : ''}">${Math.abs(n(row.difference)) < .0001 ? '일치' : `${n(row.difference) > 0 ? '+' : ''}${fmtShares(row.difference)}주`}</div></div>`).join('')}</div>` : ''}
           ${toss.unsupportedCurrencyCount ? `<p class="tiny muted">원화 체결 ${toss.unsupportedCurrencyCount}건은 USD 원장에 섞지 않고 제외했습니다.</p>` : ''}
           ${toss.matchedExistingCount ? `<p class="tiny muted">수동 거래와 유사한 토스 체결 ${toss.matchedExistingCount}건은 자동 병합하지 않고 검토 후보로 표시했습니다.</p>` : ''}${toss.matchedExistingDividendCount ? `<p class="tiny muted">수동 배당과 유사한 토스 입금 ${toss.matchedExistingDividendCount}건은 자동 병합하지 않고 검토 후보로 표시했습니다.</p>` : ''}
           ${toss.failedAccountCount ? `<p class="tiny negative">계좌 ${toss.failedAccountCount}개 조회 실패 · 성공한 계좌만 반영</p>` : ''}
-          ${(toss.correctionCandidates?.length || toss.dividendCorrectionCandidates?.length) ? `<div class="toss-setup"><div class="setup-step"><span>!</span><div><strong>토스 원본 변경 ${(toss.correctionCandidates?.length || 0) + (toss.dividendCorrectionCandidates?.length || 0)}건</strong><small>기존 원장은 자동 수정·삭제하지 않았습니다. 토스 앱 원본을 확인한 뒤 알림을 정리하세요.</small></div></div><button class="btn soft small" data-clear-toss-corrections>확인 처리</button></div>` : ''}
+          ${(records(toss.correctionCandidates).length || records(toss.dividendCorrectionCandidates).length) ? `<div class="toss-setup"><div class="setup-step"><span>!</span><div><strong>토스 원본 변경 ${(records(toss.correctionCandidates).length || 0) + (records(toss.dividendCorrectionCandidates).length || 0)}건</strong><small>기존 원장은 자동 수정·삭제하지 않았습니다. 토스 앱 원본을 확인한 뒤 알림을 정리하세요.</small></div></div><button class="btn soft small" data-clear-toss-corrections>확인 처리</button></div>` : ''}
           ${(toss.sourceLedger?.orders?.length || toss.sourceLedger?.dividends?.length) ? `<p class="tiny positive">기기 보존 원본 · 매수 ${tossBuys}건 · 매도 ${tossSells}건${toss.lastSuccessfulAt ? ' · 마지막 성공 ' + fmtDate(toss.lastSuccessfulAt.slice(0, 10)) : ''}</p><p class="tiny muted">배당 · ${toss.capabilities?.dividends ? `${toss.sourceLedger.dividends.length}건 조회` : '토스 공식 API 미지원 · 실제 입금은 직접 기록'}</p>` : ''}
           ${toss.historyTruncated ? '<p class="tiny negative">체결 기록이 10,000건을 넘어 일부만 조회됐습니다. 기간을 나눠 다시 조회해야 합니다.</p>' : ''}
           </details>
           ${nativeToss.available ? `<div class="action-row" style="margin-top:12px"><button class="btn ${nativeToss.configured ? 'soft' : 'secondary'}" data-configure-toss ${tossBusy ? 'disabled' : ''}>${nativeToss.configured ? '키 변경' : '최초 설정'}</button><button class="btn primary" data-sync-toss ${canSync && !tossBusy ? '' : 'disabled'}>${tossBusy ? '확인 중…' : '토스 갱신'}</button></div>${nativeToss.configured ? '<button class="text-link" style="margin-top:12px" data-clear-toss-credentials>이 기기에 저장한 토스 키 삭제</button>' : ''}<details class="toss-details" style="margin-top:12px"><summary><div><strong>긴급 수동 불러오기</strong><small>APK 조회가 안 될 때만 JSON 사용</small></div><b class="chev">⌄</b></summary><div class="manual-tools-body"><button class="btn soft" data-import-toss ${tossBusy ? 'disabled' : ''}>토스 JSON 불러오기</button></div></details>` : `<div class="action-row" style="margin-top:12px"><button class="btn secondary" data-import-toss ${tossBusy ? 'disabled' : ''}>${tossBusy ? '처리 중…' : '토스 JSON 불러오기'}</button>${tossReady ? `<button class="btn soft" data-sync-toss ${canSync && !tossBusy ? '' : 'disabled'}>서버에서 조회</button>` : ''}</div>`}
           <details class="toss-details"><summary><strong>연결 관리 · 거래 복구</strong><b class="chev">⌄</b></summary><div class="toss-management-actions">
-          ${(toss.candidates?.length || toss.dividendCandidates?.length) ? `<button class="btn soft" style="margin-top:9px" data-review-toss ${tossBusy ? 'disabled' : ''}>조회 기록 검토</button>` : ''}
-          ${(toss.candidates?.length || toss.dividendCandidates?.length || toss.correctionCandidates?.length || toss.dividendCorrectionCandidates?.length) ? `<button class="btn soft" style="margin-top:9px" data-delete-toss-exceptions ${tossBusy ? 'disabled' : ''}>대기 목록 정리</button>` : ''}
-          ${(toss.sourceLedger?.orders || []).some((row) => String(row?.symbol || '').toUpperCase() === 'MSTY') ? '<button class="btn soft" style="width:100%;margin-top:9px" data-rebuild-msty-toss>MSTY를 토스 원본으로 다시 만들기</button>' : ''}
+          ${(records(toss.candidates).length || records(toss.dividendCandidates).length) ? `<button class="btn soft" style="margin-top:9px" data-review-toss ${tossBusy ? 'disabled' : ''}>조회 기록 검토</button>` : ''}
+          ${(records(toss.candidates).length || records(toss.dividendCandidates).length || records(toss.correctionCandidates).length || records(toss.dividendCorrectionCandidates).length) ? `<button class="btn soft" style="margin-top:9px" data-delete-toss-exceptions ${tossBusy ? 'disabled' : ''}>대기 목록 정리</button>` : ''}
+          ${records(toss.sourceLedger?.orders).some((row) => String(row?.symbol || '').toUpperCase() === 'MSTY') ? '<button class="btn soft" style="width:100%;margin-top:9px" data-rebuild-msty-toss>MSTY를 토스 원본으로 다시 만들기</button>' : ''}
           ${toss.accountScopeId && toss.status !== 'not_connected' ? '<button class="btn soft" style="margin-top:9px" data-disconnect-toss>화면 연결 해제</button>' : ''}          </div></details>
 
         </div></details>
@@ -332,7 +338,7 @@ export function createViews(context) {
           <section class="danger-zone"><div class="card-title">초기화</div><p class="tiny muted">V4 데이터만 지웁니다. V3.2.1 저장소는 삭제하지 않습니다.</p><button class="btn soft" style="width:100%" data-reset>V4 전체 초기화</button></section>
         </div></details>
       </div><div class="detail-note">원화는 설정 환율로 환산한 참고 금액입니다. 관리기준은 사용자 알림용이며 세금 판정이 아닙니다.</div><div class="app-version">DividendOS ${APP_VERSION}${state.meta.migratedFrom ? ` · ${esc(state.meta.migratedFrom)}에서 이전` : ''}</div>`;
-        document.getElementById('page-settings').querySelectorAll?.('input,select,textarea').forEach((input, index) => { const label = input.closest('div')?.querySelector('label'); if (label) {
+        document.getElementById('page-settings')?.querySelectorAll?.('input,select,textarea').forEach((input, index) => { const label = input.closest('div')?.querySelector('label'); if (label) {
             input.id = 'settings-field-' + index;
             label.htmlFor = input.id;
         } });

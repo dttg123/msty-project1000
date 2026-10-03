@@ -124,3 +124,19 @@ assert.deepEqual(dismissed.sourceLedger,exceptions.sourceLedger);
 assert.equal(filterDismissedTossExceptions(exceptions,dismissed.dismissedExceptionKeys).candidates.length,0);
 assert.equal(filterDismissedTossExceptions({...exceptions,accountScopeId:'scope-b'},dismissed.dismissedExceptionKeys).candidates.length,1);
 assert.equal(filterDismissedTossExceptions({...exceptions,candidates:[{...exceptions.candidates[0],sourceFingerprint:'changed'}]},dismissed.dismissedExceptionKeys).candidates.length,1);
+
+// Untrusted snapshots must reject malformed rows without hiding their ignored counts.
+for(const value of [null,undefined,1,'bad',[],true]){
+  assert.equal(normalizeTossOrder(value),null);
+  assert.equal(normalizeTossDividend(value),null);
+}
+const malformedSync=buildTossSync({orders:[null,7,'bad'],dividends:[null,false],holdings:[null],prices:[42],capabilities:{orders:true,prices:'yes'},syncCursor:7});
+assert.equal(malformedSync.ignoredCount,5);
+assert.deepEqual(malformedSync.candidates,[]);
+assert.deepEqual(malformedSync.holdings,[]);
+assert.deepEqual(malformedSync.capabilities,{orders:true});
+assert.deepEqual(malformedSync.syncCursor,{});
+const numericStringOrder=normalizeTossOrder({...row,shares:'2',price:'12.5',feeUSD:'0',taxUSD:'0'});
+assert.equal(numericStringOrder.shares,2);
+assert.equal(numericStringOrder.price,12.5);
+assert.equal(numericStringOrder.feeUSD,0);

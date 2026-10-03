@@ -148,6 +148,7 @@ export interface DividendCashBreakdown {
 }
 
 export interface SplitRecord extends LedgerRow {
+  type?: 'forward'|'reverse';
   id: string;
   projectId: string;
   symbol?: string;
