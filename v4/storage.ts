@@ -6,6 +6,7 @@ let database: IDBDatabase | undefined;
 let storageMode: 'indexeddb' | 'localstorage' | 'memory' = 'indexeddb';
 const memoryStore = new Map<string, unknown>();
 const FALLBACK_PREFIX = demoMode?'dividend-os-qa:':'dividend-os-v4:';
+const FALLBACK_MODE_KEY = `${FALLBACK_PREFIX}storage-backend`;
 const LEGACY_DB_NAME = 'MSTYProject1000DB_V3';
 
 export const storageStatus = () => ({mode:storageMode,durable:storageMode!=='memory'});
@@ -13,12 +14,22 @@ export const storageStatus = () => ({mode:storageMode,durable:storageMode!=='mem
 function enableFallback(): void {
   try {
     const probe=`${FALLBACK_PREFIX}probe`;
-    localStorage.setItem(probe,'1');localStorage.removeItem(probe);storageMode='localstorage';
+    localStorage.setItem(probe,'1');localStorage.removeItem(probe);
+    localStorage.setItem(FALLBACK_MODE_KEY,'localstorage');storageMode='localstorage';
   } catch (_) { storageMode='memory'; }
 }
 
 export function openStorage(): Promise<IDBDatabase | null> {
   return new Promise<IDBDatabase | null>((resolve, reject) => {
+    // Keep using the durable backend holding the last saved ledger.
+    // Preserve the marker after deletion so an old IndexedDB ledger cannot reappear.
+    try {
+      if(localStorage.getItem(FALLBACK_MODE_KEY)==='localstorage'||localStorage.getItem(`${FALLBACK_PREFIX}state`)!==null){
+        storageMode='localstorage';
+        try{localStorage.setItem(FALLBACK_MODE_KEY,'localstorage');}catch(_){}
+        resolve(null);return;
+      }
+    } catch (_) {}
     if(typeof indexedDB==='undefined'){enableFallback();resolve(null);return;}
     let request: IDBOpenDBRequest;
     try { request = indexedDB.open(DB_NAME, DB_VERSION); }
@@ -73,6 +84,7 @@ export function storageDelete(key: string): Promise<void> {
     tx.objectStore(STORE_NAME).delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('삭제 작업이 중단되었습니다.'));
   });
 }
 

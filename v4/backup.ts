@@ -1,6 +1,7 @@
 export const APP_VERSION: any = '0.12.21';
 export const DATA_SCHEMA_VERSION: any = 4;
 
+import { dividendCashBreakdown } from './modules/finance.js';
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
 
 const APP_FILES: any = [
@@ -120,7 +121,7 @@ export function buildCsvExports(state: any ={}): any {
   return [
     csv('securities.csv',['securityId','ticker','name','category','currency','archived'],projects.map((project: any)=>[project.id,project.symbol,project.name,project.category,project.currency||'USD',!!project.archived])),
     csv('trades.csv',['id','securityId','ticker','date','type','buyType','shares','priceUSD','feeUSD','taxUSD','currency','provider','sourceId','note'],(state.trades||[]).map((row: any)=>{const project: any=byId.get(row.projectId);const [provider,sourceId,currency]=source(row);return [row.id,row.projectId,project?.symbol||row.symbol||'',row.date,row.type,row.buyType||'',row.shares,row.price,row.feeUSD||0,row.taxUSD||0,currency,provider,sourceId,row.note||''];})),
-    csv('dividends.csv',['id','securityId','ticker','date','grossUSD','taxUSD','feeUSD','netUSD','status','currency','provider','sourceId','note','amountKRW'],(state.dividends||[]).map((row: any)=>{const project: any=byId.get(row.projectId);const [provider,sourceId,currency]=source(row);const gross: any=Number(row.grossAmountUSD??row.amountUSD??0),tax=Number(row.taxUSD||0),fee=Number(row.feeUSD||0);return [row.id,row.projectId,project?.symbol||row.symbol||'',row.date,gross,tax,fee,Number(row.amountUSD??gross-tax-fee),row.status||'actual',row.currency||currency,provider,sourceId,row.note||'',row.amountKRW??''];})),
+    csv('dividends.csv',['id','securityId','ticker','date','grossUSD','taxUSD','feeUSD','netUSD','status','currency','provider','sourceId','note','amountKRW'],(state.dividends||[]).map((row: any)=>{const project: any=byId.get(row.projectId);const [provider,sourceId,currency]=source(row);const cash=dividendCashBreakdown(row);return [row.id,row.projectId,project?.symbol||row.symbol||'',row.date,cash.grossUSD,cash.withholdingTaxUSD,cash.feeUSD,cash.netUSD,row.status||'actual',row.currency||currency,provider,sourceId,row.note||'',row.amountKRW??''];})),
     csv('goals.csv',['securityId','ticker','targetUnits','monthlyPlanShares','projectStart','afterGoalMode','recoveryLocked','recoveryBasis','recoveryStartDate'],projects.map((project: any)=>[project.id,project.symbol,project.targetUnits,project.monthlyPlanShares,project.projectStart,project.afterGoalMode,!!project.recovery?.locked,project.recovery?.basis||0,project.recovery?.startDate||'']))
   ];
 }

@@ -81,3 +81,21 @@ test('동기화 문구와 빈 상태가 바뀌어도 상단과 목표 카드 위
   }
   expect(errors).toEqual([]);
 });
+
+test('저장소 오류 후 기본 저장소가 복구돼도 저장한 기록을 다시 읽는다',async({page})=>{
+  await page.addInitScript(()=>{
+    if(localStorage.getItem('qa-fallback-seeded'))return;
+    localStorage.setItem('dividend-os-qa:state',JSON.stringify({previousFallback:true}));
+    localStorage.setItem('dividend-os-qa:fallback-checkpoint',JSON.stringify({amountUSD:12.34,source:'fallback'}));
+    localStorage.setItem('qa-fallback-seeded','1');
+  });
+  const errors=await openDemo(page);
+  const read=()=>page.evaluate(async()=>{
+    const storage=await import('/storage.js');
+    return {mode:storage.storageStatus().mode,record:await storage.storageGet('fallback-checkpoint')};
+  });
+  expect(await read()).toEqual({mode:'localstorage',record:{amountUSD:12.34,source:'fallback'}});
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
+  expect(await read()).toEqual({mode:'localstorage',record:{amountUSD:12.34,source:'fallback'}});
+  expect(errors).toEqual([]);
+});

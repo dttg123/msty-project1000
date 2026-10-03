@@ -7,16 +7,17 @@ export function tradeCashBreakdown(trade) {
     const feeUSD = finiteNonNegative(trade.feeUSD), taxUSD = finiteNonNegative(trade.taxUSD);
     return { executionAmountUSD, feeUSD, taxUSD, grossBuyCostUSD: trade.type === 'buy' ? executionAmountUSD + feeUSD + taxUSD : 0, netSellProceedsUSD: trade.type === 'sell' ? Math.max(0, executionAmountUSD - feeUSD - taxUSD) : 0 };
 }
+const hasAmount = (value) => value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0;
 export function dividendCashBreakdown(record) {
     const status = record.status === 'confirmed' || record.status === 'estimated' ? record.status : 'actual';
     if (record.currency === 'KRW')
         return { grossUSD: 0, withholdingTaxUSD: 0, feeUSD: 0, netUSD: 0, netKRW: finiteNonNegative(record.amountKRW), rocUSD: 0, incomeUSD: 0, status };
     const legacyNet = finiteNonNegative(record.amountUSD), tax = finiteNonNegative(record.withholdingTaxUSD ?? record.taxUSD), fee = finiteNonNegative(record.feeUSD);
     const explicitGross = finiteNonNegative(record.grossAmountUSD), explicitNet = finiteNonNegative(record.netAmountUSD);
-    const grossUSD = explicitGross || (explicitNet ? explicitNet + tax + fee : legacyNet + tax + fee);
-    const netUSD = explicitNet || legacyNet || Math.max(0, grossUSD - tax - fee);
+    const netUSD = hasAmount(record.netAmountUSD) ? explicitNet : hasAmount(record.amountUSD) ? legacyNet : Math.max(0, explicitGross - tax - fee);
+    const grossUSD = hasAmount(record.grossAmountUSD) ? explicitGross : netUSD + tax + fee;
     const explicitRoc = finiteNonNegative(record.rocAmountUSD), rocPercent = Math.min(100, finiteNonNegative(record.rocPercent));
-    const rocUSD = Math.min(netUSD, explicitRoc || (rocPercent > 0 ? netUSD * rocPercent / 100 : 0));
+    const rocUSD = Math.min(netUSD, hasAmount(record.rocAmountUSD) ? explicitRoc : (rocPercent > 0 ? netUSD * rocPercent / 100 : 0));
     return { grossUSD, withholdingTaxUSD: tax, feeUSD: fee, netUSD, rocUSD, incomeUSD: Math.max(0, netUSD - rocUSD), status };
 }
 export function isPostedDividend(record, asOf) {
