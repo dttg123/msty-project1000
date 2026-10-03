@@ -16,6 +16,8 @@ export function demoState(now = new Date()) {
     });
     state.trades = state.projects.map((project, index) => ({ id: `demo-open-${project.symbol.toLowerCase()}`, projectId: project.id, symbol: project.symbol, date: '2019-01-02', type: 'buy', buyType: 'direct', shares: specs[index][4], price: specs[index][5] * 1.08 }));
     const achieved = state.projects.find((project) => project.symbol === 'YMAX');
+    if (!achieved)
+        throw new Error('QA 종목 구성에 YMAX가 없습니다.');
     achieved.targetUnits = 500;
     achieved.recovery = { locked: true, basis: Number((520 * 12.31 * 1.08).toFixed(2)), startDate: '2025-01-01', targetReachedDate: '2019-01-02', calculatedBasisAtLock: Number((520 * 12.31 * 1.08).toFixed(2)), confirmedAt: '2025-01-01T00:00:00.000Z', method: 'withdrawnOnly' };
     state.cashAdjustments.push({ id: 'demo-withdraw-ymax-1', projectId: achieved.id, symbol: 'YMAX', date: '2025-06-30', amountUSD: -620, purpose: 'recoveryWithdrawal', label: '배당금 인출', note: '더미 원금회수' }, { id: 'demo-withdraw-ymax-2', projectId: achieved.id, symbol: 'YMAX', date: '2026-06-30', amountUSD: -780, purpose: 'recoveryWithdrawal', label: '배당금 인출', note: '더미 원금회수' });

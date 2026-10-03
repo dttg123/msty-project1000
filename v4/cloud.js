@@ -9,7 +9,7 @@ const revisionsRef = (uid) => collection(firestore, 'users', uid, 'apps', CLOUD_
 const segmentsRef = (uid, revisionId) => collection(firestore, 'users', uid, 'apps', CLOUD_DOC_ID, 'revisions', revisionId, 'segments');
 async function cleanupOldRevisions(uid, currentManifest) {
     const snapshots = await getDocs(revisionsRef(uid));
-    const rows = snapshots.docs.map((item) => ({ id: item.id, ref: item.ref, ...item.data() }));
+    const rows = snapshots.docs.map(item => { const data = item.data(); return { ...data, id: item.id, ref: item.ref, revision: Number(data.revision) }; });
     const previous = rows.filter((row) => row.id !== currentManifest.revisionId && Number(row.revision) < Number(currentManifest.revision)).sort((a, b) => Number(b.revision) - Number(a.revision))[0];
     const keep = new Set([currentManifest.revisionId, previous?.id].filter(Boolean)), remove = rows.filter((row) => !keep.has(row.id) && Number(row.revision) < Number(currentManifest.revision));
     const writes = [];
@@ -27,6 +27,8 @@ async function cleanupOldRevisions(uid, currentManifest) {
     }
 }
 async function readSplitDocument(uid, manifest) {
+    if (typeof manifest.revisionId !== 'string')
+        throw new Error('클라우드 revision 정보가 올바르지 않습니다.');
     const revisionSnapshot = await getDoc(revisionRef(uid, manifest.revisionId));
     if (!revisionSnapshot.exists())
         throw new Error('클라우드 revision 정보가 없습니다.');
@@ -34,7 +36,7 @@ async function readSplitDocument(uid, manifest) {
     if (revision.stateHash !== manifest.stateHash || revision.batchId !== manifest.batchId)
         throw new Error('클라우드 revision 포인터 검증에 실패했습니다.');
     const snapshots = await getDocs(segmentsRef(uid, manifest.revisionId));
-    return { state: await assembleCloudState(manifest, snapshots.docs.map((item) => item.data())), revision: manifest.revision, manifest, storageFormat: CLOUD_STORAGE_FORMAT };
+    return { state: await assembleCloudState(manifest, snapshots.docs.map((item) => item.data())), revision: Math.max(0, Number(manifest.revision) || 0), manifest, storageFormat: CLOUD_STORAGE_FORMAT };
 }
 export async function getCloudDocument(uid) {
     const snapshot = await getDoc(cloudRef(uid));

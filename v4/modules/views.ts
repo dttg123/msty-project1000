@@ -1,3 +1,5 @@
+import type { ProjectCalculation } from './portfolio.js';
+import type { Project } from '../types/domain.js';
 declare const document: any;
 import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
 import { reportingDividends, isPostedDividend } from './finance.js';
@@ -6,7 +8,7 @@ import { clamp, esc, isDate, n, todayISO } from './utils.js';
 import { buildHomeMetrics, nextMilestone } from './home-metrics.js';
 import { PROJECT_CATEGORIES } from './constants.js';
 
-export function createViews(context: any): any {
+export function createViews(context: any) {
   const {
     getState, getSelectedProjectId, setSelectedProjectId, getPortfolioGroup, setPortfolioGroup, getChartMode, getChartSelection, getHomeCashflowMode, getHomeYearRange, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getCurrentUser, getAutoBackupStatus, getNativeTossStatus, getAppUpdateStatus, getExchangeRateStatus, getSaveSummary, getOfficialDistributionStatus, isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
@@ -20,34 +22,34 @@ export function createViews(context: any): any {
     const content=row?`<p>${row.payDate>=todayISO()?'공시 지급 예정':'최근 공시 지급'} ${esc(row.payDate)} · 배당락 ${esc(row.exDate)}</p><p class="tiny muted">${row===manual?'직접 기록한 공시':'운용사 공시 · 세전 주당 $'+Number(row.amountPerShareUSD).toFixed(4)} · 실제 계좌 입금일은 다를 수 있습니다.</p>${row===official?`<p class="tiny muted">자료 확인 ${esc(syncTime(feed.retrievedAt))}${Date.now()-Date.parse(feed.retrievedAt)>3*86400000?' · 최신 공시 재확인 필요':''}</p><a class="text-link" href="${esc(feed.sourceURL)}" target="_blank" rel="noopener noreferrer">운용사 원문 보기</a>`:''}${row.payDate<todayISO()?'<p class="tiny muted">다음 지급일은 아직 확인되지 않았습니다.</p>':''}`:'<p class="tiny muted">확인된 공시가 없습니다. 공시 지급일을 기록하면 여기에 표시합니다.</p>';
     return content+(project.symbol==='MSTY'?`<button class="text-link" style="margin-top:10px" data-refresh-official-distributions ${status.busy?'disabled':''}>${status.busy?'공시 확인 중…':'공시 갱신'}</button>${status.error?`<p class="tiny muted">${esc(status.error)}</p>`:''}`:'');
   }
-  function syncTime(value: any): string {const date=new Date(value||'');return Number.isFinite(date.getTime())?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(date)+' (한국 시간)':'기록 없음';}
-  function sectionTitle(title: any,note: any =''): any { return `<div class="section-title-row"><h2 class="section-title">${esc(title)}</h2>${note?`<span class="section-note">${esc(note)}</span>`:''}</div>`; }
-  function progress(value: any,color: any =''): any { return `<div class="progress-track"><div class="progress-fill" style="width:${clamp(value,0,100)}%;${color?`background:${color}`:''}"></div></div>`; }
-  function pricedMoney(calc: any,value: any,digits: any =2): any { return calc.priceAvailable?fmtMoney(value,digits):'—'; }
-  const categoryLabel: any=(category: any)=>category==='highYield'?'고배당주':'배당주';
-  const projectGroup: any=(project: any)=>project?.category==='highYield'?'highYield':'dividend';
+  function syncTime(value: unknown): string {const date=new Date(String(value||''));return Number.isFinite(date.getTime())?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(date)+' (한국 시간)':'기록 없음';}
+  function sectionTitle(title: string,note: string ='') { return `<div class="section-title-row"><h2 class="section-title">${esc(title)}</h2>${note?`<span class="section-note">${esc(note)}</span>`:''}</div>`; }
+  function progress(value: number,color: string ='') { return `<div class="progress-track"><div class="progress-fill" style="width:${clamp(value,0,100)}%;${color?`background:${color}`:''}"></div></div>`; }
+  function pricedMoney(calc: ProjectCalculation,value: number,digits: number =2) { return calc.priceAvailable?fmtMoney(value,digits):'—'; }
+  const categoryLabel: any=(category: unknown)=>category==='highYield'?'고배당주':'배당주';
+  const projectGroup=(project: Pick<Project,'category'>|null|undefined)=>project?.category==='highYield'?'highYield':'dividend';
   const finitePct: any=(value: any)=>value===null||value===undefined||!Number.isFinite(value)?'—':fmtPct(value);
 
-  function paymentTrendHTML(calc: any): any{
+  function paymentTrendHTML(calc: ProjectCalculation){
     const rows: any=calc.income.payments.slice(0,8),usePerShare=rows.length>0&&rows.every((row: any)=>row.known),ordered=[...rows].reverse(),values=ordered.map(row=>usePerShare?row.perShare:row.amount),max=Math.max(1,...values),recent=rows.slice(0,4),prior=rows.slice(4,8),valueOf=(row: any)=>usePerShare?row.perShare:row.amount,average=(list: any)=>list.length?list.reduce((sum: any,row: any)=>sum+valueOf(row),0)/list.length:0,recentAvg=average(recent),priorAvg=average(prior),change=recent.length===4&&prior.length===4&&priorAvg>0?(recentAvg/priorAvg-1)*100:null,perShare=usePerShare;
     if(!rows.length)return '<p class="empty-inline">실제 입금이 쌓이면 지급 추세를 보여줍니다.</p>';
     const latest: any=valueOf(rows[0]),previous=rows[1]?valueOf(rows[1]):0,latestChange=previous>0?(latest/previous-1)*100:null;
     return `<div class="payment-trend-summary"><div><span>최근 지급</span><strong>${fmtMoney(latest,perShare?4:2)}${perShare?' / 주':''}</strong></div><div><span>직전 지급 대비</span><strong class="${latestChange===null?'':signClass(latestChange)}">${latestChange===null?'비교 전':`${latestChange>=0?'+':''}${fmtPct(latestChange)}`}</strong></div></div><div class="payment-spark" aria-label="날짜별 실제 지급액">${ordered.map((row,index)=>`<button type="button" ${row.ids?.[0]?`data-view-record="dividend:${esc(row.ids[0])}"`:''} aria-label="${esc(fmtDate(row.date))} ${esc(perShare?fmtMoney(values[index],4)+' 주당':fmtMoney(values[index],2))}"><b>${esc(fmtMoney(values[index],perShare?4:0))}</b><i style="height:${Math.max(12,values[index]/max*58)}px"></i><small>${esc(row.date.slice(5).replace('-','.'))}</small></button>`).join('')}</div><div class="trend-sentence"><strong>${recent.length===4?`최근 4회 평균 ${fmtMoney(recentAvg,perShare?4:2)}${perShare?' / 주':''}`:`최근 실제 지급 ${recent.length}회`}</strong><span class="${change===null?'':signClass(change)}">${change===null?'각 막대를 누르면 해당 입금 기록을 확인합니다.':`이전 4회 평균보다 ${change>=0?'증가':'감소'} ${fmtPct(Math.abs(change))}`}</span></div>${perShare?'':'<p class="detail-note">일부 기록에 지급 당시 주수가 없어 해당 회차는 실제 입금액으로 표시합니다.</p>'}`;
   }
 
-  function annualDpsHTML(calc: any): any{
+  function annualDpsHTML(calc: ProjectCalculation){
     const analytics: any=calc.analytics,years=analytics.years.filter((row: any)=>row.known&&row.dps>0).slice(-6),max=Math.max(1,...years.map((row: any)=>row.dps));
     const growthRates: any=[[3,analytics.cagr3],[5,analytics.cagr5],[10,analytics.cagr10]].filter(([,value])=>value!==null&&value!==undefined&&Number.isFinite(value));
     return `<div class="strategy-metrics two"><div><span>내 입력 기록 기준 배당률</span><strong>${analytics.trailingYoc===null?'기록 부족':fmtPct(analytics.trailingYoc)}</strong></div><div><span>입력 기록상 연속 증가</span><strong>${analytics.increaseStreak?analytics.increaseStreak+'년':'확인 전'}</strong></div></div>${years.length?`<div class="annual-chart-heading"><strong>연도별 주당 세후 배당금</strong><span>입력된 주당 세후 금액 · 연간 누락 여부 미확인</span></div><div class="annual-dps-chart" aria-label="연도별 실제 주당 세후 배당금">${years.map((row: any)=>`<div><small>${fmtMoney(row.dps,2)}</small><b style="height:${Math.max(10,row.dps/max*70)}px"></b><span>${row.year}년</span></div>`).join('')}</div>`:'<p class="empty-inline">완료된 연도 기록이 쌓이면 주당배당 성장을 보여줍니다.</p>'}${growthRates.length?`<div class="growth-rate-heading">입력 기록상 연평균 증가율</div><div class="growth-rate-row">${growthRates.map(([period,value]: any)=>`<span><b>최근 ${period}년</b><strong>${value>=0?'+':''}${fmtPct(value)}</strong></span>`).join('')}</div>`:''}${analytics.cutCount?`<p class="strategy-warning">기록상 배당 감소 ${analytics.cutCount}회</p>`:''}`;
   }
 
-  function strategyInsightHTML(calc: any): any{
+  function strategyInsightHTML(calc: ProjectCalculation){
     if(calc.project.category==='highYield')return `<div class="analysis-divider"><strong>${calc.income.payments.length&&calc.income.payments.every((row: any)=>row.known)?'주당 실제 지급액':'실제 입금액 추세'}</strong><span>최근 최대 8회</span></div>${paymentTrendHTML(calc)}<div class="strategy-metrics two easy-yield-metrics"><div><span>입력 기록 기준 배당률</span><strong>${calc.analytics.trailingYoc===null?'기록 부족':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>투입금 대비 누적 배당률</span><strong>${calc.hasKRWDividends?'달러 금액 미확인':fmtPct(calc.lifetimeDividendRecoveryPct)}</strong></div></div><details class="metric-guide"><summary>지표 뜻 보기</summary><p><b>1년 배당률</b> 현재 보유분 매입금과 최근 1년 실제 세후 배당의 비율입니다.</p><p><b>누적 배당률</b> 직접 넣은 투자금과 지금까지 실제 세후 배당의 비율입니다. 원금 회수율은 아닙니다.</p></details>`;
     if(calc.project.category==='growth')return `<div class="analysis-divider"><strong>주당배당 성장</strong><span>완료 연도 기준</span></div>${annualDpsHTML(calc)}<details class="metric-guide"><summary>계산 기준 보기</summary><p>분할을 보정한 실제 주당배당만 사용하며 진행 중인 연도는 성장률에서 제외합니다.</p></details>`;
     return `<div class="analysis-divider"><strong>배당 변화</strong><span>같은 기간 비교</span></div><div class="strategy-metrics two"><div><span>입력 기록 기준 배당률</span><strong>${calc.analytics.trailingYoc===null?'기록 부족':fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>전년 같은 기간 대비</span><strong class="${calc.analytics.ytdChange===null?'':signClass(calc.analytics.ytdChange)}">${finitePct(calc.analytics.ytdChange)}</strong></div></div><details class="metric-guide"><summary>지표 뜻 보기</summary><p>최근 1년 실제 세후 배당을 내 매입금과 비교하고, 올해 받은 배당을 지난해 같은 기간과 비교합니다.</p></details>`;
   }
 
-  function lifecycleContent(calc: any): any {
+  function lifecycleContent(calc: ProjectCalculation) {
     const rec: any=recoveryStats(calc),project=calc.project;
     if(project.category!=='highYield'||rec.stage==='accumulating')return '';
     if(rec.stage==='setup')return `<div class="lifecycle-head"><span class="phase-pill achieved">주수 목표 달성</span><strong>${fmtShares(calc.currentTarget)}주 달성</strong><small>${fmtDate(rec.reachedDate)}부터 원금회수 단계로 전환할 수 있습니다.</small></div><button class="btn primary lifecycle-action" data-lock-recovery="${project.id}">원금회수 기준 확정</button><p class="detail-note">기준 확정 뒤 실제로 밖으로 인출한 배당금만 원금회수에 포함합니다.</p>`;
@@ -55,14 +57,14 @@ export function createViews(context: any): any {
     return `<div class="lifecycle-head"><span class="phase-pill ${completed?'profit':'recovery'}">${completed?'순수익 단계':'원금 회수 중'}</span><strong>${completed?`회수 후 순수익 ${fmtMoney(rec.profit,2)}`:`남은 원금 ${fmtMoney(rec.remaining,2)}`}</strong><small>목표 ${fmtShares(calc.currentTarget)}주 달성 · ${fmtDate(rec.reachedDate)}</small></div>${progress(rec.pct)}<div class="lifecycle-metrics"><div><span>회수 기준원금</span><strong>${fmtMoney(project.recovery.basis,2)}</strong></div><div><span>실제 인출 회수</span><strong>${fmtMoney(rec.total,2)}</strong></div><div><span>${completed?'회수 이후 순수익':'원금 회수율'}</span><strong>${completed?fmtMoney(rec.profit,2):fmtPct(rec.pct)}</strong></div></div><div class="lifecycle-actions"><button class="btn primary small" data-add-withdrawal="${project.id}">배당 인출 기록</button><button class="btn soft small" data-edit-recovery="${project.id}">회수 기준</button></div><p class="detail-note">배당 입금만으로는 회수되지 않습니다. 실제 인출 기록만 계산합니다.</p>`;
   }
 
-  function periodKey(dateString: any,mode: any): any {
+  function periodKey(dateString: any,mode: any) {
     const date: any=new Date(`${dateString}T12:00:00`); if(Number.isNaN(date.getTime()))return '';
     if(mode==='year')return String(date.getFullYear());
     if(mode==='month')return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
     const day: any=(date.getDay()+6)%7; date.setDate(date.getDate()-day);
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
   }
-  function chartSeries(projectId: any =null): any {
+  function chartSeries(projectId: any =null) {
     const today: any=todayISO(),rows=reportingDividends((projectId?projectRows('dividends',projectId):state.dividends).filter((row: any)=>isDate(row.date)&&isPostedDividend(row,today)),n(state.settings.exchangeRate));
     if(getChartMode()==='month')return historicalIncome(rows,'month',effectiveChartYear(rows),today);
     if(getChartMode()==='year')return historicalIncome(rows,'year','',today);
@@ -70,17 +72,17 @@ export function createViews(context: any): any {
     const count: any=getChartMode()==='year'?10:6;
     return [...grouped.entries()].sort(([a],[b])=>a.localeCompare(b)).slice(-count).map(([key,value])=>({key,label:getChartMode()==='year'?key:getChartMode()==='month'?`${key.slice(2,4)}.${key.slice(5,7)}`:`${key.slice(2,4)}.${key.slice(5,7)}/${key.slice(8,10)}`,value}));
   }
-  function effectiveChartYear(rows: any =[]): any {
+  function effectiveChartYear(rows: any =[]) {
     const chosen: any=String(getChartYear?.()||''); if(/^\d{4}$/.test(chosen))return chosen;
     return rows.map((row: any)=>String(row.date||'').slice(0,4)).filter((year: any)=>/^\d{4}$/.test(year)).sort().at(-1)||todayISO().slice(0,4);
   }
-  function selectedChartRow(series: any,mode: any,chartMonth: any =''): any {
+  function selectedChartRow(series: any,mode: any,chartMonth: any ='') {
     const chosen: any=series.find((row: any)=>row.key===getChartSelection?.()); if(chosen)return chosen;
     if(mode==='month'){const current: any=todayISO().slice(0,7),exact=series.find((row: any)=>row.key===current&&row.value>0);return exact||[...series].reverse().find(row=>row.value>0)||series.at(-1);}
     if(mode==='monthWeeks'){if(chartMonth===todayISO().slice(0,7)){const day: any=+todayISO().slice(8),index=Math.min(4,Math.floor((day-1)/7));return series[index]||series.at(-1);}return [...series].reverse().find(row=>row.value>0)||series.at(-1);}
     return series.at(-1);
   }
-  function chartHTML(projectId: any =null): any {
+  function chartHTML(projectId: any =null) {
     const chartMonth: any=getChartMonth?.()||todayISO().slice(0,7);
     const series: any=getChartMode()==='monthWeeks'?monthWeeks(reportingDividends(projectRows('dividends',projectId).filter((r: any)=>isPostedDividend(r,todayISO())),n(state.settings.exchangeRate)),chartMonth).map((r: any)=>({...r,key:r.range})):chartSeries(projectId), max=Math.max(1,...series.map((x: any)=>x.value));
     if(!series.length)return '<div class="empty">배당을 입력하면 실제 흐름이 표시됩니다.</div>';
@@ -96,14 +98,14 @@ export function createViews(context: any): any {
     const modeClass: any=getChartMode()==='month'?'month-chart':getChartMode()==='year'?'year-chart wide-chart':'fit-chart';
     return `<div class="column-chart compact-chart ${modeClass}">${series.map((x: any)=>`<button class="column-item ${selectedKey===x.key?'active':''}" type="button" data-chart-key="${esc(x.key)}" aria-label="${esc(x.label)} 배당 ${esc(fmtMoney(x.value,2))}"><div class="column-value" title="${esc(fmtMoney(x.value,2))}">${esc(chartMoney(x.value))}</div><div class="column-track"><div class="column-fill" style="height:${x.value>0?Math.max(7,x.value/max*100):0}%"></div></div><div class="column-label">${esc(getChartMode()==='month'?`${+x.key.slice(5)}월`:getChartMode()==='week'?x.label.slice(3):x.label)}</div></button>`).join('')}</div>`;
   }
-  function chartSelectionHTML(projectId: any): any {
+  function chartSelectionHTML(projectId: any) {
     const chartMonth: any=getChartMonth?.()||todayISO().slice(0,7),series=getChartMode()==='monthWeeks'?monthWeeks(reportingDividends(projectRows('dividends',projectId).filter((r: any)=>isPostedDividend(r,todayISO())),n(state.settings.exchangeRate)),chartMonth).map((r: any)=>({...r,key:r.range})):chartSeries(projectId);
     if(!series.length)return '';
     const mode: any=getChartMode(),selected=selectedChartRow(series,mode,chartMonth),label=mode==='year'?`${selected.key}년`:mode==='month'?`${selected.key.replace('-','년 ')}월`:selected.label;
     const count: any=mode==='year'||mode==='month'?projectRows('dividends',projectId).filter((row: any)=>row.date<=todayISO()&&row.date.startsWith(selected.key)).length:null;
     return `<div class="chart-selection-inline"><div><span>${esc(label)} 실제 입금</span><strong>${fmtMoney(selected.value,2)}</strong>${count!==null?`<small>${count}회</small>`:''}</div>${mode==='month'&&count?`<button class="btn soft small" data-income-month="${esc(selected.key)}" data-income-project="${esc(projectId)}">입금 ${count}건 보기</button>`:''}</div>`;
   }
-  function chartContextHTML(calc: any): any {
+  function chartContextHTML(calc: ProjectCalculation) {
     const mode: any=getChartMode();
     if(mode==='month'){
       const year: any=effectiveChartYear(calc.postedDividends);
@@ -114,11 +116,11 @@ export function createViews(context: any): any {
     return '<div class="chart-context-line"><span>최근 지급 회차</span><b>최근 6회</b></div>';
   }
 
-  function cashflowChart(items: any,selectedKey: any,mode: any): any {
+  function cashflowChart(items: any,selectedKey: any,mode: any) {
     const max: any=Math.max(1,...items.map((item: any)=>item.actual));
     return `<div class="cashflow-chart actual-only ${mode==='year'?'year-bars':''}" aria-label="${mode==='year'?'연도별':'월별'} 실제 배당">${items.map((item: any)=>`<button class="cashflow-month ${item.key===selectedKey?'active':''}" type="button" data-cashflow-period="${esc(item.key)}" aria-label="${esc(item.label)} 실제 배당 ${esc(fmtMoney(item.actual,2))}"><div class="cashflow-bars"><i class="cashflow-actual" style="height:${item.actual>0?Math.max(5,item.actual/max*112):0}px"></i></div><span>${esc(mode==='year'?item.label:item.label.replace('월',''))}</span></button>`).join('')}</div>`;
   }
-  function renderHome(): any {
+  function renderHome() {
     const reportRows=reportingDividends(state.dividends.filter((row: any)=>isPostedDividend(row,todayISO())),n(state.settings.exchangeRate));
     const total: any=totals(),metrics=buildHomeMetrics(total.rows,reportRows),goal=metrics.nextGoal,paceChange=metrics.pace.change,currentMonth=todayISO().slice(0,7),mode=getHomeCashflowMode?.()||'month',yearRange=getHomeYearRange?.()||'6',yearCount=yearRange==='all'?metrics.years.length:Number(yearRange),series=mode==='year'?metrics.years.slice(-yearCount):metrics.months,defaultKey=mode==='year'?(series.at(-1)?.key||String(new Date().getFullYear())):currentMonth,selectedKey=series.some((item: any)=>item.key===getCashflowMonthKey?.())?getCashflowMonthKey():defaultKey,selected=series.find((item: any)=>item.key===selectedKey)||{key:selectedKey,label:selectedKey,actual:0,count:0};
     const selectedRows: any=reportRows.filter((row: any)=>isDate(row.date)&&row.date<=todayISO()&&row.date.startsWith(selectedKey)),projectMap=new Map(activeProjects().map((project: any)=>[project.id,project])),symbolRows=[...selectedRows.reduce((map: any,row: any)=>{const project: any=projectMap.get(row.projectId),symbol=project?.symbol||'보관 종목',item=map.get(symbol)||{symbol,value:0,project};item.value+=n(row.amountUSD);map.set(symbol,item);return map;},new Map()).values()].sort((a,b)=>b.value-a.value),topSymbols=symbolRows.slice(0,4),other=symbolRows.slice(4).reduce((sum,row)=>sum+row.value,0),composition=other?[...topSymbols,{symbol:'기타',value:other,project:null}]:topSymbols,compositionTotal=Math.max(1,composition.reduce((sum,row)=>sum+row.value,0)),compositionColor=(row: any,index: any)=>row.project?projectColors(row.project)[0]:`hsl(${225+index*24} 18% ${55-index*3}%)`;
@@ -135,7 +137,7 @@ export function createViews(context: any): any {
           <p class="chart-instruction">막대를 누르면 해당 기간의 실제 입금 구성이 바뀝니다.</p>
           ${mode==='year'?`<div class="year-range-switch" aria-label="연도 표시 범위">${[['6','최근 6년'],['10','10년'],['all','전체']].map(([value,label])=>`<button class="${yearRange===value?'active':''}" data-home-year-range="${value}">${label}</button>`).join('')}</div>`:''}
           ${cashflowChart(series,selectedKey,mode)}
-          ${mode==='year'&&yearRange==='all'&&metrics.years.length>10?`<div class="five-year-summary">${Array.from({length:Math.ceil(metrics.years.length/5)},(_,index)=>metrics.years.slice(index*5,index*5+5)).map(group=>`<div><span>${group[0].key}–${group.at(-1).key}</span><strong>${fmtMoney(group.reduce((sum: any,row: any)=>sum+row.actual,0),0)}</strong></div>`).join('')}</div>`:''}
+          ${mode==='year'&&yearRange==='all'&&metrics.years.length>10?`<div class="five-year-summary">${Array.from({length:Math.ceil(metrics.years.length/5)},(_,index)=>metrics.years.slice(index*5,index*5+5)).map(group=>`<div><span>${group[0].key}–${group.at(-1)?.key}</span><strong>${fmtMoney(group.reduce((sum: any,row: any)=>sum+row.actual,0),0)}</strong></div>`).join('')}</div>`:''}
           <div class="cashflow-selection"><div><span>${mode==='year'?`${selectedKey}년`:`${selectedKey.replace('-','년 ')}월`}</span><strong>${fmtMoney(selected.actual,2)}</strong><small>${selectedRows.length}회 입금</small></div>${composition.length>1?`<div class="composition-bar" aria-label="종목별 실제 배당 비중">${composition.map((row,index)=>`<i style="width:${row.value/compositionTotal*100}%;--segment:${compositionColor(row,index)}" title="${esc(row.symbol)} ${esc(fmtMoney(row.value,2))}"></i>`).join('')}</div><div class="composition-legend">${composition.map((row,index)=>`<span><i style="--dot:${compositionColor(row,index)}"></i>${esc(row.symbol)} <b>${fmtMoney(row.value,0)}</b></span>`).join('')}</div>`:'<p class="single-symbol-note">'+(composition[0]?`${esc(composition[0].symbol)}에서 받은 실제 배당입니다.`:'이 기간의 입금 기록이 없습니다.')+'</p>'}</div>
           ${mode==='month'?`<button class="card-link" data-income-month="${selectedKey}"><span>날짜별 입금 상세</span><b>›</b></button>`:''}
           <div class="cashflow-year-summary">
@@ -148,7 +150,7 @@ export function createViews(context: any): any {
       </div>`;
     if(mode==='year'&&typeof requestAnimationFrame==='function')requestAnimationFrame(()=>document.querySelector('#page-home .cashflow-month.active')?.scrollIntoView({block:'nearest',inline:'center'}));
   }
-  function combinedRecords(calc: any): any {
+  function combinedRecords(calc: ProjectCalculation) {
     return [
       ...calc.trades.map((row: any)=>({...row,kind:'trade'})),
       ...calc.dividends.map((row: any)=>({...row,kind:'dividend'})),
@@ -156,7 +158,7 @@ export function createViews(context: any): any {
       ...calc.adjustments.map((row: any)=>({...row,kind:'cash'}))
     ].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||b.id).localeCompare(String(a.createdAt||a.id)));
   }
-  function recordRow(row: any): any {
+  function recordRow(row: any) {
     let title: any='',sub='',value='',cls='';const future: any=String(row.date)>todayISO();
     if(row.kind==='trade'){title=row.type==='sell'?'매도':row.buyType==='reinvest'?'배당재투자':row.buyType==='mixed'?'혼합매수':row.buyType==='opening'?'초기보유':'직접매수';sub=`${fmtDate(row.date)} · ${fmtShares(row.shares)}주 · 단가 ${fmtMoney(row.price)}${row.source?.provider==='toss'?' · 토스 승인':''}`;value=`${row.type==='sell'?'+':'-'}${fmtMoney(n(row.shares)*n(row.price))}`;cls=row.type==='sell'?'positive':'';}
     if(row.kind==='dividend'){const perShare: any=row.currency!=='KRW'&&n(row.sharesAtPayment)>0?n(row.amountUSD)/n(row.sharesAtPayment):0;title='세후배당'+(row.rocPercent!==null&&row.rocPercent!==undefined?` · ROC ${n(row.rocPercent)}% (${row.rocStatus==='final'?'확정':'추정'})`:'');sub=`${fmtDate(row.date)}${perShare?` · 주당 ${fmtMoney(perShare,4)}`:''}${row.note?` · ${esc(row.note)}`:''}`;value=`+${fmtDividend?fmtDividend(row):fmtMoney(row.amountUSD)}`;cls='positive';}
@@ -166,10 +168,10 @@ export function createViews(context: any): any {
     return `<button type="button" class="list-row record-row-button" data-view-record="${row.kind}:${row.id}" aria-label="${esc(title)} 기록 상세"><div><div class="row-title">${title}</div><div class="row-sub">${sub}</div></div><div class="record-value"><div class="row-value ${cls}">${value}</div><span class="record-chevron">상세 ›</span></div></button>`;
   }
 
-  function renderProjects(): any {
+  function renderProjects() {
     const allProjects: any=activeProjects(),group=getPortfolioGroup?.()==='dividend'?'dividend':'highYield',projects=allProjects.filter((project: any)=>projectGroup(project)===group),counts={highYield:allProjects.filter((project: any)=>projectGroup(project)==='highYield').length,dividend:allProjects.filter((project: any)=>projectGroup(project)==='dividend').length}; let selectedProjectId: any=getSelectedProjectId();
     if(!selectedProjectId||!projects.some((project: any)=>project.id===selectedProjectId)){selectedProjectId=projects[0]?.id||'';setSelectedProjectId(selectedProjectId);}
-    const calc: any=projects.length?computeProject(selectedProjectId):null, page=document.getElementById('page-projects'),groupTabs=`<div class="portfolio-group-tabs" aria-label="포트폴리오 분류"><button type="button" data-portfolio-group="highYield" class="${group==='highYield'?'active':''}"><span>고배당주</span><b>${counts.highYield}</b></button><button type="button" data-portfolio-group="dividend" class="${group==='dividend'?'active':''}"><span>배당주</span><b>${counts.dividend}</b></button></div>`;
+    const calc: ProjectCalculation=projects.length?computeProject(selectedProjectId):null, page=document.getElementById('page-projects'),groupTabs=`<div class="portfolio-group-tabs" aria-label="포트폴리오 분류"><button type="button" data-portfolio-group="highYield" class="${group==='highYield'?'active':''}"><span>고배당주</span><b>${counts.highYield}</b></button><button type="button" data-portfolio-group="dividend" class="${group==='dividend'?'active':''}"><span>배당주</span><b>${counts.dividend}</b></button></div>`;
     if(!allProjects.length){page.innerHTML=`${sectionTitle('포트폴리오')}<article class="card empty-project"><p>아직 등록된 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
     if(!calc){page.innerHTML=`<div class="section-title-row"><h2 class="section-title">포트폴리오</h2><button class="btn soft small" data-add-project>＋ 종목</button></div>${groupTabs}<article class="card empty-project"><p>${group==='highYield'?'고배당주':'배당주'}로 묶인 종목이 없습니다.</p><button class="btn primary" data-add-project>종목 추가</button></article>`;return;}
     const p: any=calc.project, colors=projectColors(p), rec=recoveryStats(calc), pct=calc.progress*100, allRows=combinedRecords(calc),filter=getHistoryFilter?.()||{},rows=selectRecords(allRows,filter),historyLimit=getHistoryLimit?.()||10;
@@ -201,22 +203,22 @@ export function createViews(context: any): any {
       </div>`;
   }
 
-  function estimatedDate(calc: any,targetShares: any =calc.currentTarget): any {
+  function estimatedDate(calc: ProjectCalculation,targetShares: any =calc.currentTarget) {
     const plan: any=Math.max(0,n(calc.project.monthlyPlanShares)), remaining=Math.max(0,targetShares-calc.shares);
     if(remaining<=0)return '달성 완료'; if(plan<=0)return '월 매수계획 필요';
     const now: any=new Date(),date=new Date(now.getFullYear(),now.getMonth()+Math.ceil(remaining/plan),1);
     return `${date.getFullYear()}년 ${date.getMonth()+1}월 예상`;
   }
-  function renderGoals(): any {
+  function renderGoals() {
     const rows: any=totals().rows;
     document.getElementById('page-goal').innerHTML=`${sectionTitle('다음 목표','가장 가까운 단계만')}
-      <div class="stack">${rows.map((calc: any)=>{const p: any=calc.project,colors=projectColors(p),milestone=nextMilestone(calc),rec=recoveryStats(calc),lifecycle=p.category==='highYield'&&rec.stage!=='accumulating',goalPct=milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,buyCost=calc.priceAvailable?milestone.remaining*calc.currentPrice:0,phaseLabel=rec.stage==='setup'?'목표 달성':rec.stage==='recovery'?'원금 회수 중':rec.stage==='profit'?'순수익 단계':'';return `<details class="card goal-step-card ${lifecycle?'lifecycle-goal':''}" data-goal-project="${esc(p.id)}" style="--project-a:${colors[0]};--project-b:${colors[1]}">
+      <div class="stack">${rows.map((calc: ProjectCalculation)=>{const p: any=calc.project,colors=projectColors(p),milestone=nextMilestone(calc),rec=recoveryStats(calc),lifecycle=p.category==='highYield'&&rec.stage!=='accumulating',goalPct=milestone.reached?100:(calc.shares/Math.max(1,milestone.shares))*100,buyCost=calc.priceAvailable?milestone.remaining*calc.currentPrice:0,phaseLabel=rec.stage==='setup'?'목표 달성':rec.stage==='recovery'?'원금 회수 중':rec.stage==='profit'?'순수익 단계':'';return `<details class="card goal-step-card ${lifecycle?'lifecycle-goal':''}" data-goal-project="${esc(p.id)}" style="--project-a:${colors[0]};--project-b:${colors[1]}">
         <summary><div><div class="goal-symbol-row"><span class="goal-symbol">${esc(p.symbol)}</span>${lifecycle?`<em class="goal-achieved-badge">✓ ${fmtShares(calc.currentTarget)}주 달성</em>`:''}</div><strong>${lifecycle?phaseLabel:`${fmtShares(milestone.shares)}주 목표`}</strong><small>${lifecycle?`현재 ${fmtShares(calc.shares)}주 · 달성일 ${fmtDate(rec.reachedDate)}`:`현재 ${fmtShares(calc.shares)}주${milestone.reached?' · 목표 달성':` · ${fmtShares(milestone.remaining)}주 남음`}`}</small></div><div class="goal-summary-status"><span>${lifecycle?(rec.stage==='setup'?'주수 목표':rec.stage==='profit'?'회수 후':'원금 회수'):'달성률'}</span><b>${lifecycle?(rec.stage==='setup'?'100%':rec.stage==='profit'?'완료':fmtPct(rec.pct)):(milestone.reached?'완료':fmtPct(goalPct))}</b></div></summary>
         ${lifecycle?`${rec.stage==='setup'?progress(100,`linear-gradient(90deg,${colors[0]},${colors[1]})`):progress(rec.pct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body">${lifecycleContent(calc)}</div>`:`${progress(goalPct,`linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body"><div class="goal-info-rows"><div><span>현재 보유</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet,2)}</strong></div><div><span>필요 매수금</span><strong>${calc.priceAvailable?fmtMoney(buyCost,2):'현재가 필요'}</strong></div><div><span>계획상 달성 시점</span><strong>${estimatedDate(calc,milestone.shares)}</strong></div></div><button class="btn soft small" data-settings-project="${esc(p.id)}">목표 · 월 매수계획 설정</button><p class="detail-note">달성 시점은 저장한 월 매수계획만 반영하며 배당금은 예측하지 않습니다.</p></div>`}
       </details>`}).join('')||'<article class="card empty">종목을 추가하면 설정한 다음 목표를 보여줍니다.</article>'}</div>`;
   }
 
-  function renderSettings(): any {
+  function renderSettings() {
     const toss: any=state.integrations.toss;
     const nativeToss: any=getNativeTossStatus?.()||{available:false,configured:false,publicIp:'',checking:false};
     const appUpdate: any=getAppUpdateStatus?.()||{available:false,checking:false,currentVersion:APP_VERSION,latestVersion:APP_VERSION,updateAvailable:false,nativeUpdateRequired:false,error:''};

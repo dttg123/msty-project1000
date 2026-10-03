@@ -1,4 +1,5 @@
 import type { DividendCashBreakdown, DividendRecord, DividendStatus, Trade, TradeCashBreakdown } from '../types/domain.js';
+import { isRecord } from './utils.js';
 
 const finiteNonNegative=(value:unknown):number=>{
   const parsed=typeof value==='number'?value:Number(value);
@@ -91,7 +92,8 @@ export function applyRocToBasis(costBasisUSD:number,rocUSD:number):{costBasisUSD
   return {costBasisUSD:basis-basisReductionUSD,basisReductionUSD,excessRocUSD:Math.max(0,roc-basisReductionUSD)};
 }
 
-export function parseReferenceExchangeRate(data: any,now: Date=new Date()): {rate:number,date:string} {
+export function parseReferenceExchangeRate(data: unknown,now: Date=new Date()): {rate:number,date:string} {
+  if(!isRecord(data))throw new Error('유효한 최신 달러·원 참고 환율이 아닙니다.');
   const rate=Number(data?.rate),date=String(data?.date||'');
   const day=Date.parse(date+'T00:00:00Z'),age=now.getTime()-day;
   if(data?.base!=='USD'||data?.quote!=='KRW'||!Number.isFinite(rate)||rate<=0||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(day)||new Date(day).toISOString().slice(0,10)!==date||age < -86400000||age>7*86400000)throw new Error('유효한 최신 달러·원 참고 환율이 아닙니다.');

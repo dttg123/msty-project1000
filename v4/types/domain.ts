@@ -9,6 +9,7 @@ export type SecurityStatus = 'active' | 'inactive' | 'liquidated';
 export interface SourceRef {
   provider: ImportProvider;
   externalId?: string;
+  sourceId?: string;
   rawExternalId?: string;
   sourceIdKind?: 'source' | 'fingerprint';
   sourceFingerprint?: string;
@@ -20,12 +21,21 @@ export interface SourceRef {
   importedAt?: string;
 }
 
-export interface BuyTrade {
+export interface LedgerRow {
+  symbol?: string;
+  note?: string;
+  createdAt?: string;
+  importSource?: string;
+  sourceId?: string;
+}
+
+export interface BuyTrade extends LedgerRow {
   id: string;
   projectId: string;
   date: string;
   type: 'buy';
   buyType: BuyType;
+  reinvestAmountUSD?: number;
   shares: number;
   price: number;
   feeUSD?: number;
@@ -33,11 +43,12 @@ export interface BuyTrade {
   source?: SourceRef;
 }
 
-export interface SellTrade {
+export interface SellTrade extends LedgerRow {
   id: string;
   projectId: string;
   date: string;
   type: 'sell';
+  buyType?: BuyType;
   shares: number;
   price: number;
   feeUSD?: number;
@@ -63,6 +74,7 @@ export interface Project {
   symbol: string;
   name: string;
   tag: string;
+  currency?: Currency;
   category: ProjectCategory;
   targetUnits: number;
   monthlyPlanShares: number;
@@ -96,7 +108,7 @@ export interface CorporateAction {
   createdAt: string;
 }
 
-export interface DividendRecord {
+export interface DividendRecord extends LedgerRow {
   id: string;
   projectId: string;
   date: string;
@@ -110,7 +122,7 @@ export interface DividendRecord {
   netAmountUSD?: number;
   taxUSD?: number;
   rocAmountUSD?: number;
-  rocPercent?: number;
+  rocPercent?: number | null;
   rocStatus?: 'none' | 'estimated' | 'confirmed' | 'final';
   sharesAtPayment?: number;
   source?: SourceRef;
@@ -135,7 +147,7 @@ export interface DividendCashBreakdown {
   status: DividendStatus;
 }
 
-export interface SplitRecord {
+export interface SplitRecord extends LedgerRow {
   id: string;
   projectId: string;
   symbol?: string;
@@ -145,7 +157,7 @@ export interface SplitRecord {
   createdAt?: string;
 }
 
-export interface CashAdjustment {
+export interface CashAdjustment extends LedgerRow {
   id: string;
   projectId: string;
   symbol?: string;
@@ -160,14 +172,14 @@ export interface CashAdjustment {
 export interface AppState {
   version: 4;
   schemaVersion: 4;
-  settings: Record<string, unknown>;
+  settings: AppSettings;
   projects: Project[];
   trades: Trade[];
   dividends: DividendRecord[];
   splits: SplitRecord[];
   cashAdjustments: CashAdjustment[];
   integrations: {toss: TossIntegrationState};
-  meta: Record<string, unknown>;
+  meta: AppMetadata;
 }
 
 export interface TossSnapshot {
@@ -216,3 +228,37 @@ export interface BackupEnvelope<TState> {
   integrity?: { algorithm: 'SHA-256'; hash: string };
   state: TState;
 }
+
+export interface AppSettings {
+  exchangeRate: number;
+  exchangeRateMode: 'manual' | 'auto';
+  displayCurrency: Currency;
+  targetMonthlyDividend: number;
+  warningKRW: number;
+  thresholdKRW: number;
+  appearance: 'system' | 'light' | 'dark';
+  exchangeRateDate?: string;
+  exchangeRateUpdatedAt?: string;
+}
+export interface AppMetadata {
+  createdAt: string;
+  updatedAt: string;
+  lastBackupAt: string;
+  lastLocalSaveAt: string;
+  lastCloudSaveAt: string;
+  migratedFrom: string;
+  migrationCheckedAt: string;
+  celebratedMilestones: string[];
+  lastBackupPreparedAt?: string;
+  lastCloudAttemptAt?: string;
+  lastDividendReplacementFingerprint?: string;
+  legacyMigrationAvailable?: boolean;
+  migrationAudit?: import('../modules/migration.js').MigrationAudit | null;
+  ledgerRepairV321?: string;
+  demo?: boolean;
+  demoAsOf?: string;
+}
+export type LedgerCollection = 'trades'|'dividends'|'splits'|'cashAdjustments';
+export type DatedRow = {id:string;date:string;createdAt?:string};
+export type PortfolioEvent = (Trade & {eventType:'trade'}) | (SplitRecord & {eventType:'split'}) | (DividendRecord & {eventType:'roc'});
+export type MilestoneDates = Record<25|50|75|100,string>;

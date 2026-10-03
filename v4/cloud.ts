@@ -1,57 +1,61 @@
+import type { AppState } from './types/domain.js';
+import type { DocumentReference } from 'firebase/firestore';
+export interface CloudDocument extends Record<string, unknown> {state?:unknown;revision:number;storageFormat:string;}
 import { collection, doc, getDoc, getDocs, onSnapshot, runTransaction, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 import { firestore } from './firebase.js';
 import { assembleCloudState, assertCloudRevision, CLOUD_STORAGE_FORMAT, prepareCloudRevision } from './modules/cloud-contract.js';
 
-const CLOUD_DOC_ID: any = 'dividend-os-v4';
-const LEGACY_CLOUD_DOC_ID: any = 'msty-project1000';
-const cloudRef: any=(uid: any,docId=CLOUD_DOC_ID)=>doc(firestore,'users',uid,'apps',docId);
-const revisionRef: any=(uid: any,revisionId: any)=>doc(firestore,'users',uid,'apps',CLOUD_DOC_ID,'revisions',revisionId);
-const revisionsRef: any=(uid: any)=>collection(firestore,'users',uid,'apps',CLOUD_DOC_ID,'revisions');
-const segmentsRef: any=(uid: any,revisionId: any)=>collection(firestore,'users',uid,'apps',CLOUD_DOC_ID,'revisions',revisionId,'segments');
+const CLOUD_DOC_ID = 'dividend-os-v4';
+const LEGACY_CLOUD_DOC_ID = 'msty-project1000';
+const cloudRef=(uid: string,docId=CLOUD_DOC_ID)=>doc(firestore,'users',uid,'apps',docId);
+const revisionRef=(uid: string,revisionId: string)=>doc(firestore,'users',uid,'apps',CLOUD_DOC_ID,'revisions',revisionId);
+const revisionsRef=(uid: string)=>collection(firestore,'users',uid,'apps',CLOUD_DOC_ID,'revisions');
+const segmentsRef=(uid: string,revisionId: string)=>collection(firestore,'users',uid,'apps',CLOUD_DOC_ID,'revisions',revisionId,'segments');
 
-async function cleanupOldRevisions(uid: any,currentManifest: any): Promise<any> {
-  const snapshots: any=await getDocs(revisionsRef(uid));
-  const rows: any=snapshots.docs.map((item: any)=>({id:item.id,ref:item.ref,...item.data()}));
-  const previous: any=rows.filter((row: any)=>row.id!==currentManifest.revisionId&&Number(row.revision)<Number(currentManifest.revision)).sort((a: any,b: any)=>Number(b.revision)-Number(a.revision))[0];
-  const keep: any=new Set([currentManifest.revisionId,previous?.id].filter(Boolean)),remove=rows.filter((row: any)=>!keep.has(row.id)&&Number(row.revision)<Number(currentManifest.revision));
-  const writes: any=[];
-  for(const row of remove){const segments: any=await getDocs(segmentsRef(uid,row.id));for(const segment of segments.docs)writes.push(segment.ref);writes.push(row.ref);}
-  for(let offset: any=0;offset<writes.length;offset+=450){const batch: any=writeBatch(firestore);for(const ref of writes.slice(offset,offset+450))batch.delete(ref);await batch.commit();}
+async function cleanupOldRevisions(uid: string,currentManifest: Awaited<ReturnType<typeof prepareCloudRevision>>['manifest']): Promise<void> {
+  const snapshots=await getDocs(revisionsRef(uid));
+  const rows=snapshots.docs.map(item=>{const data:Record<string, unknown>=item.data();return {...data,id:item.id,ref:item.ref,revision:Number(data.revision)};});
+  const previous=rows.filter((row)=>row.id!==currentManifest.revisionId&&Number(row.revision)<Number(currentManifest.revision)).sort((a,b)=>Number(b.revision)-Number(a.revision))[0];
+  const keep=new Set([currentManifest.revisionId,previous?.id].filter(Boolean)),remove=rows.filter((row)=>!keep.has(row.id)&&Number(row.revision)<Number(currentManifest.revision));
+  const writes: DocumentReference[]=[];
+  for(const row of remove){const segments=await getDocs(segmentsRef(uid,row.id));for(const segment of segments.docs)writes.push(segment.ref);writes.push(row.ref);}
+  for(let offset=0;offset<writes.length;offset+=450){const batch=writeBatch(firestore);for(const ref of writes.slice(offset,offset+450))batch.delete(ref);await batch.commit();}
 }
 
-async function readSplitDocument(uid: any,manifest: any): Promise<any> {
-  const revisionSnapshot: any=await getDoc(revisionRef(uid,manifest.revisionId));
+async function readSplitDocument(uid: string,manifest: Record<string, unknown>): Promise<CloudDocument> {
+  if(typeof manifest.revisionId!=='string')throw new Error('클라우드 revision 정보가 올바르지 않습니다.');
+  const revisionSnapshot=await getDoc(revisionRef(uid,manifest.revisionId));
   if(!revisionSnapshot.exists())throw new Error('클라우드 revision 정보가 없습니다.');
-  const revision: any=revisionSnapshot.data();
+  const revision=revisionSnapshot.data();
   if(revision.stateHash!==manifest.stateHash||revision.batchId!==manifest.batchId)throw new Error('클라우드 revision 포인터 검증에 실패했습니다.');
-  const snapshots: any=await getDocs(segmentsRef(uid,manifest.revisionId));
-  return {state:await assembleCloudState(manifest,snapshots.docs.map((item: any)=>item.data())),revision:manifest.revision,manifest,storageFormat:CLOUD_STORAGE_FORMAT};
+  const snapshots=await getDocs(segmentsRef(uid,manifest.revisionId));
+  return {state:await assembleCloudState(manifest,snapshots.docs.map((item)=>item.data())),revision:Math.max(0,Number(manifest.revision)||0),manifest,storageFormat:CLOUD_STORAGE_FORMAT};
 }
 
-export async function getCloudDocument(uid: any): Promise<any> {
-  const snapshot: any=await getDoc(cloudRef(uid));
+export async function getCloudDocument(uid: string): Promise<CloudDocument|null> {
+  const snapshot=await getDoc(cloudRef(uid));
   if(!snapshot.exists())return null;
-  const data: any=snapshot.data();
+  const data: Record<string, unknown>=snapshot.data();
   if(data.storageFormat===CLOUD_STORAGE_FORMAT)return readSplitDocument(uid,data);
   return {...data,revision:Math.max(0,Number(data.revision)||0),storageFormat:'legacy-single-document',legacySingleDocument:true};
 }
 
-export async function getLegacyCloudDocument(uid: any): Promise<any> {
-  const snapshot: any=await getDoc(cloudRef(uid,LEGACY_CLOUD_DOC_ID));
+export async function getLegacyCloudDocument(uid: string): Promise<Record<string, unknown>|null> {
+  const snapshot=await getDoc(cloudRef(uid,LEGACY_CLOUD_DOC_ID));
   return snapshot.exists()?snapshot.data():null;
 }
 
-export async function saveCloudDocument(uid: any,state: any,{expectedRevision=0,appVersion=''}: any ={}): Promise<any> {
-  const prepared: any=await prepareCloudRevision(state,{expectedRevision});
-  const writes: any=[...prepared.documents.map((document: any)=>({ref:doc(segmentsRef(uid,prepared.manifest.revisionId),document.id),data:document})),{ref:revisionRef(uid,prepared.manifest.revisionId),data:{...prepared.manifest,status:'ready',appVersion}}];
-  for(let offset: any=0;offset<writes.length;offset+=450){
-    const batch: any=writeBatch(firestore);
+export async function saveCloudDocument(uid: string,state: AppState,{expectedRevision=0,appVersion=''}: {expectedRevision?:number;appVersion?:string} ={}) {
+  const prepared=await prepareCloudRevision(state,{expectedRevision});
+  const writes=[...prepared.documents.map((document)=>({ref:doc(segmentsRef(uid,prepared.manifest.revisionId),document.id),data:document})),{ref:revisionRef(uid,prepared.manifest.revisionId),data:{...prepared.manifest,status:'ready',appVersion}}];
+  for(let offset=0;offset<writes.length;offset+=450){
+    const batch=writeBatch(firestore);
     for(const write of writes.slice(offset,offset+450))batch.set(write.ref,write.data);
     await batch.commit();
   }
-  await runTransaction(firestore,async (transaction: any)=>{
-    const root: any=cloudRef(uid),snapshot=await transaction.get(root),current=snapshot.exists()?snapshot.data():null;
-    const actualRevision: any=current?.storageFormat===CLOUD_STORAGE_FORMAT?current.revision:Math.max(0,Number(current?.revision)||0);
+  await runTransaction(firestore,async (transaction)=>{
+    const root=cloudRef(uid),snapshot=await transaction.get(root),current=snapshot.exists()?snapshot.data():null;
+    const actualRevision=current?.storageFormat===CLOUD_STORAGE_FORMAT?current.revision:Math.max(0,Number(current?.revision)||0);
     assertCloudRevision(expectedRevision,actualRevision);
     transaction.set(root,{...prepared.manifest,appVersion,updatedAt:serverTimestamp()});
   });
@@ -59,12 +63,12 @@ export async function saveCloudDocument(uid: any,state: any,{expectedRevision=0,
   return {revision:prepared.manifest.revision,manifest:prepared.manifest};
 }
 
-export function subscribeCloudDocument(uid: any,onData: any,onError: any): any {
-  let sequence: any=0;
-  return onSnapshot(cloudRef(uid),(snapshot: any)=>{
-    const current: any=++sequence;
+export function subscribeCloudDocument(uid: string,onData:(document:CloudDocument|null)=>void,onError:(error:unknown)=>void) {
+  let sequence=0;
+  return onSnapshot(cloudRef(uid),(snapshot)=>{
+    const current=++sequence;
     if(!snapshot.exists()){onData(null);return;}
-    const data: any=snapshot.data();
+    const data: Record<string, unknown>=snapshot.data();
     if(data.storageFormat!==CLOUD_STORAGE_FORMAT){onData({...data,revision:Math.max(0,Number(data.revision)||0),storageFormat:'legacy-single-document'});return;}
     readSplitDocument(uid,data).then(value=>{if(current===sequence)onData(value);}).catch(onError);
   },onError);

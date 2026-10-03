@@ -1,4 +1,5 @@
-export const APP_VERSION = '0.12.21';
+import { isRecord } from './modules/utils.js';
+export const APP_VERSION = '0.12.22';
 export const DATA_SCHEMA_VERSION = 4;
 import { dividendCashBreakdown } from './modules/finance.js';
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
@@ -13,7 +14,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8');
 function asBytes(value) {
     if (value instanceof Uint8Array)
-        return value;
+        return new Uint8Array(value);
     if (value instanceof ArrayBuffer)
         return new Uint8Array(value);
     return encoder.encode(String(value));
@@ -181,11 +182,14 @@ export async function readStateFromBackupFile(file) {
     if (!data)
         throw new Error('ZIP 안에 data/state.json이 없습니다.');
     const text = decoder.decode(data), parsed = JSON.parse(text);
-    if (!parsed || !Array.isArray(parsed.trades) || !Array.isArray(parsed.dividends))
+    if (!isRecord(parsed) || !Array.isArray(parsed.trades) || !Array.isArray(parsed.dividends))
         throw new Error('원장 데이터가 없습니다.');
     const infoBytes = entries.get('backup-info.json');
     if (infoBytes) {
-        const info = JSON.parse(decoder.decode(infoBytes)), expected = info?.integrity?.hash;
+        const info = JSON.parse(decoder.decode(infoBytes));
+        if (!isRecord(info))
+            throw new Error('백업 정보 형식이 올바르지 않습니다.');
+        const expected = isRecord(info.integrity) ? info.integrity.hash : undefined;
         if (expected && await sha256Hex(canonicalStringify(parsed)) !== expected)
             throw new Error('백업 전체 무결성 검증에 실패했습니다.');
         if (info?.counts && canonicalStringify(info.counts) !== canonicalStringify(stateCounts(parsed)))

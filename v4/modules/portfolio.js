@@ -13,7 +13,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
     }
     function projectRows(key, projectId) {
         const state = getState();
-        return state[key].filter((row) => row.projectId === projectId || (!row.projectId && projectById(projectId)?.symbol === 'MSTY'));
+        return state[key].filter(row => row.projectId === projectId || (!row.projectId && projectById(projectId)?.symbol === 'MSTY'));
     }
     function sortedEvents(projectId) {
         const trades = projectRows('trades', projectId).map((row) => ({ ...row, eventType: 'trade' }));
@@ -73,7 +73,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
                     factor *= ratio;
                 }
             }
-            else if (event.type === 'buy') {
+            else if (event.eventType === 'trade' && event.type === 'buy') {
                 const quantity = Math.max(0, n(event.shares)), cash = tradeCashBreakdown(event), amount = cash.grossBuyCostUSD;
                 shares += quantity;
                 normalizedShares += quantity / factor;
@@ -101,7 +101,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
                         reinvestCount++;
                 }
             }
-            else if (event.type === 'sell') {
+            else if (event.eventType === 'trade' && event.type === 'sell') {
                 const quantity = Math.max(0, n(event.shares)), cash = tradeCashBreakdown(event);
                 if (quantity > shares + 1e-8)
                     oversells.push(event);
@@ -223,7 +223,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         return { withdrawalRecovery, total, remaining: Math.max(0, basis - total), pct, profit, milestoneDates, stage: pct >= 100 ? 'profit' : 'recovery', reachedDate };
     }
     function totals() {
-        const rows = activeProjects().map(computeProject).filter(Boolean);
+        const rows = activeProjects().map(computeProject).filter((row) => row !== null);
         const received = reportingDividends(getState().dividends.filter((row) => isDate(row.date) && isPostedDividend(row, todayISO())), n(getState().settings.exchangeRate));
         return {
             rows, marketValue: rows.reduce((sum, row) => sum + row.marketValue, 0), costBasis: rows.reduce((sum, row) => sum + row.costBasis, 0),

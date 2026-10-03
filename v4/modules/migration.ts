@@ -78,3 +78,5 @@ export function buildMigrationAudit(legacyRaw: any,migratedState: any,migratedCa
   ];
   return {version:1,checkedAt:new Date().toISOString(),passed:checks.every((check: any)=>check.passed),checks,source,target};
 }
+
+export type MigrationAudit = ReturnType<typeof buildMigrationAudit>;
