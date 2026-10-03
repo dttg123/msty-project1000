@@ -471,8 +471,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const category = PROJECT_CATEGORIES.some(([key]) => key === form.get('category')) ? String(form.get('category')) : 'dividend';
             const frequencyChoice = String(form.get('distributionFrequency'));
             Object.assign(target, { symbol, name: String(form.get('name')).trim() || symbol, tag: String(form.get('tag')).trim() || '배당 프로젝트', category, colorIndex: Math.max(0, Math.min(PROJECT_COLORS.length - 1, Math.floor(n(form.get('colorIndex'))))), targetUnits: Math.max(.0001, n(form.get('targetUnits'))), monthlyPlanShares: Math.max(0, n(form.get('monthlyPlanShares'))), currentPrice, priceSource: currentPrice ? 'manual' : target.priceSource || 'manual', priceUpdatedAt: currentPrice ? new Date().toISOString() : target.priceUpdatedAt || '', distributionFrequencyMode: frequencyChoice === 'auto' ? 'auto' : 'manual', distributionFrequency: FREQUENCIES[frequencyChoice] ? frequencyChoice : (target.distributionFrequency || 'monthly'), projectStart: String(form.get('projectStart')) || todayISO() });
-            if (edit && oldSymbol !== symbol)
+            if (edit && oldSymbol !== symbol) {
+                target.symbol = oldSymbol;
                 tickerChange(target, symbol, todayISO(), uid('ca'));
+            }
             if (!edit) {
                 historyFilter = {};
                 state.projects.push(target);
@@ -503,7 +505,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         typeInput.onchange = syncTradeFields;
         buyTypeInput.onchange = syncTradeFields;
         syncTradeFields();
-        tradeForm.onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget), date = String(form.get('date')), type = form.get('type'), shares = n(form.get('shares')), price = n(form.get('price')), buyType = type === 'sell' ? '' : String(form.get('buyType')), reinvestAmountUSD = buyType === 'mixed' ? n(form.get('reinvestAmountUSD')) : 0; if (!isDate(date) || shares <= 0 || price < 0) {
+        tradeForm.onsubmit = async (event) => { event.preventDefault(); if (modalSaving)
+            return; const form = new FormData(event.currentTarget), date = String(form.get('date')), type = form.get('type'), shares = n(form.get('shares')), price = n(form.get('price')), buyType = type === 'sell' ? '' : String(form.get('buyType')), reinvestAmountUSD = buyType === 'mixed' ? n(form.get('reinvestAmountUSD')) : 0; if (!isDate(date) || shares <= 0 || price < 0) {
             toast('날짜·주수·단가를 확인해 주세요.');
             return;
         } if (reinvestAmountUSD > shares * price + .0001) {
@@ -517,7 +520,18 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 state.trades = state.trades.filter((item) => item !== row);
             toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');
             return;
-        } await saveState(true); closeModal(); renderAll(true); showPage('projects'); toast(edit ? '거래를 수정했습니다.' : '거래를 저장했습니다.'); };
+        } const controls = [...tradeForm.querySelectorAll('input,select,button')], disabled = controls.map((el) => el.disabled); modalSaving = true; controls.forEach((el) => el.disabled = true); try {
+            await saveState(true);
+        }
+        catch {
+            if (edit)
+                Object.assign(row, before);
+            else
+                state.trades = state.trades.filter((item) => item !== row);
+            controls.forEach((el, i) => el.disabled = disabled[i]);
+            modalSaving = false;
+            return;
+        } modalSaving = false; closeModal(); renderAll(true); showPage('projects'); toast(edit ? '거래를 수정했습니다.' : '거래를 저장했습니다.'); };
     }
     function openPriceForm() {
         const project = projectById();
@@ -643,7 +657,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         preview.className = 'dividend-preview';
         preview.setAttribute('aria-live', 'polite');
         dividendForm.querySelector('.modal-actions').before(preview);
-        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); dividendForm.elements.amountUSD.step = krw ? '1' : '0.01'; if (amount <= 0) {
+        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); dividendForm.elements.amountUSD.step = krw ? '1' : '0.01'; dividendForm.elements.amountUSD.min = krw ? '1' : '0.01'; if (amount <= 0) {
             preview.textContent = '실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';
             return;
         } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${krw ? Math.round(amount).toLocaleString('ko-KR') + '원' : fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`; };
@@ -1966,7 +1980,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const form = event.target;
             if (!(form instanceof HTMLFormElement))
                 return;
-            const futureDate = [...form.querySelectorAll('input[type="date"]')].find((input) => input.value && input.value > todayISO());
+            const futureDate = form.id === 'dividendScheduleForm' ? null : [...form.querySelectorAll('input[type="date"]')].find((input) => input.value && input.value > todayISO());
             if (futureDate) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
