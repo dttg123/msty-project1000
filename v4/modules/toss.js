@@ -1,4 +1,9 @@
+import { isRecord } from './utils.js';
 import { isDate, n, todayISO, uid } from './utils.js';
+const record = (value) => isRecord(value) ? value : {};
+const records = (value) => Array.isArray(value) ? value.filter(isRecord) : [];
+const arrayValues = (value) => Array.isArray(value) ? value : [];
+const present = (value) => value !== null;
 const SYMBOL_PATTERN = /^[A-Z0-9.-]{1,16}$/;
 function symbolOf(value) {
     const symbol = String(value || '').trim().toUpperCase();
@@ -9,7 +14,8 @@ function dateOf(value) {
     const match = text.match(/^\d{4}-\d{2}-\d{2}/);
     return match && isDate(match[0]) ? match[0] : '';
 }
-function orderIdOf(order) {
+function orderIdOf(input) {
+    const order = record(input);
     const source = order && Object.hasOwn(order, 'rawExternalId') ? order.rawExternalId : (order?.externalId || order?.orderId || order?.id || '');
     const value = String(source || '').trim();
     return value.length <= 256 ? value : '';
@@ -26,40 +32,49 @@ function sourceId(rawExternalId, identity, signature) {
     const base = rawExternalId || `fp-${fingerprint([identity.accountId, identity.instrumentKey, signature].join('|'))}`;
     return identity.accountId ? `${identity.accountId}:${base}` : base;
 }
-function accountIdOf(row) {
+function accountIdOf(input) {
+    const row = record(input);
     return String(row?.accountId ?? row?.accountSeq ?? '').trim().slice(0, 128);
 }
-function marketOf(row) {
+function marketOf(input) {
+    const row = record(input);
     return String(row?.market ?? row?.exchange ?? row?.exchangeCode ?? '').trim().toUpperCase().slice(0, 32);
 }
-function securityIdOf(row) {
+function securityIdOf(input) {
+    const row = record(input);
     return String(row?.securityId ?? row?.instrumentId ?? row?.stockCode ?? row?.productCode ?? row?.isin ?? '').trim().toUpperCase().slice(0, 64);
 }
-export function tossIdentityOf(row) {
+export function tossIdentityOf(input) {
+    const row = record(input);
     const symbol = symbolOf(row?.symbol), currency = String(row?.currency || '').toUpperCase(), market = marketOf(row), securityId = securityIdOf(row), accountId = accountIdOf(row);
     const instrumentKey = securityId ? `${market || 'UNKNOWN'}:${securityId}` : `${market || 'UNKNOWN'}:${symbol}:${currency || 'UNKNOWN'}`;
     return { accountId, market, securityId, instrumentKey, assetKey: `toss:${instrumentKey}` };
 }
-function tradeSignature(row) {
+function tradeSignature(input) {
+    const row = record(input);
     const symbol = symbolOf(row?.symbol), date = dateOf(row?.date), type = String(row?.type || '').toLowerCase();
     const shares = Math.max(0, n(row?.shares)), price = Math.max(0, n(row?.price));
     if (!symbol || !date || !['buy', 'sell'].includes(type) || shares <= 0 || price <= 0)
         return '';
     return [symbol, date, type, shares.toFixed(8), price.toFixed(4)].join('|');
 }
-function dividendSignature(row) {
+function dividendSignature(input) {
+    const row = record(input);
     const symbol = symbolOf(row?.symbol), date = dateOf(row?.date), amount = Math.max(0, n(row?.amountUSD));
     if (!symbol || !date || amount <= 0)
         return '';
     return [symbol, date, amount.toFixed(2)].join('|');
 }
-function orderVersionFingerprint(row) {
+function orderVersionFingerprint(input) {
+    const row = record(input);
     return fingerprint([row?.status, row?.symbol, row?.date, row?.type, n(row?.shares).toFixed(8), n(row?.price).toFixed(8), n(row?.feeUSD).toFixed(8), n(row?.taxUSD).toFixed(8), row?.currency].join('|'));
 }
-function dividendVersionFingerprint(row) {
+function dividendVersionFingerprint(input) {
+    const row = record(input);
     return fingerprint([row?.symbol, row?.date, n(row?.amountUSD).toFixed(8), n(row?.grossAmountUSD).toFixed(8), n(row?.withholdingTaxUSD).toFixed(8), n(row?.feeUSD).toFixed(8), row?.currency].join('|'));
 }
-export function normalizeTossHolding(row) {
+export function normalizeTossHolding(input) {
+    const row = record(input);
     const symbol = symbolOf(row?.symbol);
     if (!symbol)
         return null;
@@ -73,17 +88,19 @@ export function normalizeTossHolding(row) {
         shares: Math.max(0, n(row?.shares ?? row?.quantity)),
         avgPrice: Math.max(0, n(row?.avgPrice ?? row?.averagePurchasePrice)),
         lastPrice: Math.max(0, n(row?.lastPrice)),
-        marketValue: Math.max(0, n(row?.marketValue?.amount ?? row?.marketValue))
+        marketValue: Math.max(0, n(record(row.marketValue).amount ?? row.marketValue))
     };
 }
-export function normalizeTossPrice(row) {
+export function normalizeTossPrice(input) {
+    const row = record(input);
     const symbol = symbolOf(row?.symbol), currency = String(row?.currency || '').toUpperCase(), lastPrice = Math.max(0, n(row?.lastPrice));
     if (!symbol || !currency || lastPrice <= 0)
         return null;
     return { ...tossIdentityOf(row), symbol, currency, lastPrice, timestamp: String(row?.timestamp || '') };
 }
-export function normalizeTossOrder(order) {
-    const execution = order?.execution || {};
+export function normalizeTossOrder(input) {
+    const order = record(input);
+    const execution = record(order.execution);
     const rawExternalId = orderIdOf(order), symbol = symbolOf(order?.symbol), identity = tossIdentityOf(order);
     const shares = Math.max(0, n(order?.shares ?? execution.filledQuantity ?? order?.filledQuantity));
     const price = Math.max(0, n(order?.priceFilled ?? execution.averageFilledPrice ?? order?.averageFilledPrice ?? order?.price));
@@ -97,15 +114,15 @@ export function normalizeTossOrder(order) {
         return null;
     const signature = [symbol, date, type, shares.toFixed(8), price.toFixed(8), currency].join('|');
     const externalId = sourceId(rawExternalId, identity, signature);
-    const normalized = {
+    const normalized = { sourceFingerprint: '',
         ...identity, externalId, rawExternalId, accountLabel: String(order?.accountLabel || '').trim().slice(0, 64), symbol, name: String(order?.name || symbol).trim() || symbol, date, type, shares, price, currency,
         status, feeUSD, taxUSD, filledAmount: Math.max(0, n(execution.filledAmount ?? order?.filledAmount)), filledAt: String((execution.filledAt ?? order?.filledAt) || ''), settlementDate: String((execution.settlementDate ?? order?.settlementDate) || ''),
-        sourceIdKind: rawExternalId ? 'source' : 'fingerprint', buyType: type === 'buy' ? 'direct' : '', reinvestAmountUSD: 0, note: '토스 체결 승인 가져오기'
-    };
+        sourceIdKind: rawExternalId ? 'source' : 'fingerprint', buyType: type === 'buy' ? 'direct' : '', reinvestAmountUSD: 0, note: '토스 체결 승인 가져오기' };
     normalized.sourceFingerprint = orderVersionFingerprint(normalized);
     return normalized;
 }
-export function normalizeTossDividend(row) {
+export function normalizeTossDividend(input) {
+    const row = record(input);
     const rawExternalId = orderIdOf(row), symbol = symbolOf(row?.symbol), date = dateOf(row?.date ?? row?.paidAt ?? row?.paymentDate), identity = tossIdentityOf(row);
     const grossAmountUSD = Math.max(0, n(row?.grossAmountUSD ?? row?.grossAmount)), withholdingTaxUSD = Math.max(0, n(row?.withholdingTaxUSD ?? row?.tax)), feeUSD = Math.max(0, n(row?.feeUSD ?? row?.fee));
     const explicitAmount = row?.amountUSD ?? row?.netAmountUSD ?? row?.netAmount ?? row?.amount;
@@ -114,33 +131,35 @@ export function normalizeTossDividend(row) {
     if (!symbol || !date || date > todayISO() || !['USD', 'KRW'].includes(currency) || amountUSD <= 0 || amountUSD > 1e9 || grossAmountUSD > 1e9 || withholdingTaxUSD > 1e9 || feeUSD > 1e9)
         return null;
     const externalId = sourceId(rawExternalId, identity, [symbol, date, amountUSD.toFixed(8), currency].join('|'));
-    const normalized = { ...identity, externalId, rawExternalId, sourceIdKind: rawExternalId ? 'source' : 'fingerprint', accountLabel: String(row?.accountLabel || '').trim().slice(0, 64), symbol, name: String(row?.name || symbol).trim() || symbol, date, amountUSD, grossAmountUSD: grossAmountUSD || amountUSD + withholdingTaxUSD + feeUSD, withholdingTaxUSD, feeUSD, currency };
+    const normalized = { sourceFingerprint: '', ...identity, externalId, rawExternalId, sourceIdKind: rawExternalId ? 'source' : 'fingerprint', accountLabel: String(row?.accountLabel || '').trim().slice(0, 64), symbol, name: String(row?.name || symbol).trim() || symbol, date, amountUSD, grossAmountUSD: grossAmountUSD || amountUSD + withholdingTaxUSD + feeUSD, withholdingTaxUSD, feeUSD, currency };
     normalized.sourceFingerprint = dividendVersionFingerprint(normalized);
     return normalized;
 }
-function normalizeTossOrderSource(order) {
+function normalizeTossOrderSource(input) {
+    const order = record(input);
     const importable = normalizeTossOrder(order);
     if (importable)
         return { ...importable, importable: true };
-    const rawExternalId = orderIdOf(order), symbol = symbolOf(order?.symbol), identity = tossIdentityOf(order), execution = order?.execution || {};
+    const rawExternalId = orderIdOf(order), symbol = symbolOf(order?.symbol), identity = tossIdentityOf(order), execution = record(order.execution);
     const date = dateOf(order?.date ?? execution.filledAt ?? order?.filledAt ?? order?.orderedAt), side = String(order?.type ?? order?.side ?? '').toUpperCase(), type = side === 'SELL' ? 'sell' : side === 'BUY' ? 'buy' : '', currency = String(order?.currency || '').toUpperCase();
     if (!rawExternalId || !symbol || !date || !type || !['USD', 'KRW'].includes(currency))
         return null;
-    const normalized = { ...identity, externalId: sourceId(rawExternalId, identity, ''), rawExternalId, symbol, date, type, currency, status: String(order?.status || '').toUpperCase().slice(0, 32), shares: Math.max(0, n(execution.filledQuantity ?? order?.filledQuantity)), price: Math.max(0, n(execution.averageFilledPrice ?? order?.averageFilledPrice)), feeUSD: Math.max(0, n(execution.commission ?? order?.commission)), taxUSD: Math.max(0, n(execution.tax ?? order?.tax)), importable: false };
+    const normalized = { sourceFingerprint: '', ...identity, externalId: sourceId(rawExternalId, identity, ''), rawExternalId, symbol, date, type, currency, status: String(order?.status || '').toUpperCase().slice(0, 32), shares: Math.max(0, n(execution.filledQuantity ?? order?.filledQuantity)), price: Math.max(0, n(execution.averageFilledPrice ?? order?.averageFilledPrice)), feeUSD: Math.max(0, n(execution.commission ?? order?.commission)), taxUSD: Math.max(0, n(execution.tax ?? order?.tax)), importable: false };
     normalized.sourceFingerprint = orderVersionFingerprint(normalized);
     return normalized;
 }
-export function mergeTossSourceLedger(current = {}, snapshot = {}, observedAt = new Date().toISOString()) {
+export function mergeTossSourceLedger(currentInput = {}, snapshotInput = {}, observedAt = new Date().toISOString()) {
+    const current = record(currentInput), snapshot = record(snapshotInput);
     const revisionOf = (row) => ({ observedAt, status: String(row?.status || ''), date: String(row?.date || ''), shares: Math.max(0, n(row?.shares)), price: Math.max(0, n(row?.price)), feeUSD: Math.max(0, n(row?.feeUSD)), taxUSD: Math.max(0, n(row?.taxUSD)), amountUSD: Math.max(0, n(row?.amountUSD)), sourceFingerprint: String(row?.sourceFingerprint || '') });
     const merge = (existing, incoming, normalizer) => {
-        const map = new Map((Array.isArray(existing) ? existing : []).filter(row => row?.externalId).map(row => [String(row.externalId), row]));
-        for (const raw of Array.isArray(incoming) ? incoming : []) {
+        const map = new Map(records(existing).filter(row => row.externalId).map(row => [String(row.externalId), row]));
+        for (const raw of records(incoming)) {
             const row = normalizer(raw);
             if (!row)
                 continue;
             const previous = map.get(row.externalId);
             const changed = !!(previous?.sourceFingerprint && row.sourceFingerprint && previous.sourceFingerprint !== row.sourceFingerprint);
-            const revisions = changed ? [...(Array.isArray(previous?.revisions) ? previous.revisions : []), revisionOf(previous)].slice(-10) : (Array.isArray(previous?.revisions) ? previous.revisions : []);
+            const revisions = changed ? [...records(previous?.revisions), revisionOf(previous)].slice(-10) : records(previous?.revisions);
             map.set(row.externalId, { ...(previous || {}), ...row, revisions, firstSeenAt: previous?.firstSeenAt || observedAt, lastSeenAt: observedAt, lastChangedAt: changed ? observedAt : (previous?.lastChangedAt || ''), revisionCount: Math.max(1, n(previous?.revisionCount) || 1) + (changed ? 1 : 0) });
         }
         return [...map.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.externalId).localeCompare(String(b.externalId)));
@@ -150,10 +169,11 @@ export function mergeTossSourceLedger(current = {}, snapshot = {}, observedAt = 
         dividends: merge(current.dividends, snapshot.dividends, normalizeTossDividend)
     };
 }
-export function buildTossSync(snapshot, { existingTrades = [], existingDividends = [], appPositions = [] } = {}) {
+export function buildTossSync(snapshotInput, { existingTrades = [], existingDividends = [], appPositions = [] } = {}) {
+    const snapshot = record(snapshotInput);
     const existingById = new Map();
     for (const row of existingTrades.filter((item) => item?.source?.provider === 'toss'))
-        for (const id of [row.source.externalId, row.source.rawExternalId].map(value => String(value || '')).filter(Boolean))
+        for (const id of [row.source?.externalId, row.source?.rawExternalId].map(value => String(value || '')).filter(Boolean))
             existingById.set(id, row);
     const manualBySignature = new Map();
     for (const trade of existingTrades.filter((row) => row?.source?.provider !== 'toss')) {
@@ -161,7 +181,7 @@ export function buildTossSync(snapshot, { existingTrades = [], existingDividends
         if (signature)
             manualBySignature.set(signature, [...(manualBySignature.get(signature) || []), trade.id]);
     }
-    const normalizedHoldings = (Array.isArray(snapshot?.holdings) ? snapshot.holdings : []).map(normalizeTossHolding).filter(Boolean);
+    const normalizedHoldings = records(snapshot.holdings).map(normalizeTossHolding).filter(present);
     const holdingMap = new Map();
     for (const row of normalizedHoldings) {
         const previous = holdingMap.get(row.assetKey);
@@ -174,7 +194,7 @@ export function buildTossSync(snapshot, { existingTrades = [], existingDividends
             holdingMap.set(row.assetKey, { ...row, accounts: row.accountId ? [row.accountId] : [] });
     }
     const holdings = [...holdingMap.values()];
-    const prices = (Array.isArray(snapshot?.prices) ? snapshot.prices : []).map(normalizeTossPrice).filter(Boolean);
+    const prices = records(snapshot.prices).map(normalizeTossPrice).filter(present);
     const appMap = new Map();
     for (const row of appPositions) {
         const key = String(row?.assetKey || '');
@@ -192,12 +212,12 @@ export function buildTossSync(snapshot, { existingTrades = [], existingDividends
     const seen = new Set(), ignored = [];
     let matchedExistingCount = 0;
     const candidates = [], correctionCandidates = [];
-    for (const raw of Array.isArray(snapshot?.orders) ? snapshot.orders : []) {
+    for (const raw of arrayValues(snapshot.orders)) {
         const sourceRow = normalizeTossOrderSource(raw);
         const row = normalizeTossOrder(raw);
         if (!row) {
             const existing = sourceRow && (existingById.get(sourceRow.externalId) || existingById.get(sourceRow.rawExternalId));
-            if (existing && sourceRow.currency === 'USD') {
+            if (existing && sourceRow && sourceRow.currency === 'USD') {
                 const previousFingerprint = existing.source?.sourceFingerprint || orderVersionFingerprint({ ...existing, status: existing.source?.status || 'FILLED', currency: 'USD', feeUSD: existing.feeUSD, taxUSD: existing.taxUSD });
                 if (previousFingerprint !== sourceRow.sourceFingerprint)
                     correctionCandidates.push({ ...sourceRow, existingRecordId: existing.id, previousFingerprint, changeType: 'voided' });
@@ -229,7 +249,7 @@ export function buildTossSync(snapshot, { existingTrades = [], existingDividends
     }
     const existingDividendById = new Map();
     for (const row of existingDividends.filter((item) => item?.source?.provider === 'toss'))
-        for (const id of [row.source.externalId, row.source.rawExternalId].map(value => String(value || '')).filter(Boolean))
+        for (const id of [row.source?.externalId, row.source?.rawExternalId].map(value => String(value || '')).filter(Boolean))
             existingDividendById.set(id, row);
     const manualDividendBySignature = new Map();
     for (const dividend of existingDividends.filter((row) => row?.source?.provider !== 'toss')) {
@@ -239,7 +259,7 @@ export function buildTossSync(snapshot, { existingTrades = [], existingDividends
     }
     const seenDividends = new Set(), dividendCandidates = [], dividendCorrectionCandidates = [];
     let matchedExistingDividendCount = 0;
-    for (const raw of Array.isArray(snapshot?.dividends) ? snapshot.dividends : []) {
+    for (const raw of arrayValues(snapshot.dividends)) {
         const row = normalizeTossDividend(raw);
         if (!row) {
             ignored.push({ reason: 'invalid-dividend' });
@@ -273,7 +293,7 @@ export function buildTossSync(snapshot, { existingTrades = [], existingDividends
     return {
         accountLabel: String(snapshot?.accountLabel || '토스증권 계좌'),
         fetchedAt: String(snapshot?.fetchedAt || new Date().toISOString()),
-        accountScopeId: String(snapshot?.accountScopeId || ''), syncStatus: snapshot?.syncStatus === 'partial' ? 'partial' : 'complete', syncCursor: snapshot?.syncCursor || {}, accountResults: Array.isArray(snapshot?.accountResults) ? snapshot.accountResults : [], capabilities: snapshot?.capabilities || {}, failedAccountCount: Math.max(0, n(snapshot?.failedAccountCount)),
+        accountScopeId: String(snapshot?.accountScopeId || ''), syncStatus: snapshot?.syncStatus === 'partial' ? 'partial' : 'complete', syncCursor: record(snapshot.syncCursor), accountResults: records(snapshot.accountResults), capabilities: Object.fromEntries(Object.entries(record(snapshot.capabilities)).filter((entry) => typeof entry[1] === 'boolean')), failedAccountCount: Math.max(0, n(snapshot?.failedAccountCount)),
         holdings, prices, comparisons, candidates, dividendCandidates, correctionCandidates, dividendCorrectionCandidates,
         ignoredCount: ignored.length, matchedExistingCount, matchedExistingDividendCount, historyTruncated: !!snapshot?.historyTruncated,
         unsupportedCurrencyCount: ignored.filter(row => row.reason === 'currency').length
@@ -281,7 +301,7 @@ export function buildTossSync(snapshot, { existingTrades = [], existingDividends
 }
 export function mergeTossCandidates(current = [], incoming = []) {
     const map = new Map();
-    for (const raw of [...current, ...incoming]) {
+    for (const raw of [...records(current), ...records(incoming)]) {
         const row = normalizeTossOrder(raw), id = String(row?.externalId || '');
         if (row?.currency === 'USD' && id)
             map.set(id, { ...(map.get(id) || {}), ...raw, ...row });
@@ -290,7 +310,7 @@ export function mergeTossCandidates(current = [], incoming = []) {
 }
 export function mergeTossCorrectionCandidates(current = [], incoming = []) {
     const map = new Map();
-    for (const raw of [...current, ...incoming]) {
+    for (const raw of [...records(current), ...records(incoming)]) {
         const row = normalizeTossOrderSource(raw), id = String(row?.externalId || '');
         if (row?.currency === 'USD' && id)
             map.set(id, { ...(map.get(id) || {}), ...raw, ...row, existingRecordId: raw?.existingRecordId || map.get(id)?.existingRecordId || '' });
@@ -299,7 +319,7 @@ export function mergeTossCorrectionCandidates(current = [], incoming = []) {
 }
 export function mergeTossDividendCandidates(current = [], incoming = []) {
     const map = new Map();
-    for (const raw of [...current, ...incoming]) {
+    for (const raw of [...records(current), ...records(incoming)]) {
         const row = normalizeTossDividend(raw), id = String(row?.externalId || '');
         if (row?.currency === 'USD' && id)
             map.set(id, { ...(map.get(id) || {}), ...raw, ...row });
@@ -311,7 +331,7 @@ export function tossCandidateToTrade(candidate, { projectId, id, createdAt = new
     if (!row || row.currency !== 'USD' || !projectId || !id)
         return null;
     return {
-        id, projectId, symbol: row.symbol, date: row.date, type: row.type, buyType: row.buyType,
+        id, projectId, symbol: row.symbol, date: row.date, type: row.type, buyType: row.type === 'buy' ? 'direct' : undefined,
         shares: row.shares, price: row.price, feeUSD: row.feeUSD, taxUSD: row.taxUSD, reinvestAmountUSD: 0, note: row.note, createdAt,
         source: { provider: 'toss', externalId: row.externalId, rawExternalId: row.rawExternalId, sourceIdKind: row.sourceIdKind, sourceFingerprint: row.sourceFingerprint, status: row.status, accountId: row.accountId, assetKey: row.assetKey, market: row.market, securityId: row.securityId, importedAt: createdAt }
     };
@@ -336,7 +356,7 @@ export function rebuildProjectFromTossSource({ project, sourceLedger, currentTra
     const symbol = symbolOf(project.symbol);
     const unique = (rows, normalizer) => {
         const map = new Map();
-        for (const raw of Array.isArray(rows) ? rows : []) {
+        for (const raw of records(rows)) {
             const row = normalizer(raw);
             if (row?.symbol === symbol && row.currency === 'USD' && row.externalId)
                 map.set(row.externalId, row);
@@ -346,7 +366,7 @@ export function rebuildProjectFromTossSource({ project, sourceLedger, currentTra
     const orders = unique(sourceLedger?.orders, normalizeTossOrder);
     if (!orders.length)
         return { ok: false, reason: 'empty-orders' };
-    const rebuiltTrades = orders.map((row) => tossCandidateToTrade(row, { projectId: project.id, id: makeId('t'), createdAt })).filter(Boolean);
+    const rebuiltTrades = orders.map((row) => tossCandidateToTrade(row, { projectId: project.id, id: makeId('t'), createdAt })).filter(present);
     const projectTrades = currentTrades.filter((row) => row.projectId === project.id);
     const keepTrades = currentTrades.filter((row) => row.projectId !== project.id);
     const dividendSourceSupported = capabilities?.dividends === true;
@@ -355,7 +375,7 @@ export function rebuildProjectFromTossSource({ project, sourceLedger, currentTra
     let rebuiltDividends = projectDividends;
     if (dividendSourceSupported) {
         const rows = unique(sourceLedger?.dividends, normalizeTossDividend);
-        rebuiltDividends = rows.map((row) => tossCandidateToDividend(row, { projectId: project.id, id: makeId('d'), sharesAtPayment: Math.max(0, n(sharesAtDate(row.date))), createdAt })).filter(Boolean);
+        rebuiltDividends = rows.map((row) => tossCandidateToDividend(row, { projectId: project.id, id: makeId('d'), sharesAtPayment: Math.max(0, n(sharesAtDate(row.date))), createdAt })).filter(present);
     }
     return {
         ok: true, reason: '', trades: [...keepTrades, ...rebuiltTrades], dividends: [...keepDividends, ...rebuiltDividends],
@@ -364,8 +384,9 @@ export function rebuildProjectFromTossSource({ project, sourceLedger, currentTra
         preservedDividends: dividendSourceSupported ? 0 : projectDividends.length, dividendSourceSupported
     };
 }
-export function nextTossSyncFrom(toss = {}, fallback = '2020-01-01', overlapDays = 14) {
-    const cursor = dateOf(toss?.syncCursor?.ordersThrough) || dateOf(toss?.lastSuccessfulAt);
+export function nextTossSyncFrom(input = {}, fallback = '2020-01-01', overlapDays = 14) {
+    const toss = record(input);
+    const cursor = dateOf(record(toss.syncCursor).ordersThrough) || dateOf(toss?.lastSuccessfulAt);
     if (!cursor)
         return dateOf(fallback) || '2020-01-01';
     const date = new Date(`${cursor}T12:00:00Z`);
@@ -374,14 +395,16 @@ export function nextTossSyncFrom(toss = {}, fallback = '2020-01-01', overlapDays
     return candidate < minimum ? minimum : candidate;
 }
 export function accountScopeChanged(previous, next) { return !!(previous && next && String(previous) !== String(next)); }
-export function tossSyncProgress(previous = {}, result = {}) {
+export function tossSyncProgress(previousInput = {}, resultInput = {}) {
+    const previous = record(previousInput), result = record(resultInput);
     const complete = result.syncStatus === 'complete', accountsComplete = Math.max(0, n(result.failedAccountCount)) === 0;
-    return { syncCursor: accountsComplete ? (result.syncCursor || previous.syncCursor || {}) : (previous.syncCursor || {}), lastSuccessfulAt: complete ? String(result.fetchedAt || '') : String(previous.lastSuccessfulAt || ''), lastPartialAt: complete ? String(previous.lastPartialAt || '') : String(result.fetchedAt || previous.lastPartialAt || '') };
+    return { syncCursor: accountsComplete ? record(result.syncCursor || previous.syncCursor) : record(previous.syncCursor), lastSuccessfulAt: complete ? String(result.fetchedAt || '') : String(previous.lastSuccessfulAt || ''), lastPartialAt: complete ? String(previous.lastPartialAt || '') : String(result.fetchedAt || previous.lastPartialAt || '') };
 }
-export function automaticTossImportPlan(toss = {}) {
-    const candidates = Array.isArray(toss.candidates) ? toss.candidates : [];
-    const dividendCandidates = Array.isArray(toss.dividendCandidates) ? toss.dividendCandidates : [];
-    const corrections = [...(Array.isArray(toss.correctionCandidates) ? toss.correctionCandidates : []), ...(Array.isArray(toss.dividendCorrectionCandidates) ? toss.dividendCorrectionCandidates : [])];
+export function automaticTossImportPlan(input = {}) {
+    const toss = record(input);
+    const candidates = records(toss.candidates);
+    const dividendCandidates = records(toss.dividendCandidates);
+    const corrections = [...records(toss.correctionCandidates), ...records(toss.dividendCorrectionCandidates)];
     const total = candidates.length + dividendCandidates.length;
     if (toss.syncStatus !== 'complete' || Math.max(0, n(toss.failedAccountCount)) > 0)
         return { eligible: false, reason: 'partial', candidates, dividendCandidates };
@@ -402,7 +425,7 @@ export function automaticTossImportPlan(toss = {}) {
 export function refreshTossCandidateConflicts(toss = {}, existingTrades = [], existingDividends = []) {
     const manualTradeIds = new Set(existingTrades.filter((row) => row?.source?.provider !== 'toss').map((row) => String(row?.id || '')).filter(Boolean));
     const manualDividendIds = new Set(existingDividends.filter((row) => row?.source?.provider !== 'toss').map((row) => String(row?.id || '')).filter(Boolean));
-    const refresh = (rows, ids) => (Array.isArray(rows) ? rows : []).map((row) => {
+    const refresh = (rows, ids) => records(rows).map((row) => {
         const matches = (Array.isArray(row?.manualMatchIds) ? row.manualMatchIds : []).map(String).filter((id) => ids.has(id));
         return { ...row, possibleManualDuplicate: matches.length > 0, manualMatchIds: matches };
     });
@@ -412,8 +435,8 @@ export function refreshTossCandidateConflicts(toss = {}, existingTrades = [], ex
 }
 export function automaticTossDividendAdoptions(candidates = []) {
     const used = new Set(), adoptions = [];
-    for (const row of Array.isArray(candidates) ? candidates : []) {
-        const matches = Array.isArray(row?.manualMatchIds) ? row.manualMatchIds.filter(Boolean) : [];
+    for (const row of records(candidates)) {
+        const matches = Array.isArray(row?.manualMatchIds) ? row.manualMatchIds.filter((id) => typeof id === 'string' && !!id) : [];
         if (!row?.possibleManualDuplicate || matches.length !== 1 || used.has(matches[0]))
             continue;
         used.add(matches[0]);
@@ -425,17 +448,18 @@ export function disconnectedTossState(toss = {}) {
     return { ...toss, status: 'not_connected', lastError: '', accountLabel: '', holdings: [], comparisons: [], candidates: [], dividendCandidates: [], correctionCandidates: [], dividendCorrectionCandidates: [], accountResults: [], failedAccountCount: 0 };
 }
 export const TOSS_EXCEPTION_FIELDS = ['candidates', 'dividendCandidates', 'correctionCandidates', 'dividendCorrectionCandidates'];
-export function tossExceptionKey(field, row, scope = '') {
+export function tossExceptionKey(field, input, scope = '') {
+    const row = record(input);
     return JSON.stringify([scope, field, String(row?.externalId || ''), String(row?.sourceFingerprint || '')]);
 }
-export function filterDismissedTossExceptions(toss, keys = toss.dismissedExceptionKeys || []) {
+export function filterDismissedTossExceptions(toss, keys = Array.isArray(toss.dismissedExceptionKeys) ? toss.dismissedExceptionKeys.filter((key) => typeof key === 'string') : []) {
     const dismissed = new Set(keys), result = { ...toss };
     for (const field of TOSS_EXCEPTION_FIELDS)
-        result[field] = (toss[field] || []).filter((row) => !dismissed.has(tossExceptionKey(field, row, toss.accountScopeId || '')));
+        result[field] = records(toss[field]).filter((row) => !dismissed.has(tossExceptionKey(field, row, String(toss.accountScopeId || ''))));
     return result;
 }
 export function dismissTossExceptions(toss, selectedKeys) {
-    const available = new Set(TOSS_EXCEPTION_FIELDS.flatMap(field => (toss[field] || []).map((row) => tossExceptionKey(field, row, toss.accountScopeId || ''))));
-    const dismissedExceptionKeys = [...new Set([...(toss.dismissedExceptionKeys || []), ...selectedKeys.filter(key => available.has(key))])];
+    const available = new Set(TOSS_EXCEPTION_FIELDS.flatMap(field => records(toss[field]).map((row) => tossExceptionKey(field, row, String(toss.accountScopeId || '')))));
+    const dismissedExceptionKeys = [...new Set([...(Array.isArray(toss.dismissedExceptionKeys) ? toss.dismissedExceptionKeys.filter((key) => typeof key === 'string') : []), ...selectedKeys.filter(key => available.has(key))])];
     return filterDismissedTossExceptions({ ...toss, dismissedExceptionKeys });
 }

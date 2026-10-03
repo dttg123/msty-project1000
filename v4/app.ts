@@ -1,11 +1,6 @@
+import type {User} from 'firebase/auth';
 import type {OfficialDistributionFeed} from './modules/finance.js';
 import {chooseCloudSync, syncSignature} from './modules/cloud-contract.js';
-declare const document: any;
-declare const window: any;
-declare const navigator: any;
-declare const location: any;
-declare const localStorage: any;
-declare const sessionStorage: any;
 import { OFFICIAL_DISTRIBUTIONS_URL, parseOfficialDistributionFeed, parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
 import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
@@ -24,7 +19,7 @@ import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvaila
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
-import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
+import { clone, esc, isDate, isRecord, n, round, todayISO, uid } from './modules/utils.js';
 import { listAutoBackups, readAutoBackup, rotateAutoBackups } from './modules/backup-history.js';
 import { tickerChange } from './modules/corporate-actions.js';
 import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, installHotUpdate, isHotUpdateAvailable } from './hot-update.js';
@@ -32,39 +27,50 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 (() => {
   'use strict';
 
-  const bootAt: any = performance.now();
-  const demoMode: any=new URLSearchParams(location.search).get('demo')==='1';
+  const errorMessage=(error: unknown): string=>error instanceof Error?error.message:isRecord(error)&&typeof error.message==='string'?error.message:'';
+  function submittedFormData(event: Event): FormData {
+    const form=event.currentTarget instanceof HTMLFormElement?event.currentTarget:event.target;
+    if(!(form instanceof HTMLFormElement))throw new Error('입력 양식을 찾을 수 없습니다.');
+    return new FormData(form);
+  }
+  function formControl(form: HTMLFormElement,name: string): HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement {
+    const input=form.elements.namedItem(name);
+    if(!(input instanceof HTMLInputElement||input instanceof HTMLSelectElement||input instanceof HTMLTextAreaElement))throw new Error(`입력 항목을 찾을 수 없습니다: ${name}`);
+    return input;
+  }
+  const bootAt = performance.now();
+  const demoMode=new URLSearchParams(location.search).get('demo')==='1';
 
   let state: any;
-  let currentPage: any = 'home';
-  let selectedProjectId: any = '';
-  let chartMode: any = 'month';
-  let chartSelection: any = '';
-  let homeCashflowMode: any = 'month';
-  let homeYearRange: any = '6';
+  let currentPage = 'home';
+  let selectedProjectId = '';
+  let chartMode = 'month';
+  let chartSelection = '';
+  let homeCashflowMode = 'month';
+  let homeYearRange = '6';
   let historyFilter: any={},chartMonth='',chartYear='';
-  let historyLimit: any=10, modalDirty=false, modalSaving=false, modalFocus: any=null, modalScroll=0;
-  let cashflowMonthKey: any = '';
-  let portfolioGroup: any = 'highYield';
-  const viewKey: any=`dividend-os-view-v2:${demoMode?'demo':'local'}`;
-  function rememberView(): any{try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioGroup,chartMode,chartMonth,chartYear,homeCashflowMode,homeYearRange}));}catch (_: any){}}
-  function restoreView(): any{try{const saved: any=JSON.parse(localStorage.getItem(viewKey)||'null');if(!saved)return;const project: any=activeProjects().find((p: any)=>p.id===saved.selectedProjectId);if(project)selectedProjectId=project.id;const savedGroup: any=saved.portfolioGroup||(saved.portfolioCategory==='highYield'?'highYield':saved.portfolioCategory?'dividend':'');if(['highYield','dividend'].includes(savedGroup))portfolioGroup=savedGroup;if(['home','projects','goal'].includes(saved.page))currentPage=saved.page;if(['week','month','year','monthWeeks'].includes(saved.chartMode))chartMode=saved.chartMode;if(['month','year'].includes(saved.homeCashflowMode))homeCashflowMode=saved.homeCashflowMode;if(['6','10','all'].includes(saved.homeYearRange))homeYearRange=saved.homeYearRange;if(/^\d{4}-\d{2}$/.test(saved.chartMonth||''))chartMonth=saved.chartMonth;if(/^\d{4}$/.test(saved.chartYear||''))chartYear=saved.chartYear;}catch (_: any){}}
-  let currentUser: any = null;
-  let cloudReady: any = false, pendingCloudState: any = null, cloudChoiceResolve: any = null;
+  let historyLimit=10, modalDirty=false, modalSaving=false, modalFocus: HTMLElement|null=null, modalScroll=0;
+  let cashflowMonthKey = '';
+  let portfolioGroup = 'highYield';
+  const viewKey=`dividend-os-view-v2:${demoMode?'demo':'local'}`;
+  function rememberView(): void{try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioGroup,chartMode,chartMonth,chartYear,homeCashflowMode,homeYearRange}));}catch (_: unknown){}}
+  function restoreView(): void{try{const saved: any=JSON.parse(localStorage.getItem(viewKey)||'null');if(!saved)return;const project: any=activeProjects().find((p: any)=>p.id===saved.selectedProjectId);if(project)selectedProjectId=project.id;const savedGroup: any=saved.portfolioGroup||(saved.portfolioCategory==='highYield'?'highYield':saved.portfolioCategory?'dividend':'');if(['highYield','dividend'].includes(savedGroup))portfolioGroup=savedGroup;if(['home','projects','goal'].includes(saved.page))currentPage=saved.page;if(['week','month','year','monthWeeks'].includes(saved.chartMode))chartMode=saved.chartMode;if(['month','year'].includes(saved.homeCashflowMode))homeCashflowMode=saved.homeCashflowMode;if(['6','10','all'].includes(saved.homeYearRange))homeYearRange=saved.homeYearRange;if(/^\d{4}-\d{2}$/.test(saved.chartMonth||''))chartMonth=saved.chartMonth;if(/^\d{4}$/.test(saved.chartYear||''))chartYear=saved.chartYear;}catch (_: unknown){}}
+  let currentUser: User|null = null;
+  let cloudReady = false, pendingCloudState: any = null, cloudChoiceResolve: any = null;
   let cloudBaseSignature: string | null = null;
   let cloudConnectGeneration=0;
-  let cloudUnsubscribe: any = null;
-  let applyingCloudState: any = false;
-  let saveTimer: any = null;
-  let cloudTimer: any = null;
-  let cloudRevision: any = 0;
-  let cloudWritePending: any = false;
+  let cloudUnsubscribe: (()=>void)|null = null;
+  let applyingCloudState = false;
+  let saveTimer: ReturnType<typeof setTimeout>|undefined;
+  let cloudTimer: ReturnType<typeof setTimeout>|undefined;
+  let cloudRevision = 0;
+  let cloudWritePending = false;
   let cloudPushQueued=false;
-  let toastTimer: any = null;
+  let toastTimer: ReturnType<typeof setTimeout>|undefined;
   let legacyMigrationSource: any = null;
-  let tossSyncRunning: any = false;
-  let nativeTossStatus: any={available:isNativeTossAvailable(),configured:false,publicIp:'',lastPublicIp:'',checking:false};
-  let appUpdateStatus: any={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:APP_VERSION,updateAvailable:false,nativeUpdateRequired:false,error:''};
+  let tossSyncRunning = false;
+  let nativeTossStatus={available:isNativeTossAvailable(),configured:false,publicIp:'',lastPublicIp:'',checking:false};
+  let appUpdateStatus={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:APP_VERSION,updateAvailable:false,nativeUpdateRequired:false,error:''};
   let exchangeRateBusy=false,exchangeRateError='',lastExchangeRateAttempt=0;
   let officialFeed: OfficialDistributionFeed | null=null,officialBusy=false,officialError='',officialAttempt=0;
   async function refreshOfficialDistributions(manual=false):Promise<void>{
@@ -85,7 +91,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function readLocalMode(): boolean {try{return sessionStorage.getItem('dividend-os-local-mode')==='1';}catch{return false;}}
   function persistLocalMode(enabled: boolean): void {try{if(enabled)sessionStorage.setItem('dividend-os-local-mode','1');else sessionStorage.removeItem('dividend-os-local-mode');}catch{}}
   let localOnlySession: any = readLocalMode();
-  let autoBackupStatus: any={count:0,lastAt:'',error:''},autoBackupPromise: any=null;
+  let autoBackupStatus={count:0,lastAt:'',error:''},autoBackupPromise: any=null;
 
   const portfolio: any = createPortfolioEngine(() => state, () => selectedProjectId);
   const { activeProjects, projectById, projectRows, sharesAtDate, computeProject, recoveryStats, totals } = portfolio;
@@ -97,13 +103,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     try{localStorage.setItem('dividend-os-theme',pref);}catch{}
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content',dark?'#0f1117':'#f4f5f9');
   }
-  function hideSplash(): any {
-    const splash: any=document.getElementById('splashScreen'); if(!splash)return;
+  function hideSplash(): void {
+    const splash=document.getElementById('splashScreen'); if(!splash)return;
     setTimeout(()=>{splash.classList.add('hide');setTimeout(()=>splash.remove(),240);},Math.max(0,330-(performance.now()-bootAt)));
   }
-  function toast(message: any,{haptic=false}: any ={}): any {
-    const el: any=document.getElementById('toast'); clearTimeout(toastTimer); el.textContent=message; el.classList.add('show');
-    if(haptic)try{navigator.vibrate?.(18)}catch (_: any){} toastTimer=setTimeout(()=>el.classList.remove('show'),2300);
+  function toast(message: string,{haptic=false}: {haptic?:boolean} ={}): void {
+    const el=document.getElementById('toast');if(!el)return; clearTimeout(toastTimer); el.textContent=message; el.classList.add('show');
+    if(haptic)try{navigator.vibrate?.(18)}catch (_: unknown){} toastTimer=setTimeout(()=>el.classList.remove('show'),2300);
   }
   async function refreshExchangeRate(manual=false): Promise<void> {
     if(exchangeRateBusy||demoMode)return;
@@ -119,12 +125,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       Object.assign(state.settings,{exchangeRate:value.rate,exchangeRateMode:'auto',exchangeRateDate:value.date,exchangeRateUpdatedAt:new Date().toISOString(),exchangeRateSource:'Frankfurter'});
       try{await saveState(true);}catch(error){state.settings=before;throw error;}
       renderAll();if(manual)toast('참고 환율을 갱신했습니다.');
-    }catch(error: any){exchangeRateError='환율 조회 실패 · 마지막 저장 환율 유지';if(manual)toast(exchangeRateError);}
+    }catch (error: unknown){exchangeRateError='환율 조회 실패 · 마지막 저장 환율 유지';if(manual)toast(exchangeRateError);}
     finally{exchangeRateBusy=false;renderRateSettings();}
   }
 
   function getSaveSummary(): string {if(!currentUser)return '연결 안 됨 · 기기 저장 사용';const text=document.getElementById('saveStatus')?.textContent;if(text)return String(text);if(!cloudReady)return '클라우드 확인 대기';return state.meta.lastCloudSaveAt?'저장 성공 '+new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',dateStyle:'short',timeStyle:'short'}).format(new Date(state.meta.lastCloudSaveAt)):'연결됨 · 저장 성공 기록 없음';}
-  function setSaveStatus(text: any,kind: any =''): any { const el: any=document.getElementById('saveStatus'); if(el){el.textContent=text;el.className=`save-pill ${kind}`;}const summary=document.getElementById('cloudSaveSummary');if(summary)summary.textContent=getSaveSummary(); }
+  function setSaveStatus(text: string,kind: string =''): void { const el=document.getElementById('saveStatus'); if(el){el.textContent=text;el.className=`save-pill ${kind}`;}const summary=document.getElementById('cloudSaveSummary');if(summary)summary.textContent=getSaveSummary(); }
   function hasMeaningfulData(value: any =state): any { return !!(value&&(value.trades?.length||value.dividends?.length||value.splits?.length||value.cashAdjustments?.length||value.projects?.some((p: any)=>n(p.currentPrice)||n(p.monthlyPlanShares)||n(p.initialDividendBalance)))); }
 
   const backupStorage: any={get:storageGet,set:storageSet,remove:storageDelete};
@@ -149,10 +155,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const saved: any=await saveCloudDocument(uid,sent,{expectedRevision:cloudRevision,appVersion:APP_VERSION});
       if(!isCurrent())return;cloudRevision=saved.revision;
       cloudWritePending=false;state.meta.lastCloudSaveAt=now;await storageSet(STATE_KEY,state);cloudBaseSignature=sentSignature;await storageSet('cloudSyncBase:'+uid,cloudBaseSignature); setSaveStatus('','cloud-ok');
-    } catch (error: any) {
+    } catch (error: unknown) {
       if(!isCurrent())return;
       cloudWritePending=false;console.error(error);
-      if(error?.code==='cloud-conflict'){
+      if(isRecord(error)&&error.code==='cloud-conflict'){
         const latest: any=await getCloudDocument(uid).catch(()=>null);if(!isCurrent())return;pendingCloudState=latest?.state?migrate(latest.state):null;cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
       }
       setSaveStatus('클라우드 오류','cloud-error');toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true});
@@ -160,11 +166,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
   async function saveState(immediate: any =false): Promise<any> {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
-    const run: any=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: any){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
+    const run: any=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
     if(immediate)await run();else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
 
-  const views: any = createViews({
+  const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value: any) => { selectedProjectId=value; },
     getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value: any) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
@@ -193,15 +199,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     openModal(`<h3 class="modal-title">V3.2.1 → V4 이전 점검</h3><p class="modal-desc">V3 원본은 읽기만 합니다. 아래 값이 모두 일치할 때 V4 전용 저장소에 복사합니다.</p><div class="list">${migrationCheckRows(audit)}</div><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmLegacyMigration" ${audit.passed?'':'disabled'}>일치 확인 후 복사</button></div>`);
     const confirm: any=document.getElementById('confirmLegacyMigration');if(confirm)confirm.onclick=async()=>{await storageSet(SAFETY_KEY,clone(state));state=preview.candidate;selectedProjectId=state.projects[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('settings');toast('V3.2.1 데이터를 V4에 복사했습니다.');};
   }
-  function renderAll(displayOnly: any =false): any {
-    const opened: any=displayOnly?[...document.querySelectorAll('.goal-step-card[open]')].map(el=>el.dataset.goalProject):[],historyOpen=displayOnly&&document.querySelector('.record-center')?.open,scrollY=window.scrollY;
+  function renderAll(displayOnly =false): void {
+    const opened: any=displayOnly?[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card[open]')].map(el=>el.dataset.goalProject):[],historyOpen=displayOnly&&document.querySelector<HTMLDetailsElement>('.record-center')?.open,scrollY=window.scrollY;
     if(!selectedProjectId)selectedProjectId=activeProjects()[0]?.id||'';
     document.getElementById('usdBtn')?.classList.toggle('active',displayCurrency()==='USD');
     document.getElementById('krwBtn')?.classList.toggle('active',displayCurrency()==='KRW');
     document.getElementById('usdBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='USD'));
     document.getElementById('krwBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='KRW'));
     renderHome();renderProjects();renderGoals();if(!displayOnly)renderSettings();
-    if(displayOnly){document.querySelectorAll('.goal-step-card').forEach((el: any)=>{el.open=opened.includes(el.dataset.goalProject);});const history: any=document.querySelector('.record-center');if(history)history.open=!!historyOpen;window.scrollTo(0,scrollY);}
+    if(displayOnly){document.querySelectorAll<HTMLDetailsElement>('.goal-step-card').forEach((el: any)=>{el.open=opened.includes(el.dataset.goalProject);});const history: any=document.querySelector<HTMLDetailsElement>('.record-center');if(history)history.open=!!historyOpen;window.scrollTo(0,scrollY);}
   }
   function showPage(page: any): any {
     if(!PAGES.includes(page))page='home'; currentPage=page;
@@ -210,9 +216,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     window.scrollTo({top:0,behavior:'instant'});
     rememberView();
   }
-  function openModal(html: any): any {
-    const modal: any=document.getElementById('modal'),backdrop=document.getElementById('modalBackdrop');
-    if(!backdrop.classList.contains('show')){modalFocus=document.activeElement;modalScroll=window.scrollY;document.body.style.position='fixed';document.body.style.top=`-${modalScroll}px`;document.body.style.width='100%';}
+  function openModal(html: string): void {
+    const modal: any=document.getElementById('modal'),backdrop=document.getElementById('modalBackdrop')!;
+    if(!backdrop.classList.contains('show')){modalFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;modalScroll=window.scrollY;document.body.style.position='fixed';document.body.style.top=`-${modalScroll}px`;document.body.style.width='100%';}
     modalDirty=false;modal.innerHTML=`<button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button><div class="modal-handle"></div>${html}`;
     modal.querySelectorAll('input,select,textarea').forEach((input: any,index: any)=>{const label: any=input.closest('div')?.querySelector('label');if(label){input.id='modal-field-'+index;label.htmlFor=input.id;}});
     backdrop.classList.add('show');modal.scrollTop=0;
@@ -220,22 +226,22 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     modal.setAttribute('aria-label',modal.querySelector('h3')?.textContent||'입력 창');
     requestAnimationFrame(()=>modal.querySelector('button')?.focus());
   }
-  function requestCloseModal(): any {
+  function requestCloseModal(): void {
     if(modalSaving)return;
-    if(!document.getElementById('modalBackdrop').classList.contains('show'))return;
-    if(modalDirty){if(!document.querySelector('.modal-unsaved'))document.getElementById('modal').insertAdjacentHTML('beforeend','<div class="modal-unsaved" role="alert"><p>작성 중인 내용이 있습니다. 저장하지 않고 닫을까요?</p><button class="btn soft" data-keep-modal>계속 작성</button><button class="btn danger" data-discard-modal>닫기</button></div>');return;}
+    if(!document.getElementById('modalBackdrop')!.classList.contains('show'))return;
+    if(modalDirty){if(!document.querySelector('.modal-unsaved'))document.getElementById('modal')!.insertAdjacentHTML('beforeend','<div class="modal-unsaved" role="alert"><p>작성 중인 내용이 있습니다. 저장하지 않고 닫을까요?</p><button class="btn soft" data-keep-modal>계속 작성</button><button class="btn danger" data-discard-modal>닫기</button></div>');return;}
     closeModal();
   }
-  function closeModal(): any {
+  function closeModal(): void {
     if(cloudChoiceResolve){const resolve: any=cloudChoiceResolve;cloudChoiceResolve=null;resolve('cancel');}
-    document.getElementById('modalBackdrop').classList.remove('show');document.getElementById('modal').innerHTML='';
+    document.getElementById('modalBackdrop')!.classList.remove('show');document.getElementById('modal')!.innerHTML='';
     modalDirty=false;document.body.style.position='';document.body.style.top='';document.body.style.width='';
     document.querySelectorAll('main,.bottom-nav').forEach((el: any)=>{el.inert=false;});
     window.scrollTo(0,modalScroll);modalFocus?.focus?.({preventScroll:true});
   }
-  function confirmAction(title: any,message: any,action: any,confirmText: any ='확인'): any {
+  function confirmAction(title: string,message: string,action: ()=>void|Promise<void>,confirmText: string ='확인'): void {
     openModal(`<h3 class="modal-title">${esc(title)}</h3><p class="modal-desc">${esc(message)}</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn danger" id="modalConfirm">${esc(confirmText)}</button></div>`);
-    document.getElementById('modalConfirm').onclick=async()=>{await action();closeModal();};
+    document.getElementById('modalConfirm')!.onclick=async()=>{await action();closeModal();};
   }
 
   function openProjectForm(project: any =null): any {
@@ -255,9 +261,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">${edit?'수정 저장':'추가'}</button></div>
       ${edit&&activeProjects().length>1?'<button class="btn soft" type="button" id="archiveProject">프로젝트 보관</button>':''}
     </form>`);
-    if(returnPage==='goal')document.querySelector('#projectForm .form-advanced').open=true;
-    document.getElementById('projectForm').onsubmit=async (event: any)=>{
-      event.preventDefault();const form: any=new FormData(event.currentTarget),symbol=String(form.get('symbol')).trim().toUpperCase();
+    if(returnPage==='goal')document.querySelector<HTMLDetailsElement>('#projectForm .form-advanced')!.open=true;
+    document.getElementById('projectForm')!.onsubmit=async (event: Event)=>{
+      event.preventDefault();const form=submittedFormData(event),symbol=String(form.get('symbol')).trim().toUpperCase();
       if(!/^[A-Z0-9.-]{1,16}$/.test(symbol)){toast('티커는 영문·숫자·점·하이픈만 입력해 주세요.');return;}
       if(state.projects.some((x: any)=>x.id!==project?.id&&x.symbol===symbol&&!x.archived)){toast('이미 등록된 티커입니다.');return;}
       const target: any=project||blankProject(symbol,String(form.get('name')).trim()||symbol);
@@ -281,17 +287,17 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       <div data-mixed-only><label class="input-label">혼합매수 배당 사용액 USD</label><input class="input" name="reinvestAmountUSD" type="number" min="0" step="0.01" value="${n(record?.reinvestAmountUSD)}"></div>
       <details><summary>추가 정보 (선택)</summary><div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div></details>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit?`<button class="record-delete-link" type="button" data-delete-from-edit="trade:${record.id}">이 거래 기록 삭제</button>`:''}</form>`);
-    const tradeForm: any=document.getElementById('tradeForm'),typeInput=tradeForm.elements.type,buyTypeInput=tradeForm.elements.buyType;
-    const syncTradeFields: any=()=>{const selling: any=typeInput.value==='sell';tradeForm.querySelector('[data-buy-only]').hidden=selling;tradeForm.querySelector('[data-mixed-only]').hidden=selling||buyTypeInput.value!=='mixed';};
+    const tradeForm=document.querySelector<HTMLFormElement>('#tradeForm')!,typeInput=formControl(tradeForm,'type'),buyTypeInput=formControl(tradeForm,'buyType');
+    const syncTradeFields: any=()=>{const selling: any=typeInput.value==='sell';tradeForm.querySelector<HTMLElement>('[data-buy-only]')!.hidden=selling;tradeForm.querySelector<HTMLElement>('[data-mixed-only]')!.hidden=selling||buyTypeInput.value!=='mixed';};
     typeInput.onchange=syncTradeFields;buyTypeInput.onchange=syncTradeFields;syncTradeFields();
-    tradeForm.onsubmit=async (event: any)=>{event.preventDefault();if(modalSaving)return;const form: any=new FormData(event.currentTarget),date=String(form.get('date')),type=form.get('type'),shares=n(form.get('shares')),price=n(form.get('price')),buyType=type==='sell'?'':String(form.get('buyType')),reinvestAmountUSD=buyType==='mixed'?n(form.get('reinvestAmountUSD')):0;if(!isDate(date)||shares<=0||price<0){toast('날짜·주수·단가를 확인해 주세요.');return;}if(reinvestAmountUSD>shares*price+.0001){toast('배당 사용액이 총 매수액보다 큽니다.');return;}const row: any=record||{id:uid('t'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()},before=record?clone(record):null;Object.assign(row,{date,type,buyType,shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()});if(!edit)state.trades.push(row);const invalid: any=computeProject(project).oversells.length;if(invalid){if(edit)Object.assign(row,before);else state.trades=state.trades.filter((item: any)=>item!==row);toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');return;}const controls: any=[...tradeForm.querySelectorAll('input,select,button')],disabled=controls.map((el: any)=>el.disabled);modalSaving=true;controls.forEach((el: any)=>el.disabled=true);try{await saveState(true);}catch{if(edit)Object.assign(row,before);else state.trades=state.trades.filter((item: any)=>item!==row);controls.forEach((el: any,i: any)=>el.disabled=disabled[i]);modalSaving=false;return;}modalSaving=false;closeModal();renderAll(true);showPage('projects');toast(edit?'거래를 수정했습니다.':'거래를 저장했습니다.');};
+    tradeForm.onsubmit=async (event: Event)=>{event.preventDefault();if(modalSaving)return;const form=submittedFormData(event),date=String(form.get('date')),type=form.get('type'),shares=n(form.get('shares')),price=n(form.get('price')),buyType=type==='sell'?'':String(form.get('buyType')),reinvestAmountUSD=buyType==='mixed'?n(form.get('reinvestAmountUSD')):0;if(!isDate(date)||shares<=0||price<0){toast('날짜·주수·단가를 확인해 주세요.');return;}if(reinvestAmountUSD>shares*price+.0001){toast('배당 사용액이 총 매수액보다 큽니다.');return;}const row: any=record||{id:uid('t'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()},before=record?clone(record):null;Object.assign(row,{date,type,buyType,shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()});if(!edit)state.trades.push(row);const invalid: any=computeProject(project).oversells.length;if(invalid){if(edit)Object.assign(row,before);else state.trades=state.trades.filter((item: any)=>item!==row);toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');return;}const controls=[...tradeForm.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('input,select,button')],disabled=controls.map((el)=>el.disabled);modalSaving=true;controls.forEach((el)=>el.disabled=true);try{await saveState(true);}catch{if(edit)Object.assign(row,before);else state.trades=state.trades.filter((item: any)=>item!==row);controls.forEach((el,i)=>el.disabled=disabled[i]);modalSaving=false;return;}modalSaving=false;closeModal();renderAll(true);showPage('projects');toast(edit?'거래를 수정했습니다.':'거래를 저장했습니다.');};
   }
 
 
   function openPriceForm(): any{
     const project: any=projectById();if(!project)return;
     openModal(`<h3 class="modal-title">${esc(project.symbol)} 현재가 수정</h3><p class="modal-desc">평가금액과 목표 매수금 계산에 사용할 현재가입니다.</p><form id="priceForm" class="form-grid"><div><label class="input-label">현재가 USD</label><input class="input" name="price" type="number" min="0.0001" step="0.0001" inputmode="decimal" required value="${n(project.currentPrice)||''}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-    document.getElementById('priceForm').onsubmit=async (event: any)=>{event.preventDefault();const price: any=n(new FormData(event.currentTarget).get('price'));if(price<=0)return;project.currentPrice=price;project.priceSource='manual';project.priceUpdatedAt=new Date().toISOString();await saveState(true);closeModal();renderAll(true);toast('현재가를 저장했습니다.');};
+    document.getElementById('priceForm')!.onsubmit=async (event: Event)=>{event.preventDefault();const price: any=n(submittedFormData(event).get('price'));if(price<=0)return;project.currentPrice=price;project.priceSource='manual';project.priceUpdatedAt=new Date().toISOString();await saveState(true);closeModal();renderAll(true);toast('현재가를 저장했습니다.');};
   }
 
   function openIncomeMonth(month=todayISO().slice(0,7),projectId='',symbolFilter='') {
@@ -318,26 +324,26 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const project=projects[0],fingerprint=JSON.stringify({currency:parsed.currency,rows:parsed.rows}),replacementMoney=(row: any)=>parsed.currency==='KRW'?row.amountKRW.toLocaleString('ko-KR')+'원':'$'+row.amountUSD.toFixed(2);
       if(state.meta.lastDividendReplacementFingerprint===fingerprint&&state.dividends.length===parsed.rows.length&&state.dividends.every((row: any,index: number)=>row.projectId===project.id&&row.currency===parsed.currency&&row.date===parsed.rows[index].date&&(parsed.currency==='KRW'?row.amountKRW===parsed.rows[index].amountKRW:row.amountUSD===parsed.rows[index].amountUSD))){toast('이미 같은 배당 기록으로 교체되어 있습니다.');return;}
       openModal(`<h3 class="modal-title">전체 배당 교체 확인</h3><p class="modal-desc">기존 배당 ${state.dividends.length}건을 삭제하고 ${esc(parsed.symbol)} ${parsed.rows.length}건으로 교체합니다. 거래·보유주수·목표·토스 원본은 유지합니다.</p><strong>${parsed.currency==='KRW'?parsed.totalKRW.toLocaleString('ko-KR')+'원':'$'+parsed.totalUSD.toFixed(2)}</strong><div class="list">${parsed.rows.map(row=>`<div class="list-row"><span>${esc(row.date)}</span><strong>${replacementMoney(row)}</strong></div>`).join('')}</div><p class="detail-note">${parsed.currency==='KRW'?'원화 확인액만 저장합니다. 달러 금액·지급 당시 주수는 미확인이며 달러 재투자 잔액과 총손익에 임의 합산하지 않습니다.':'확인된 달러 세후 입금액을 저장합니다. 지급 당시 주수는 미확인으로 남깁니다.'} 교체 직전 기록은 안전 사본으로 남깁니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmDividendReplacement">기존 배당 삭제 후 교체</button></div>`);
-      document.getElementById('confirmDividendReplacement').onclick=async()=>{
+      document.getElementById('confirmDividendReplacement')!.onclick=async()=>{
         if(modalSaving)return;
         const before=clone(state),next=clone(state);
         next.dividends=parsed.rows.map(row=>({id:uid('d'),projectId:project.id,symbol:project.symbol,date:row.date,status:'actual',currency:parsed.currency,amountKRW:row.amountKRW,amountUSD:row.amountUSD||0,sharesAtPayment:0,rocPercent:null,rocStatus:'none',note:'사용자 제공 증권앱 화면의 '+parsed.symbol+' '+parsed.currency+' 세후 금액',createdAt:new Date().toISOString()}));
         next.meta.lastDividendReplacementFingerprint=fingerprint;
         const errors=validateLedger(next);if(errors.length){toast(errors[0]);return;}
-        modalSaving=true;document.getElementById('confirmDividendReplacement').disabled=true;
+        modalSaving=true;document.querySelector<HTMLButtonElement>('#confirmDividendReplacement')!.disabled=true;
         try{await storageSet(SAFETY_KEY,before);state=next;await saveState(true);selectedProjectId=project.id;closeModal();renderAll();showPage('projects');toast(`배당 ${parsed.rows.length}건을 ${parsed.currency} 원본으로 교체했습니다.${currentUser&&!cloudReady?' 기기에 저장 · 클라우드 동기화 보류':''}`);}
         catch(error){state=before;try{await storageSet(STATE_KEY,before);}catch{}toast('교체를 저장하지 못해 기존 배당을 유지했습니다.');document.getElementById('confirmDividendReplacement')?.removeAttribute('disabled');}
         finally{modalSaving=false;}
       };
-    }catch(error: any){toast(error?.message||'교체 파일을 읽지 못했습니다.');}
+    }catch (error: unknown){toast(errorMessage(error)||'교체 파일을 읽지 못했습니다.');}
   }
 
   function openDividendSchedule(projectId: string): void {
     const project=projectById(projectId),announcement=project.dividendAnnouncement||{};
     openModal(`<h3 class="modal-title">${esc(project.symbol)} 공시 일정 기록</h3><p class="modal-desc">운용사·기업 공시에서 확인한 날짜를 직접 기록합니다. 자동 검증된 일정이 아니며 배당 입금 장부와 분리됩니다.</p><form id="dividendScheduleForm" class="form-grid"><label>배당락일<input class="input" name="exDate" type="date" required value="${esc(announcement.exDate||'')}"></label><label>공시 지급일<input class="input" name="payDate" type="date" required value="${esc(announcement.payDate||'')}"></label><label>공시 주소<input class="input" name="sourceURL" type="url" required value="${esc(announcement.sourceURL||'')}" placeholder="https://"></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-    document.getElementById('dividendScheduleForm').onsubmit=async(event: any)=>{
+    document.getElementById('dividendScheduleForm')!.onsubmit=async(event: Event)=>{
       event.preventDefault();if(modalSaving)return;
-      const form=new FormData(event.currentTarget),exDate=String(form.get('exDate')),payDate=String(form.get('payDate')),sourceURL=String(form.get('sourceURL'));
+      const form=submittedFormData(event),exDate=String(form.get('exDate')),payDate=String(form.get('payDate')),sourceURL=String(form.get('sourceURL'));
       if(!isDate(exDate)||!isDate(payDate)||!/^https:\/\//.test(sourceURL)){toast('날짜와 HTTPS 공시 주소를 확인해 주세요.');return;}
       const before=clone(project.dividendAnnouncement||null);modalSaving=true;
       try{project.dividendAnnouncement={exDate,payDate,sourceURL,recordedAt:new Date().toISOString(),verification:'user'};await saveState(true);closeModal();renderAll();showPage('projects');}
@@ -356,50 +362,50 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}"></div>
       </div></details>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button>${!edit?'<button class="btn soft" type="submit" name="next" value="1">저장 후 계속</button>':''}<button class="btn primary" type="submit">저장</button></div>${edit?`<button class="record-delete-link" type="button" data-delete-from-edit="dividend:${record.id}">이 배당 기록 삭제</button>`:''}</form>`);
-    const dividendForm: any=document.getElementById('dividendForm'),preview=document.createElement('div');preview.className='dividend-preview';preview.setAttribute('aria-live','polite');dividendForm.querySelector('.modal-actions').before(preview);
-    const updatePreview: any=()=>{const form: any=new FormData(dividendForm),amount=n(form.get('amountUSD')),krw=form.get('currency')==='KRW',shares=krw?0:n(form.get('sharesAtPayment'));dividendForm.elements.amountUSD.step=krw?'1':'0.01';dividendForm.elements.amountUSD.min=krw?'1':'0.01';if(amount<=0){preview.textContent='실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';return;}preview.innerHTML=`<strong>이번 실제 입금</strong><br>${krw?Math.round(amount).toLocaleString('ko-KR')+'원':fmtMoney(amount,2)}${shares>0?` · 주당 ${fmtMoney(amount/shares,4)}`:''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`;};
-    dividendForm.elements.date.addEventListener('change',updatePreview);
+    const dividendForm=document.querySelector<HTMLFormElement>('#dividendForm')!,preview=document.createElement('div');preview.className='dividend-preview';preview.setAttribute('aria-live','polite');dividendForm.querySelector('.modal-actions')!.before(preview);
+    const updatePreview: any=()=>{const form=new FormData(dividendForm),amount=n(form.get('amountUSD')),krw=form.get('currency')==='KRW',shares=krw?0:n(form.get('sharesAtPayment'));(formControl(dividendForm,'amountUSD') as HTMLInputElement).step=krw?'1':'0.01';(formControl(dividendForm,'amountUSD') as HTMLInputElement).min=krw?'1':'0.01';if(amount<=0){preview.textContent='실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';return;}preview.innerHTML=`<strong>이번 실제 입금</strong><br>${krw?Math.round(amount).toLocaleString('ko-KR')+'원':fmtMoney(amount,2)}${shares>0?` · 주당 ${fmtMoney(amount/shares,4)}`:''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`;};
+    formControl(dividendForm,'date').addEventListener('change',updatePreview);
     dividendForm.addEventListener('input',updatePreview);updatePreview();
-    dividendForm.onsubmit=async (event: any)=>{
+    dividendForm.onsubmit=async (event: Event)=>{
       event.preventDefault();if(modalSaving)return;
-      const form: any=new FormData(dividendForm),date=String(form.get('date')),entered=n(form.get('amountUSD')),krw=form.get('currency')==='KRW',amountUSD=krw?0:entered;
+      const form=new FormData(dividendForm),date=String(form.get('date')),entered=n(form.get('amountUSD')),krw=form.get('currency')==='KRW',amountUSD=krw?0:entered;
       if(!isDate(date)||entered<=0||(krw&&!Number.isSafeInteger(entered))){toast('지급일과 배당금을 확인해 주세요.');return;}
-      const keepEntering: any=!edit&&event.submitter?.name==='next',before=record?clone(record):null;
+      const keepEntering: any=!edit&&(event instanceof SubmitEvent?event.submitter:null)?.getAttribute('name')==='next',before=record?clone(record):null;
       const row: any=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};
       Object.assign(row,{date,amountUSD,currency:krw?'KRW':'USD',amountKRW:krw?entered:undefined,rocPercent:form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus:form.get('rocStatus')==='final'?'final':'estimated',sharesAtPayment:krw?0:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});
       if(krw){for(const key of ['grossAmountUSD','netAmountUSD','withholdingTaxUSD','taxUSD','feeUSD','rocAmountUSD'])delete row[key];row.rocPercent=null;row.rocStatus='none';}
       else if(row.netAmountUSD!==undefined||row.grossAmountUSD!==undefined){row.netAmountUSD=entered;row.grossAmountUSD=entered+n(row.withholdingTaxUSD??row.taxUSD)+n(row.feeUSD);}
       if(!edit)state.dividends.push(row);
-      const controls: any=[...document.getElementById('modal').querySelectorAll('input,select,button')],disabled=controls.map((el: any)=>el.disabled);
-      modalSaving=true;dividendForm.setAttribute('aria-busy','true');controls.forEach((el: any)=>el.disabled=true);preview.textContent='저장 중…';
-      try{await saveState(true);}catch (error: any){
+      const controls=[...document.getElementById('modal')!.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('input,select,button')],disabled=controls.map((el)=>el.disabled);
+      modalSaving=true;dividendForm.setAttribute('aria-busy','true');controls.forEach((el)=>el.disabled=true);preview.textContent='저장 중…';
+      try{await saveState(true);}catch (error: unknown){
         if(edit)Object.assign(row,before);else state.dividends=state.dividends.filter((item: any)=>item!==row);
-        controls.forEach((el: any,i: any)=>el.disabled=disabled[i]);dividendForm.removeAttribute('aria-busy');modalSaving=false;updatePreview();return;
+        controls.forEach((el,i)=>el.disabled=disabled[i]);dividendForm.removeAttribute('aria-busy');modalSaving=false;updatePreview();return;
       }
       modalSaving=false;
       if(keepEntering){renderAll(true);openDividendForm(null,{date});toast('저장했습니다. 다음 금액을 입력하세요.');return;}
       closeModal();renderAll(true);showPage(returnPage);toast(edit?'배당을 수정했습니다.':'배당을 저장했습니다.');
     };
-    if(draft)requestAnimationFrame(()=>{dividendForm.elements.amountUSD.focus();dividendForm.elements.amountUSD.select();});
+    if(draft)requestAnimationFrame(()=>{(formControl(dividendForm,'amountUSD') as HTMLInputElement).focus();(formControl(dividendForm,'amountUSD') as HTMLInputElement).select();});
   }
 
   function openCashForm(record: any =null): any {
     const project: any=projectById(record?.projectId||selectedProjectId),edit=!!record;
     openModal(`<h3 class="modal-title">${project.symbol} 잔액 ${edit?'수정':'보정'}</h3><p class="modal-desc">실제 사용 가능 배당과 앱 잔액이 다를 때만 더하거나 뺍니다.</p><form id="cashForm" class="form-grid"><div><label class="input-label">날짜</label><input class="input" name="date" type="date" value="${record?.date||todayISO()}" required></div><div><label class="input-label">보정액 USD (+/−)</label><input class="input" name="amountUSD" type="number" step="0.01" value="${n(record?.amountUSD)}" required></div><div><label class="input-label">사유</label><input class="input" name="label" value="${esc(record?.label||'잔액 보정')}" required></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit?`<button class="record-delete-link" type="button" data-delete-from-edit="cash:${record.id}">이 보정 기록 삭제</button>`:''}</form>`);
-    document.getElementById('cashForm').onsubmit=async (event: any)=>{event.preventDefault();const form: any=new FormData(event.currentTarget),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||!amountUSD){toast('날짜와 0이 아닌 보정액을 입력해 주세요.');return;}const row: any=record||{id:uid('c'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,label:String(form.get('label')).trim()||'잔액 보정'});if(!edit)state.cashAdjustments.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast('잔액 보정을 저장했습니다.');};
+    document.getElementById('cashForm')!.onsubmit=async (event: Event)=>{event.preventDefault();const form=submittedFormData(event),date=String(form.get('date')),amountUSD=n(form.get('amountUSD'));if(!isDate(date)||!amountUSD){toast('날짜와 0이 아닌 보정액을 입력해 주세요.');return;}const row: any=record||{id:uid('c'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD,label:String(form.get('label')).trim()||'잔액 보정'});if(!edit)state.cashAdjustments.push(row);await saveState(true);closeModal();renderAll();showPage('projects');toast('잔액 보정을 저장했습니다.');};
   }
 
   function openWithdrawalForm(projectId: any =selectedProjectId,record: any =null): any {
     const project: any=projectById(record?.projectId||projectId),calc=computeProject(project),edit=!!record,recovery=project.recovery||{},available=Math.max(0,calc.dividendAvailable+(edit?Math.abs(n(record.amountUSD)):0)),returnPage=currentPage;
     if(!recovery.locked){toast('원금회수 기준을 먼저 확정해 주세요.');return;}
     openModal(`<h3 class="modal-title">${project.symbol} 배당 인출 ${edit?'수정':'기록'}</h3><p class="modal-desc">실제로 계좌 밖으로 뺀 배당금만 기록합니다. 배당 입금이나 재투자는 원금회수로 계산하지 않습니다.</p><form id="withdrawalForm" class="form-grid"><div class="record-detail-grid"><div><span>사용 가능 배당</span><strong>${fmtMoney(available,2)}</strong></div><div><span>남은 원금</span><strong>${fmtMoney(recoveryStats(calc).remaining,2)}</strong></div></div><div><label class="input-label">인출일</label><input class="input" name="date" type="date" min="${recovery.startDate}" value="${record?.date||todayISO()}" required></div><div><label class="input-label">실제 인출액 USD</label><input class="input" name="amountUSD" type="number" min="0.01" max="${Math.max(.01,round(available,2))}" step="0.01" value="${edit?Math.abs(n(record.amountUSD)):''}" required></div><div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note||'')}" placeholder="예: 생활비 계좌로 이체"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit?`<button class="record-delete-link" type="button" data-delete-from-edit="cash:${record.id}">이 인출 기록 삭제</button>`:''}</form>`);
-    document.getElementById('withdrawalForm').onsubmit=async (event: any)=>{event.preventDefault();const form: any=new FormData(event.currentTarget),date=String(form.get('date')),amount=n(form.get('amountUSD'));if(!isDate(date)||date<recovery.startDate||amount<=0){toast('회수 시작일 이후의 인출 날짜와 금액을 확인해 주세요.');return;}if(amount>available+.005){toast('사용 가능한 배당금보다 많이 인출할 수 없습니다.');return;}const row: any=record||{id:uid('w'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD:-amount,purpose:'recoveryWithdrawal',label:'배당금 인출',note:String(form.get('note')).trim()});if(!edit)state.cashAdjustments.push(row);await saveState(true);closeModal();renderAll();showPage(returnPage==='goal'?'goal':'projects');toast(edit?'인출 기록을 수정했습니다.':'실제 인출액을 원금회수에 반영했습니다.');};
+    document.getElementById('withdrawalForm')!.onsubmit=async (event: Event)=>{event.preventDefault();const form=submittedFormData(event),date=String(form.get('date')),amount=n(form.get('amountUSD'));if(!isDate(date)||date<recovery.startDate||amount<=0){toast('회수 시작일 이후의 인출 날짜와 금액을 확인해 주세요.');return;}if(amount>available+.005){toast('사용 가능한 배당금보다 많이 인출할 수 없습니다.');return;}const row: any=record||{id:uid('w'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()};Object.assign(row,{date,amountUSD:-amount,purpose:'recoveryWithdrawal',label:'배당금 인출',note:String(form.get('note')).trim()});if(!edit)state.cashAdjustments.push(row);await saveState(true);closeModal();renderAll();showPage(returnPage==='goal'?'goal':'projects');toast(edit?'인출 기록을 수정했습니다.':'실제 인출액을 원금회수에 반영했습니다.');};
   }
 
   function openSplitForm(record: any =null): any {
     const project: any=projectById(record?.projectId||selectedProjectId),edit=!!record;
     openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균단가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date||todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from)||2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to)||1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">적용</button></div>${edit?`<button class="record-delete-link" type="button" data-delete-from-edit="split:${record.id}">이 분할 기록 삭제</button>`:''}</form>`);
-    document.getElementById('splitForm').onsubmit=async (event: any)=>{event.preventDefault();const form: any=new FormData(event.currentTarget),date=String(form.get('date')),from=n(form.get('from')),to=n(form.get('to'));if(!isDate(date)||from<=0||to<=0){toast('분할 날짜와 비율을 확인해 주세요.');return;}const row: any=record||{id:uid('s'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()},before=record?clone(record):null;Object.assign(row,{date,from,to,type:to<from?'reverse':'forward'});if(!edit)state.splits.push(row);if(computeProject(project).oversells.length){if(edit)Object.assign(row,before);else state.splits=state.splits.filter((item: any)=>item!==row);toast('이 분할을 반영하면 이후 매도 기록이 보유주수를 초과합니다.');return;}await saveState(true);closeModal();renderAll();showPage('projects');toast('분할 비율을 반영했습니다.');};
+    document.getElementById('splitForm')!.onsubmit=async (event: Event)=>{event.preventDefault();const form=submittedFormData(event),date=String(form.get('date')),from=n(form.get('from')),to=n(form.get('to'));if(!isDate(date)||from<=0||to<=0){toast('분할 날짜와 비율을 확인해 주세요.');return;}const row: any=record||{id:uid('s'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString()},before=record?clone(record):null;Object.assign(row,{date,from,to,type:to<from?'reverse':'forward'});if(!edit)state.splits.push(row);if(computeProject(project).oversells.length){if(edit)Object.assign(row,before);else state.splits=state.splits.filter((item: any)=>item!==row);toast('이 분할을 반영하면 이후 매도 기록이 보유주수를 초과합니다.');return;}await saveState(true);closeModal();renderAll();showPage('projects');toast('분할 비율을 반영했습니다.');};
   }
 
   function recordByToken(token: any): any {
@@ -449,7 +455,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const calc: any=computeProject(projectId),project=calc.project;
     const basis: any=editing&&project.recovery?.locked?n(project.recovery.basis):calc.targetBasisSuggestion,startDate=editing&&project.recovery?.locked?project.recovery.startDate:(calc.targetReachedDate||todayISO());
     openModal(`<h3 class="modal-title">${project.symbol} 원금회수 기준 ${editing?'수정':'확정'}</h3><p class="modal-desc">목표 달성 시점까지 직접 넣은 순투입 원금을 고정합니다. 이후에는 실제로 계좌 밖으로 인출한 배당금만 회수액으로 계산합니다.</p><form id="recoveryForm" class="form-grid"><div><label class="input-label">기준원금 USD</label><input class="input" name="basis" type="number" min="0.01" step="0.01" required value="${round(basis,2)}"></div><div><label class="input-label">회수 시작일</label><input class="input" name="startDate" type="date" required value="${startDate}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">${editing?'수정 저장':'확정'}</button></div></form>`);
-    document.getElementById('recoveryForm').onsubmit=async (event: any)=>{event.preventDefault();const form: any=new FormData(event.currentTarget),nextBasis=n(form.get('basis')),nextStartDate=String(form.get('startDate'));if(nextBasis<=0||!isDate(nextStartDate)){toast('기준원금과 시작일을 확인해 주세요.');return;}project.recovery={locked:true,basis:nextBasis,startDate:nextStartDate,targetReachedDate:project.recovery?.targetReachedDate||calc.targetReachedDate||nextStartDate,calculatedBasisAtLock:calc.targetBasisSuggestion,confirmedAt:new Date().toISOString(),method:'withdrawnOnly'};await saveState(true);closeModal();renderAll();showPage('goal');toast(editing?'원금회수 기준을 수정했습니다.':'원금회수 단계를 시작했습니다.');};
+    document.getElementById('recoveryForm')!.onsubmit=async (event: Event)=>{event.preventDefault();const form=submittedFormData(event),nextBasis=n(form.get('basis')),nextStartDate=String(form.get('startDate'));if(nextBasis<=0||!isDate(nextStartDate)){toast('기준원금과 시작일을 확인해 주세요.');return;}project.recovery={locked:true,basis:nextBasis,startDate:nextStartDate,targetReachedDate:project.recovery?.targetReachedDate||calc.targetReachedDate||nextStartDate,calculatedBasisAtLock:calc.targetBasisSuggestion,confirmedAt:new Date().toISOString(),method:'withdrawnOnly'};await saveState(true);closeModal();renderAll();showPage('goal');toast(editing?'원금회수 기준을 수정했습니다.':'원금회수 단계를 시작했습니다.');};
   }
 
   function downloadFile(filename: any,content: any,type: any ='application/octet-stream'): any { const blob: any=content instanceof Blob?content:new Blob([content],{type});const url: any=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
@@ -470,7 +476,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(await nativeBackupFile(true))return;
       if(window?.Capacitor?.isNativePlatform?.()){toast('파일 저장을 지원하는 새 APK로 업데이트해 주세요. 앱은 삭제하지 마세요.');return;}
       downloadFile(preparedBackupFilename,preparedBackup,'application/zip');toast('브라우저에 백업 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
-    }catch(error: any){toast('백업 저장에 실패했습니다. 다시 시도해 주세요.');}
+    }catch (error: unknown){toast('백업 저장에 실패했습니다. 다시 시도해 주세요.');}
   }
   async function saveBackupToChosenLocation(): Promise<any> {
     if(!preparedBackup||!preparedBackupFilename){toast('백업을 다시 준비해 주세요.');return;}
@@ -488,8 +494,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         await nav.share({files:[file],title:'DividendOS 백업'});closeModal();toast('선택한 앱으로 ZIP 백업을 전달했습니다.');return;
       }
       downloadFile(preparedBackupFilename,preparedBackup,'application/zip');toast('브라우저에 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
-    }catch(error: any){
-      if(error?.name==='AbortError')return;
+    }catch (error: unknown){
+      if(isRecord(error)&&error.name==='AbortError')return;
       console.error(error);toast('위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
     }
   }
@@ -504,7 +510,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       preparedBackup=zip;preparedBackupFilename=filename;
       openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 직접 선택하거나 다운로드 폴더에 바로 저장할 수 있습니다.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button></div><p class="detail-note">설치 앱은 Android 저장 창을 사용합니다. 웹에서는 지원되는 저장 창·공유·다운로드를 사용합니다. 저장 후 파일을 확인해 주세요.</p>`);
       state.meta.lastBackupPreparedAt=new Date().toISOString();await saveState(true);
-    }catch (error: any){console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
+    }catch (error: unknown){console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
     finally{backupRunning=false;}
   }
   async function restoreFromFile(file: any): Promise<any> {
@@ -516,8 +522,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const engine: any=createPortfolioEngine(()=>restored,()=>restored.projects[0].id);
       if(engine.totals().rows.some((c: any)=>c.oversells.length))throw new Error('보유량을 초과하는 매도 기록이 있습니다.');
       openModal(`<h3 class="modal-title">백업 복원 확인</h3><p class="modal-desc">종목 ${restored.projects.length}개 · 거래 ${restored.trades.length}건 · 배당 ${restored.dividends.length}건<br>현재 V4 기록을 교체합니다. 현재 기록은 기기에 안전 복사하며 기존 MSTY 원본은 건드리지 않습니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmRestore">확인 후 복원</button></div>`);
-      document.getElementById('confirmRestore').onclick=async()=>{const previousProjectId: any=selectedProjectId;await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects().some((project: any)=>project.id===previousProjectId)?previousProjectId:(activeProjects()[0]?.id||'');await saveState(true);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');};
-    }catch (error: any){toast(error?.message||'지원되는 DividendOS ZIP이 아닙니다.');}
+      document.getElementById('confirmRestore')!.onclick=async()=>{const previousProjectId: any=selectedProjectId;await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects().some((project: any)=>project.id===previousProjectId)?previousProjectId:(activeProjects()[0]?.id||'');await saveState(true);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');};
+    }catch (error: unknown){toast(errorMessage(error)||'지원되는 DividendOS ZIP이 아닙니다.');}
   }
   async function restoreSafetyCopy(): Promise<any> {
     const previous: any=await storageGet(SAFETY_KEY);
@@ -545,7 +551,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     return new Promise(resolve=>{
       openModal(`<h3 class="modal-title">클라우드 기록 확인</h3><p class="modal-desc">기기와 클라우드에 서로 다른 기록이 있습니다.<br>기기: 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>클라우드: 거래 ${cloudState.trades.length}건 · 배당 ${cloudState.dividends.length}건<br>선택하지 않아도 로그인과 기기 저장은 계속 사용할 수 있습니다.</p><div class="form-grid"><button class="btn primary" id="useLocal">이 기기 기록을 클라우드에 저장</button><button class="btn secondary" id="useCloud">클라우드 기록으로 기기 교체</button></div>`);
       cloudChoiceResolve=resolve;
-      for(const [id,choice] of [['useLocal','local'],['useCloud','cloud']])document.getElementById(id).onclick=()=>{cloudChoiceResolve=null;closeModal();resolve(choice);};
+      for(const [id,choice] of [['useLocal','local'],['useCloud','cloud']])document.getElementById(id)!.onclick=()=>{cloudChoiceResolve=null;closeModal();resolve(choice);};
     });
   }
   async function connectCloudForUser(user: any,review=false): Promise<any> {
@@ -575,7 +581,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       },(error: any)=>{if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;console.error(error);cloudReady=false;setSaveStatus('동기화 오류','cloud-error');});
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid){unsubscribe?.();return;}cloudUnsubscribe=unsubscribe;
       setSaveStatus('','cloud-ok');
-    }catch (error: any){if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
+    }catch (error: unknown){if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
   async function initAuth(): Promise<any>{await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{cloudConnectGeneration++;currentUser=null;cloudBaseSignature=null;pendingCloudState=null;cloudReady=false;cloudRevision=0;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:(message: any)=>toast(message,{haptic:true})});}
 
@@ -642,13 +648,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       state.integrations.toss.dividendCandidates=state.integrations.toss.dividendCandidates.filter((row: any)=>!importedDividendIds.has(String(row?.externalId||'')));
       state.integrations.toss.lastAutoImportReason='';
       return {imported,buys,sells,dividends,reason:''};
-    }catch(error: any){state=before;state.integrations.toss.lastAutoImportReason=error?.message||'validation';return {imported:0,reason:error?.message||'validation'};}
+    }catch (error: unknown){state=before;state.integrations.toss.lastAutoImportReason=errorMessage(error)||'validation';return {imported:0,reason:errorMessage(error)||'validation'};}
   }
 
   async function refreshNativeTossStatus(): Promise<any>{
     if(!nativeTossStatus.available)return nativeTossStatus;
     try{nativeTossStatus={...nativeTossStatus,...await nativeTossCredentialStatus()};}
-    catch (_: any){nativeTossStatus={...nativeTossStatus,configured:false};}
+    catch (_: unknown){nativeTossStatus={...nativeTossStatus,configured:false};}
     return nativeTossStatus;
   }
 
@@ -656,7 +662,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(!appUpdateStatus.available)return appUpdateStatus;
     appUpdateStatus={...appUpdateStatus,checking:true,error:''};
     try{appUpdateStatus={...appUpdateStatus,...await fetchHotUpdateStatus(),checking:false,error:''};}
-    catch(error: any){appUpdateStatus={...appUpdateStatus,checking:false,error:error?.message||'업데이트 확인 실패'};}
+    catch (error: unknown){appUpdateStatus={...appUpdateStatus,checking:false,error:errorMessage(error)||'업데이트 확인 실패'};}
     return appUpdateStatus;
   }
 
@@ -664,16 +670,16 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(appUpdateStatus.checking)return;
     appUpdateStatus={...appUpdateStatus,checking:true,error:''};renderSettings();showPage('settings');
     try{await installHotUpdate();toast('업데이트를 적용하고 다시 시작합니다.');}
-    catch(error: any){appUpdateStatus={...appUpdateStatus,checking:false,error:error?.message||'업데이트 실패'};renderSettings();showPage('settings');toast(appUpdateStatus.error);}
+    catch (error: unknown){appUpdateStatus={...appUpdateStatus,checking:false,error:errorMessage(error)||'업데이트 실패'};renderSettings();showPage('settings');toast(appUpdateStatus.error);}
   }
 
   function openNativeTossSetup(): any{
     openModal(`<h3 class="modal-title">토스 최초 설정</h3><p class="modal-desc">토스 WTS에서 발급한 Client ID와 Secret을 한 번만 입력하세요. 이 기기의 Android 보안 저장소에 암호화해 보관하며 화면에 다시 표시하지 않습니다.</p><form id="tossNativeSetupForm" class="form-grid"><div><label class="input-label">Client ID</label><input class="input" name="clientId" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required maxlength="256"></div><div><label class="input-label">Client Secret</label><input class="input" name="clientSecret" type="password" autocomplete="new-password" required maxlength="512"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">안전하게 저장</button></div></form>`);
-    document.getElementById('tossNativeSetupForm').onsubmit=async(event: any)=>{
+    document.getElementById('tossNativeSetupForm')!.onsubmit=async(event: Event)=>{
       event.preventDefault();if(modalSaving)return;modalSaving=true;
-      const form: any=new FormData(event.currentTarget);
-      try{await saveNativeTossCredentials(form.get('clientId'),form.get('clientSecret'));nativeTossStatus={...nativeTossStatus,configured:true};modalDirty=false;closeModal();renderSettings();showPage('settings');toast('토스 키를 이 기기에 저장했습니다.');await syncNativeTossReadOnly();}
-      catch(error: any){toast(error?.message||'토스 키를 저장하지 못했습니다.');}
+      const form=submittedFormData(event);
+      try{await saveNativeTossCredentials(String(form.get('clientId')||''),String(form.get('clientSecret')||''));nativeTossStatus={...nativeTossStatus,configured:true};modalDirty=false;closeModal();renderSettings();showPage('settings');toast('토스 키를 이 기기에 저장했습니다.');await syncNativeTossReadOnly();}
+      catch (error: unknown){toast(errorMessage(error)||'토스 키를 저장하지 못했습니다.');}
       finally{modalSaving=false;}
     };
   }
@@ -681,7 +687,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   async function copyTossIp(ip: any=pendingTossIp||nativeTossStatus.publicIp): Promise<any>{
     if(!ip){toast('복사할 IP가 없습니다.');return;}
     try{await navigator.clipboard.writeText(ip);toast('현재 IP를 복사했습니다.');}
-    catch (_: any){toast(`현재 IP: ${ip}`);}
+    catch (_: unknown){toast(`현재 IP: ${ip}`);}
   }
 
   function openTossIpStep(ip: any): any{
@@ -695,7 +701,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     nativeTossStatus={...nativeTossStatus,checking:true};renderSettings();showPage('settings');
     let currentIp: any='';
     try{currentIp=await nativePublicIp();nativeTossStatus={...nativeTossStatus,publicIp:currentIp,checking:false};}
-    catch(error: any){nativeTossStatus={...nativeTossStatus,checking:false};renderSettings();toast(error?.message||'현재 IP를 확인하지 못했습니다.');return;}
+    catch (error: unknown){nativeTossStatus={...nativeTossStatus,checking:false};renderSettings();toast(errorMessage(error)||'현재 IP를 확인하지 못했습니다.');return;}
     if(!ipConfirmed&&nativeTossStatus.lastPublicIp!==currentIp){renderSettings();openTossIpStep(currentIp);return;}
     pendingTossIp='';
     return runTossImport(async()=>{const snapshot: any=await fetchNativeTossSnapshot({from:nextTossSyncFrom(state.integrations.toss),symbols:activeProjects().map((project: any)=>project.symbol)});await markNativeTossPublicIp(currentIp);nativeTossStatus={...nativeTossStatus,lastPublicIp:currentIp};return snapshot;},'Toss Android read-only sync error');
@@ -737,8 +743,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     try{
       const snapshot: any=await loadSnapshot();
       await applyTossSnapshot(snapshot,attemptAt);
-    }catch (error: any){
-      console.error(errorPrefix,error);state.integrations.toss={...beforeSync,status:'error',lastAttemptAt:attemptAt,lastError:error?.message||'토스 조회 파일을 처리하지 못했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
+    }catch (error: unknown){
+      console.error(errorPrefix,error);state.integrations.toss={...beforeSync,status:'error',lastAttemptAt:attemptAt,lastError:errorMessage(error)||'토스 조회 파일을 처리하지 못했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
     }finally{tossSyncRunning=false;if(state.integrations.toss.status==='syncing')state.integrations.toss.status='not_connected';renderSettings();showPage('settings');}
   }
 
@@ -769,7 +775,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const oversold: any=computeProject(project.id).oversells.length>0,comparisons=(toss.comparisons||[]).filter((row: any)=>row.symbol==='MSTY'&&row.supported),mismatch=comparisons.length!==1||comparisons.some((row: any)=>Math.abs(n(row.difference))>=.0001);
     if(oversold||mismatch||validateLedger(state).length){state=before;toast(oversold?'토스 원본에 과매도가 있어 기존 기록을 유지했습니다.':mismatch?'토스 보유주수와 재구축 결과를 정확히 대조할 수 없어 기존 기록을 유지했습니다.':'원장 검증을 통과하지 못해 기존 기록을 유지했습니다.');return;}
     try{await storageSet(SAFETY_KEY,before);state.meta={...state.meta,lastAuthoritativeMstyImportAt:new Date().toISOString()};await saveState(true);}
-    catch(error: any){state=before;console.error('MSTY rebuild save failed',error);renderAll();toast('재구축 기록을 저장하지 못해 기존 기록을 유지했습니다.');return;}
+    catch (error: unknown){state=before;console.error('MSTY rebuild save failed',error);renderAll();toast('재구축 기록을 저장하지 못해 기존 기록을 유지했습니다.');return;}
     renderAll();showPage('settings');
     toast(`MSTY 거래 ${rebuilt.replacedTrades}건을 토스 원본 ${rebuilt.importedTrades}건으로 다시 만들었습니다.${rebuilt.preservedDividends?` 배당 ${rebuilt.preservedDividends}건은 유지했습니다.`:''}`);
   }
@@ -779,14 +785,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const rows=TOSS_EXCEPTION_FIELDS.flatMap(field=>(toss[field]||[]).map((row: any)=>({field,row,key:tossExceptionKey(field,row,toss.accountScopeId||'')})));
     if(!rows.length){toast('삭제할 예외가 없습니다.');return;}
     openModal(`<h3 class="modal-title">예외 삭제</h3><p class="modal-desc">선택한 예외만 목록에서 삭제합니다. 저장된 거래·배당과 토스 원본은 유지합니다. 같은 내역은 다음 갱신에도 다시 표시하지 않으며, 토스 원본이 변경되면 다시 확인합니다.</p><form id="tossDeleteForm" class="form-grid"><button class="btn soft" type="button" id="selectAllTossExceptions">전체 선택</button><div class="list">${rows.map(({field,row},index)=>`<label class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${field.includes('Correction')||field==='correctionCandidates'?'원본 변경':field==='dividendCandidates'?'배당':row.type==='sell'?'매도':'매수'}</div><div class="row-sub">${fmtDate(row.date)} · ${field.includes('dividend')?fmtMoney(row.amountUSD,2):fmtShares(row.shares)+'주'}</div></div><input type="checkbox" name="exception" value="${index}"></label>`).join('')}</div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">선택 예외 삭제</button></div></form>`);
-    document.getElementById('selectAllTossExceptions').onclick=()=>{document.querySelectorAll('#tossDeleteForm input[name="exception"]').forEach((input: any)=>{input.checked=true;});};
-    document.getElementById('tossDeleteForm').onsubmit=(event: any)=>{
-      event.preventDefault();const selected=new FormData(event.currentTarget).getAll('exception').map(Number).map(index=>rows[index]?.key).filter(Boolean) as string[];
+    document.getElementById('selectAllTossExceptions')!.onclick=()=>{document.querySelectorAll('#tossDeleteForm input[name="exception"]').forEach((input: any)=>{input.checked=true;});};
+    document.getElementById('tossDeleteForm')!.onsubmit=(event: Event)=>{
+      event.preventDefault();const selected=submittedFormData(event).getAll('exception').map(Number).map(index=>rows[index]?.key).filter(Boolean) as string[];
       if(!selected.length){toast('삭제할 예외를 선택해 주세요.');return;}
       confirmAction('예외 삭제 확인',`${selected.length}건을 예외 목록에서 삭제합니다. 이미 저장된 거래·배당과 보유주수는 바뀌지 않습니다.`,async()=>{
         const before=clone(state);
         try{await storageSet(SAFETY_KEY,before);state.integrations.toss=dismissTossExceptions(state.integrations.toss,selected);if(!TOSS_EXCEPTION_FIELDS.some(field=>state.integrations.toss[field]?.length))state.integrations.toss.lastAutoImportReason='';await saveState(true);closeModal();renderAll();showPage('settings');toast(`${selected.length}건의 예외를 삭제했습니다.`);}
-        catch(error: any){state=before;renderAll();toast('예외 삭제를 저장하지 못해 기존 목록을 유지했습니다.');}
+        catch (error: unknown){state=before;renderAll();toast('예외 삭제를 저장하지 못해 기존 목록을 유지했습니다.');}
       },'삭제');
     };
   }
@@ -795,8 +801,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const candidates: any=mergeTossCandidates(state.integrations.toss.candidates||[],[]),dividendCandidates=mergeTossDividendCandidates(state.integrations.toss.dividendCandidates||[],[]);state.integrations.toss.candidates=candidates;state.integrations.toss.dividendCandidates=dividendCandidates;
     if(!candidates.length&&!dividendCandidates.length){toast('검토할 신규 기록이 없습니다.');return;}
     openModal(`<h3 class="modal-title">토스 신규 기록 검토</h3><p class="modal-desc">선택한 기록만 V4 장부에 저장합니다. 수동 기록과 유사한 후보는 중복 가능성이 있어 기본 선택하지 않습니다.</p><form id="tossReviewForm" class="form-grid"><div class="list">${candidates.map((row: any,index: any)=>`<label class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${row.type==='sell'?'매도':'매수'} ${fmtShares(row.shares)}주${row.possibleManualDuplicate?' · 수동 기록 유사':''}</div><div class="row-sub">${fmtDate(row.date)} · 단가 ${fmtMoney(row.price)} · 수수료 ${fmtMoney(row.feeUSD||0,2)}${row.accountLabel?` · ${esc(row.accountLabel)}`:''}</div></div><input type="checkbox" name="tradeCandidate" value="${index}" ${row.possibleManualDuplicate?'':'checked'}></label>`).join('')}${dividendCandidates.map((row: any,index: any)=>`<label class="list-row"><div><div class="row-title">${esc(row.symbol)} · 세후배당 ${fmtMoney(row.amountUSD,2)}${row.possibleManualDuplicate?' · 수동 기록 유사':''}</div><div class="row-sub">${fmtDate(row.date)}${row.accountLabel?` · ${esc(row.accountLabel)}`:' · 토스 입금 기록'}</div></div><input type="checkbox" name="dividendCandidate" value="${index}" ${row.possibleManualDuplicate?'':'checked'}></label>`).join('')}</div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">선택 기록 저장</button></div></form>`);
-    document.getElementById('tossReviewForm').onsubmit=async (event: any)=>{
-      event.preventDefault();const submitted: any=new FormData(event.currentTarget),selected=new Set(submitted.getAll('tradeCandidate').map(Number)),selectedDividends=new Set(submitted.getAll('dividendCandidate').map(Number));
+    document.getElementById('tossReviewForm')!.onsubmit=async (event: Event)=>{
+      event.preventDefault();const submitted=submittedFormData(event),selected=new Set(submitted.getAll('tradeCandidate').map(Number)),selectedDividends=new Set(submitted.getAll('dividendCandidate').map(Number));
       if(!selected.size&&!selectedDividends.size){toast('저장할 기록을 선택해 주세요.');return;}
       const projectsBefore: any=clone(state.projects),tradesBefore=clone(state.trades),dividendsBefore=clone(state.dividends),importedIds=new Set(),importedDividendIds=new Set(),affectedProjectIds=new Set();let imported: any=0;
       candidates.forEach((row: any,index: any)=>{
@@ -825,21 +831,22 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     };
   }
 
-  function handleClick(event: any): any {
-    const button: any=event.target.closest('button,[data-open-project],[data-goal-detail]');if(!button)return;
+  function handleClick(event: Event): void {
+    if(!(event.target instanceof Element))return;
+    const button=event.target.closest<HTMLElement>('button,[data-open-project],[data-goal-detail]');if(!button)return;
     if(button.dataset.page){showPage(button.dataset.page);return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency;saveState();renderAll(true);return;}
     if(button.dataset.chartKey){chartSelection=button.dataset.chartKey;renderProjects();return;}
     if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'',button.dataset.incomeSymbol||'');return;}
-    if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector('.record-center').open=true;return;}
-    if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector('.record-center').open=true;return;}
+    if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;return;}
+    if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;return;}
     if(button.dataset.chartYearShift){const latest: any=computeProject(selectedProjectId).postedDividends.map((row: any)=>String(row.date).slice(0,4)).filter((year: any)=>/^\d{4}$/.test(year)).sort().at(-1)||todayISO().slice(0,4),base=/^\d{4}$/.test(chartYear)?Number(chartYear):Number(latest);chartYear=String(base+Number(button.dataset.chartYearShift));chartSelection='';renderProjects();return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;chartSelection='';renderProjects();return;}
     if(button.dataset.homeCashflowMode){homeCashflowMode=button.dataset.homeCashflowMode;cashflowMonthKey='';rememberView();renderHome();return;}
     if(button.dataset.homeYearRange){homeYearRange=button.dataset.homeYearRange;cashflowMonthKey='';rememberView();renderHome();return;}
     if(button.dataset.cashflowPeriod){cashflowMonthKey=button.dataset.cashflowPeriod;renderHome();return;}
     if(button.dataset.portfolioGroup){historyFilter={};historyLimit=10;portfolioGroup=button.dataset.portfolioGroup==='dividend'?'dividend':'highYield';const first: any=activeProjects().find((project: any)=>(project.category==='highYield'?'highYield':'dividend')===portfolioGroup);if(first)selectedProjectId=first.id;renderProjects();return;}
-    if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');const card: any=[...document.querySelectorAll('.goal-step-card')].find(el=>el.dataset.goalProject===selectedProjectId);if(card){card.open=true;card.scrollIntoView({block:'nearest'});}return;}
+    if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');const card: any=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card')].find(el=>el.dataset.goalProject===selectedProjectId);if(card){card.open=true;card.scrollIntoView({block:'nearest'});}return;}
     if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
     if(button.dataset.openProject){selectedProjectId=button.dataset.openProject;renderProjects();showPage('projects');return;}
     if(button.dataset.selectProject){historyFilter={};historyLimit=10;selectedProjectId=button.dataset.selectProject;renderProjects();return;}
@@ -858,23 +865,23 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(button.dataset.deleteRecord){deleteRecord(button.dataset.deleteRecord);return;}
     if('projectCheck'in button.dataset){showIssues(selectedProjectId);return;}
     if('allCheck'in button.dataset){showIssues();return;}
-    if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project: any=projectById(id);if(!project||project.afterGoalMode===mode)return;project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');const cards: any=[...document.querySelectorAll('.goal-step-card')];cards.find((card: any)=>card.querySelector('[data-goal-mode]')?.dataset.goalMode.startsWith(id+':'))?.setAttribute('open','');toast('목표 달성 후 운용 방식을 저장했습니다.');});return;}
+    if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project: any=projectById(id);if(!project||project.afterGoalMode===mode)return;project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');const cards: any=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card')];cards.find((card: any)=>card.querySelector('[data-goal-mode]')?.dataset.goalMode.startsWith(id+':'))?.setAttribute('open','');toast('목표 달성 후 운용 방식을 저장했습니다.');});return;}
     if(button.dataset.lockRecovery){lockRecovery(button.dataset.lockRecovery);return;}
     if(button.dataset.editRecovery){lockRecovery(button.dataset.editRecovery,true);return;}
     if(button.dataset.restoreProject){const project: any=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
     if('localMode'in button.dataset){localOnlySession=true;persistLocalMode(true);document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
-    if('showLogin'in button.dataset){if(currentUser){document.getElementById('authGate')?.classList.add('hidden');showPage('settings');return;}if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;persistLocalMode(false);const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus').textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
+    if('showLogin'in button.dataset){if(currentUser){document.getElementById('authGate')?.classList.add('hidden');showPage('settings');return;}if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;persistLocalMode(false);const gate: any=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus')!.textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
     if('backupDownload'in button.dataset){downloadPreparedBackup();return;}
     if('backupSave'in button.dataset){saveBackupToChosenLocation();return;}
-    if('replaceDividends'in button.dataset){document.getElementById('dividendReplacementInput').click();return;}
+    if('replaceDividends'in button.dataset){document.getElementById('dividendReplacementInput')!.click();return;}
     if(button.dataset.dividendSchedule){openDividendSchedule(button.dataset.dividendSchedule);return;}
-    if('restore'in button.dataset){document.getElementById('restoreInput').click();return;}
+    if('restore'in button.dataset){document.getElementById('restoreInput')!.click();return;}
     if('reviewCloud'in button.dataset){if(currentUser)connectCloudForUser(currentUser,true);else toast('클라우드 연결 후 사용할 수 있습니다.');return;}
     if('restoreSafety'in button.dataset){restoreSafetyCopy().catch(()=>toast('안전 사본을 읽지 못했습니다.'));return;}
     if('restoreAuto'in button.dataset){restoreLatestAutoBackup().catch(()=>toast('자동 백업을 읽지 못했습니다.'));return;}
     if('csv'in button.dataset){exportCSV();return;}
-    if('importToss'in button.dataset){document.getElementById('tossImportInput').click();return;}
+    if('importToss'in button.dataset){document.getElementById('tossImportInput')!.click();return;}
     if('configureToss'in button.dataset){openNativeTossSetup();return;}
     if('tossCopyIp'in button.dataset){copyTossIp();return;}
     if('openTossIp'in button.dataset){copyTossIp().finally(()=>openTossIpManagement());return;}
@@ -901,26 +908,26 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function bindStaticEvents(): any {
     window.addEventListener('online',()=>{refreshExchangeRate();refreshOfficialDistributions();});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshExchangeRate();});
-    document.addEventListener('submit',(event: any)=>{
-      const form: any=event.target;if(!(form instanceof HTMLFormElement))return;
-      const futureDate: any=form.id==='dividendScheduleForm'?null:[...form.querySelectorAll('input[type="date"]')].find((input: any)=>input.value&&input.value>todayISO());
+    document.addEventListener('submit',(event: Event)=>{
+      const form=event.target;if(!(form instanceof HTMLFormElement))return;
+      const futureDate=form.id==='dividendScheduleForm'?null:[...form.querySelectorAll<HTMLInputElement>('input[type="date"]')].find((input)=>input.value&&input.value>todayISO());
       if(futureDate){event.preventDefault();event.stopImmediatePropagation();futureDate.setCustomValidity('미래 날짜는 실제 기록으로 저장할 수 없습니다.');futureDate.reportValidity();setTimeout(()=>futureDate.setCustomValidity(''),1200);return;}
       if(form.dataset.submitting==='true'){event.preventDefault();event.stopImmediatePropagation();return;}
       form.dataset.submitting='true';
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;},800);
     },true);
-    document.addEventListener('click',(event: any)=>{handleClick(event);rememberView();});
+    document.addEventListener('click',(event: Event)=>{handleClick(event);rememberView();});
     window.addEventListener('pagehide',rememberView);
-    document.addEventListener('submit',(event: any)=>{if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form: any=new FormData(event.target);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();document.querySelector('.record-center').open=true;});
-    document.addEventListener('change',(event: any)=>{if(event.target.matches('[data-project-select]')){selectedProjectId=event.target.value;renderProjects();rememberView();return;}if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();rememberView();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();rememberView();});
-    document.getElementById('modal').addEventListener('input',()=>{modalDirty=true;});
-    document.getElementById('modal').addEventListener('change',()=>{modalDirty=true;});
-    document.getElementById('modalBackdrop').addEventListener('click',(event: any)=>{if(event.target.id==='modalBackdrop')requestCloseModal();});
-    document.addEventListener('keydown',(event: any)=>{const card: any=event.target.closest?.('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
-    document.getElementById('dividendReplacementInput').addEventListener('change',(event: any)=>{const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
-    document.getElementById('restoreInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
-    document.getElementById('tossImportInput').addEventListener('change',(event: any)=>{const file: any=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
-    document.addEventListener('submit',(event: any)=>{const id: any=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form: any=new FormData(event.target);let next: any={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW: any=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();});});
+    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=submittedFormData(event);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;});
+    document.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement||event.target instanceof HTMLSelectElement))return;if(event.target.matches('[data-project-select]')){selectedProjectId=event.target.value;renderProjects();rememberView();return;}if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();rememberView();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();rememberView();});
+    document.getElementById('modal')!.addEventListener('input',()=>{modalDirty=true;});
+    document.getElementById('modal')!.addEventListener('change',()=>{modalDirty=true;});
+    document.getElementById('modalBackdrop')!.addEventListener('click',(event: Event)=>{if(event.target instanceof Element&&event.target.id==='modalBackdrop')requestCloseModal();});
+    document.addEventListener('keydown',(event: KeyboardEvent)=>{if(!(event.target instanceof Element))return;const card=event.target.closest<HTMLElement>('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
+    document.getElementById('dividendReplacementInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
+    document.getElementById('restoreInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file: any=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
+    document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file: any=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
+    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=submittedFormData(event);let next: any={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:String(form.get('appearance'))};message='화면 설정을 저장했습니다.';}else{const thresholdKRW: any=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.keys(next).every(key=>state.settings[key]===next[key])){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
   }
@@ -945,7 +952,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(demoMode){const banner: any=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
       if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(console.warn);
-    }catch (error: any){console.error(error);document.getElementById('page-home').innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
+    }catch (error: unknown){console.error(error);document.getElementById('page-home')!.innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
   }
 
   init();

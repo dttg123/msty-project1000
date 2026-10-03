@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { blankProject, blankState, migrate, migrateLegacy, normalizeV4 } from '../modules/state.js';
 import { createPortfolioEngine } from '../modules/portfolio.js';
+import {validateLedger} from '../modules/validation.js';
 import { buildMigrationAudit, summarizeLegacyState } from '../modules/migration.js';
 
 function engineFor(state, selected = state.projects[0]?.id || '') {
@@ -307,3 +308,15 @@ testMixedBuyUsesDividendOnce();
 testTenYearGoalAndCashflowRecovery();
 testWithdrawnOnlyRecoveryAndProfitStage();
 console.log('DividendOS v0.9.4 domain QA: PASS');
+
+// Malformed project rows remain visible to validation instead of being silently replaced.
+for(const value of [null,1,'bad',true,[]]){
+  const payload={...blankState(),projects:[value]};
+  assert.doesNotThrow(()=>normalizeV4(payload));
+  assert.ok(validateLedger(normalizeV4(payload)).length>0);
+}
+const stringLegacy={settings:{currentPrice:'20',targetUnits:'500'},trades:[{id:'legacy-string',type:'buy',buyType:'direct',date:'2020-01-01',shares:'2',price:'10'}],dividends:[],splits:[]};
+const migratedString=migrateLegacy(stringLegacy);
+assert.equal(migratedString.trades[0].shares,'2','migration preserves historical payload fields');
+assert.deepEqual(validateLedger(migratedString),[]);
+assert.equal(buildMigrationAudit(stringLegacy,migratedString,engineFor(migratedString).computeProject(migratedString.projects[0])).passed,true);

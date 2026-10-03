@@ -3,6 +3,9 @@ import type { createPortfolioEngine, ProjectCalculation } from '../modules/portf
 import type { incomeEstimate } from '../modules/income.js';
 import type { readStateFromBackupFile } from '../backup.js';
 import type { TossSnapshotPayload } from '../toss-client.js';
+import type { normalizeTossOrder, normalizeTossDividend, buildTossSync } from '../modules/toss.js';
+import type { ViewContext } from '../modules/views.js';
+import type { summarizeLegacyState } from '../modules/migration.js';
 import type { User } from 'firebase/auth';
 
 type Assert<T extends true> = T;
@@ -20,4 +23,10 @@ type RestoredDataNeedsValidation = Assert<Equal<Awaited<ReturnType<typeof readSt
 type TossRawRowNeedsValidation = Assert<Equal<TossSnapshotPayload['orders'][number], Record<string, unknown>>>;
 type GoogleIdentityIsTyped = Assert<Equal<IsAny<User['uid']>, false>>;
 
+type TossNormalizerAcceptsUnknown = Assert<Equal<Parameters<typeof normalizeTossOrder>[0], unknown>>;
+type TossSharesAreNumeric = Assert<Equal<NonNullable<ReturnType<typeof normalizeTossOrder>>['shares'], number>>;
+type TossDividendAmountIsNumeric = Assert<Equal<NonNullable<ReturnType<typeof normalizeTossDividend>>['amountUSD'], number>>;
+type TossCandidateIsTyped = Assert<Equal<IsAny<ReturnType<typeof buildTossSync>['candidates'][number]>, false>>;
+type ViewStateIsTyped = Assert<Equal<ReturnType<ViewContext['getState']>, AppState>>;
+type LegacyAuditBasisIsNumeric = Assert<Equal<ReturnType<typeof summarizeLegacyState>['costBasis'], number>>;
 export {};

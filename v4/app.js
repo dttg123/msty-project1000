@@ -17,12 +17,25 @@ import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvaila
 import { validateLedger } from './modules/validation.js';
 import { demoState } from './modules/demo.js';
 import { FREQUENCIES } from './modules/income.js';
-import { clone, esc, isDate, n, round, todayISO, uid } from './modules/utils.js';
+import { clone, esc, isDate, isRecord, n, round, todayISO, uid } from './modules/utils.js';
 import { listAutoBackups, readAutoBackup, rotateAutoBackups } from './modules/backup-history.js';
 import { tickerChange } from './modules/corporate-actions.js';
 import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, installHotUpdate, isHotUpdateAvailable } from './hot-update.js';
 (() => {
     'use strict';
+    const errorMessage = (error) => error instanceof Error ? error.message : isRecord(error) && typeof error.message === 'string' ? error.message : '';
+    function submittedFormData(event) {
+        const form = event.currentTarget instanceof HTMLFormElement ? event.currentTarget : event.target;
+        if (!(form instanceof HTMLFormElement))
+            throw new Error('입력 양식을 찾을 수 없습니다.');
+        return new FormData(form);
+    }
+    function formControl(form, name) {
+        const input = form.elements.namedItem(name);
+        if (!(input instanceof HTMLInputElement || input instanceof HTMLSelectElement || input instanceof HTMLTextAreaElement))
+            throw new Error(`입력 항목을 찾을 수 없습니다: ${name}`);
+        return input;
+    }
     const bootAt = performance.now();
     const demoMode = new URLSearchParams(location.search).get('demo') === '1';
     let state;
@@ -71,12 +84,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     let cloudConnectGeneration = 0;
     let cloudUnsubscribe = null;
     let applyingCloudState = false;
-    let saveTimer = null;
-    let cloudTimer = null;
+    let saveTimer;
+    let cloudTimer;
     let cloudRevision = 0;
     let cloudWritePending = false;
     let cloudPushQueued = false;
-    let toastTimer = null;
+    let toastTimer;
     let legacyMigrationSource = null;
     let tossSyncRunning = false;
     let nativeTossStatus = { available: isNativeTossAvailable(), configured: false, publicIp: '', lastPublicIp: '', checking: false };
@@ -156,6 +169,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function toast(message, { haptic = false } = {}) {
         const el = document.getElementById('toast');
+        if (!el)
+            return;
         clearTimeout(toastTimer);
         el.textContent = message;
         el.classList.add('show');
@@ -269,7 +284,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 return;
             cloudWritePending = false;
             console.error(error);
-            if (error?.code === 'cloud-conflict') {
+            if (isRecord(error) && error.code === 'cloud-conflict') {
                 const latest = await getCloudDocument(uid).catch(() => null);
                 if (!isCurrent())
                     return;
@@ -386,7 +401,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     function openModal(html) {
         const modal = document.getElementById('modal'), backdrop = document.getElementById('modalBackdrop');
         if (!backdrop.classList.contains('show')) {
-            modalFocus = document.activeElement;
+            modalFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
             modalScroll = window.scrollY;
             document.body.style.position = 'fixed';
             document.body.style.top = `-${modalScroll}px`;
@@ -457,7 +472,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             document.querySelector('#projectForm .form-advanced').open = true;
         document.getElementById('projectForm').onsubmit = async (event) => {
             event.preventDefault();
-            const form = new FormData(event.currentTarget), symbol = String(form.get('symbol')).trim().toUpperCase();
+            const form = submittedFormData(event), symbol = String(form.get('symbol')).trim().toUpperCase();
             if (!/^[A-Z0-9.-]{1,16}$/.test(symbol)) {
                 toast('티커는 영문·숫자·점·하이픈만 입력해 주세요.');
                 return;
@@ -500,13 +515,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       <div data-mixed-only><label class="input-label">혼합매수 배당 사용액 USD</label><input class="input" name="reinvestAmountUSD" type="number" min="0" step="0.01" value="${n(record?.reinvestAmountUSD)}"></div>
       <details><summary>추가 정보 (선택)</summary><div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note || '')}"></div></details>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="trade:${record.id}">이 거래 기록 삭제</button>` : ''}</form>`);
-        const tradeForm = document.getElementById('tradeForm'), typeInput = tradeForm.elements.type, buyTypeInput = tradeForm.elements.buyType;
+        const tradeForm = document.querySelector('#tradeForm'), typeInput = formControl(tradeForm, 'type'), buyTypeInput = formControl(tradeForm, 'buyType');
         const syncTradeFields = () => { const selling = typeInput.value === 'sell'; tradeForm.querySelector('[data-buy-only]').hidden = selling; tradeForm.querySelector('[data-mixed-only]').hidden = selling || buyTypeInput.value !== 'mixed'; };
         typeInput.onchange = syncTradeFields;
         buyTypeInput.onchange = syncTradeFields;
         syncTradeFields();
         tradeForm.onsubmit = async (event) => { event.preventDefault(); if (modalSaving)
-            return; const form = new FormData(event.currentTarget), date = String(form.get('date')), type = form.get('type'), shares = n(form.get('shares')), price = n(form.get('price')), buyType = type === 'sell' ? '' : String(form.get('buyType')), reinvestAmountUSD = buyType === 'mixed' ? n(form.get('reinvestAmountUSD')) : 0; if (!isDate(date) || shares <= 0 || price < 0) {
+            return; const form = submittedFormData(event), date = String(form.get('date')), type = form.get('type'), shares = n(form.get('shares')), price = n(form.get('price')), buyType = type === 'sell' ? '' : String(form.get('buyType')), reinvestAmountUSD = buyType === 'mixed' ? n(form.get('reinvestAmountUSD')) : 0; if (!isDate(date) || shares <= 0 || price < 0) {
             toast('날짜·주수·단가를 확인해 주세요.');
             return;
         } if (reinvestAmountUSD > shares * price + .0001) {
@@ -538,7 +553,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         if (!project)
             return;
         openModal(`<h3 class="modal-title">${esc(project.symbol)} 현재가 수정</h3><p class="modal-desc">평가금액과 목표 매수금 계산에 사용할 현재가입니다.</p><form id="priceForm" class="form-grid"><div><label class="input-label">현재가 USD</label><input class="input" name="price" type="number" min="0.0001" step="0.0001" inputmode="decimal" required value="${n(project.currentPrice) || ''}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
-        document.getElementById('priceForm').onsubmit = async (event) => { event.preventDefault(); const price = n(new FormData(event.currentTarget).get('price')); if (price <= 0)
+        document.getElementById('priceForm').onsubmit = async (event) => { event.preventDefault(); const price = n(submittedFormData(event).get('price')); if (price <= 0)
             return; project.currentPrice = price; project.priceSource = 'manual'; project.priceUpdatedAt = new Date().toISOString(); await saveState(true); closeModal(); renderAll(true); toast('현재가를 저장했습니다.'); };
     }
     function openIncomeMonth(month = todayISO().slice(0, 7), projectId = '', symbolFilter = '') {
@@ -583,7 +598,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                     return;
                 }
                 modalSaving = true;
-                document.getElementById('confirmDividendReplacement').disabled = true;
+                document.querySelector('#confirmDividendReplacement').disabled = true;
                 try {
                     await storageSet(SAFETY_KEY, before);
                     state = next;
@@ -609,7 +624,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             };
         }
         catch (error) {
-            toast(error?.message || '교체 파일을 읽지 못했습니다.');
+            toast(errorMessage(error) || '교체 파일을 읽지 못했습니다.');
         }
     }
     function openDividendSchedule(projectId) {
@@ -619,7 +634,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             event.preventDefault();
             if (modalSaving)
                 return;
-            const form = new FormData(event.currentTarget), exDate = String(form.get('exDate')), payDate = String(form.get('payDate')), sourceURL = String(form.get('sourceURL'));
+            const form = submittedFormData(event), exDate = String(form.get('exDate')), payDate = String(form.get('payDate')), sourceURL = String(form.get('sourceURL'));
             if (!isDate(exDate) || !isDate(payDate) || !/^https:\/\//.test(sourceURL)) {
                 toast('날짜와 HTTPS 공시 주소를 확인해 주세요.');
                 return;
@@ -653,15 +668,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note || '')}"></div>
       </div></details>
       <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button>${!edit ? '<button class="btn soft" type="submit" name="next" value="1">저장 후 계속</button>' : ''}<button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="dividend:${record.id}">이 배당 기록 삭제</button>` : ''}</form>`);
-        const dividendForm = document.getElementById('dividendForm'), preview = document.createElement('div');
+        const dividendForm = document.querySelector('#dividendForm'), preview = document.createElement('div');
         preview.className = 'dividend-preview';
         preview.setAttribute('aria-live', 'polite');
         dividendForm.querySelector('.modal-actions').before(preview);
-        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); dividendForm.elements.amountUSD.step = krw ? '1' : '0.01'; dividendForm.elements.amountUSD.min = krw ? '1' : '0.01'; if (amount <= 0) {
+        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); formControl(dividendForm, 'amountUSD').step = krw ? '1' : '0.01'; formControl(dividendForm, 'amountUSD').min = krw ? '1' : '0.01'; if (amount <= 0) {
             preview.textContent = '실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';
             return;
         } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${krw ? Math.round(amount).toLocaleString('ko-KR') + '원' : fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`; };
-        dividendForm.elements.date.addEventListener('change', updatePreview);
+        formControl(dividendForm, 'date').addEventListener('change', updatePreview);
         dividendForm.addEventListener('input', updatePreview);
         updatePreview();
         dividendForm.onsubmit = async (event) => {
@@ -673,7 +688,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 toast('지급일과 배당금을 확인해 주세요.');
                 return;
             }
-            const keepEntering = !edit && event.submitter?.name === 'next', before = record ? clone(record) : null;
+            const keepEntering = !edit && (event instanceof SubmitEvent ? event.submitter : null)?.getAttribute('name') === 'next', before = record ? clone(record) : null;
             const row = record || { id: uid('d'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString() };
             Object.assign(row, { date, amountUSD, currency: krw ? 'KRW' : 'USD', amountKRW: krw ? entered : undefined, rocPercent: form.get('rocPercent') === '' ? null : n(form.get('rocPercent')), rocStatus: form.get('rocStatus') === 'final' ? 'final' : 'estimated', sharesAtPayment: krw ? 0 : Math.max(0, n(form.get('sharesAtPayment'))), referencePrice: Math.max(0, n(form.get('referencePrice'))), note: String(form.get('note')).trim() });
             if (krw) {
@@ -720,12 +735,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             toast(edit ? '배당을 수정했습니다.' : '배당을 저장했습니다.');
         };
         if (draft)
-            requestAnimationFrame(() => { dividendForm.elements.amountUSD.focus(); dividendForm.elements.amountUSD.select(); });
+            requestAnimationFrame(() => { formControl(dividendForm, 'amountUSD').focus(); formControl(dividendForm, 'amountUSD').select(); });
     }
     function openCashForm(record = null) {
         const project = projectById(record?.projectId || selectedProjectId), edit = !!record;
         openModal(`<h3 class="modal-title">${project.symbol} 잔액 ${edit ? '수정' : '보정'}</h3><p class="modal-desc">실제 사용 가능 배당과 앱 잔액이 다를 때만 더하거나 뺍니다.</p><form id="cashForm" class="form-grid"><div><label class="input-label">날짜</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div><label class="input-label">보정액 USD (+/−)</label><input class="input" name="amountUSD" type="number" step="0.01" value="${n(record?.amountUSD)}" required></div><div><label class="input-label">사유</label><input class="input" name="label" value="${esc(record?.label || '잔액 보정')}" required></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${record.id}">이 보정 기록 삭제</button>` : ''}</form>`);
-        document.getElementById('cashForm').onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget), date = String(form.get('date')), amountUSD = n(form.get('amountUSD')); if (!isDate(date) || !amountUSD) {
+        document.getElementById('cashForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), date = String(form.get('date')), amountUSD = n(form.get('amountUSD')); if (!isDate(date) || !amountUSD) {
             toast('날짜와 0이 아닌 보정액을 입력해 주세요.');
             return;
         } const row = record || { id: uid('c'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString() }; Object.assign(row, { date, amountUSD, label: String(form.get('label')).trim() || '잔액 보정' }); if (!edit)
@@ -738,7 +753,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         openModal(`<h3 class="modal-title">${project.symbol} 배당 인출 ${edit ? '수정' : '기록'}</h3><p class="modal-desc">실제로 계좌 밖으로 뺀 배당금만 기록합니다. 배당 입금이나 재투자는 원금회수로 계산하지 않습니다.</p><form id="withdrawalForm" class="form-grid"><div class="record-detail-grid"><div><span>사용 가능 배당</span><strong>${fmtMoney(available, 2)}</strong></div><div><span>남은 원금</span><strong>${fmtMoney(recoveryStats(calc).remaining, 2)}</strong></div></div><div><label class="input-label">인출일</label><input class="input" name="date" type="date" min="${recovery.startDate}" value="${record?.date || todayISO()}" required></div><div><label class="input-label">실제 인출액 USD</label><input class="input" name="amountUSD" type="number" min="0.01" max="${Math.max(.01, round(available, 2))}" step="0.01" value="${edit ? Math.abs(n(record.amountUSD)) : ''}" required></div><div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note || '')}" placeholder="예: 생활비 계좌로 이체"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${record.id}">이 인출 기록 삭제</button>` : ''}</form>`);
-        document.getElementById('withdrawalForm').onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget), date = String(form.get('date')), amount = n(form.get('amountUSD')); if (!isDate(date) || date < recovery.startDate || amount <= 0) {
+        document.getElementById('withdrawalForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), date = String(form.get('date')), amount = n(form.get('amountUSD')); if (!isDate(date) || date < recovery.startDate || amount <= 0) {
             toast('회수 시작일 이후의 인출 날짜와 금액을 확인해 주세요.');
             return;
         } if (amount > available + .005) {
@@ -750,7 +765,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     function openSplitForm(record = null) {
         const project = projectById(record?.projectId || selectedProjectId), edit = !!record;
         openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균단가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from) || 2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to) || 1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">적용</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="split:${record.id}">이 분할 기록 삭제</button>` : ''}</form>`);
-        document.getElementById('splitForm').onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget), date = String(form.get('date')), from = n(form.get('from')), to = n(form.get('to')); if (!isDate(date) || from <= 0 || to <= 0) {
+        document.getElementById('splitForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), date = String(form.get('date')), from = n(form.get('from')), to = n(form.get('to')); if (!isDate(date) || from <= 0 || to <= 0) {
             toast('분할 날짜와 비율을 확인해 주세요.');
             return;
         } const row = record || { id: uid('s'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString() }, before = record ? clone(record) : null; Object.assign(row, { date, from, to, type: to < from ? 'reverse' : 'forward' }); if (!edit)
@@ -855,7 +870,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         const calc = computeProject(projectId), project = calc.project;
         const basis = editing && project.recovery?.locked ? n(project.recovery.basis) : calc.targetBasisSuggestion, startDate = editing && project.recovery?.locked ? project.recovery.startDate : (calc.targetReachedDate || todayISO());
         openModal(`<h3 class="modal-title">${project.symbol} 원금회수 기준 ${editing ? '수정' : '확정'}</h3><p class="modal-desc">목표 달성 시점까지 직접 넣은 순투입 원금을 고정합니다. 이후에는 실제로 계좌 밖으로 인출한 배당금만 회수액으로 계산합니다.</p><form id="recoveryForm" class="form-grid"><div><label class="input-label">기준원금 USD</label><input class="input" name="basis" type="number" min="0.01" step="0.01" required value="${round(basis, 2)}"></div><div><label class="input-label">회수 시작일</label><input class="input" name="startDate" type="date" required value="${startDate}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">${editing ? '수정 저장' : '확정'}</button></div></form>`);
-        document.getElementById('recoveryForm').onsubmit = async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget), nextBasis = n(form.get('basis')), nextStartDate = String(form.get('startDate')); if (nextBasis <= 0 || !isDate(nextStartDate)) {
+        document.getElementById('recoveryForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), nextBasis = n(form.get('basis')), nextStartDate = String(form.get('startDate')); if (nextBasis <= 0 || !isDate(nextStartDate)) {
             toast('기준원금과 시작일을 확인해 주세요.');
             return;
         } project.recovery = { locked: true, basis: nextBasis, startDate: nextStartDate, targetReachedDate: project.recovery?.targetReachedDate || calc.targetReachedDate || nextStartDate, calculatedBasisAtLock: calc.targetBasisSuggestion, confirmedAt: new Date().toISOString(), method: 'withdrawnOnly' }; await saveState(true); closeModal(); renderAll(); showPage('goal'); toast(editing ? '원금회수 기준을 수정했습니다.' : '원금회수 단계를 시작했습니다.'); };
@@ -934,7 +949,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             toast('브라우저에 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
         }
         catch (error) {
-            if (error?.name === 'AbortError')
+            if (isRecord(error) && error.name === 'AbortError')
                 return;
             console.error(error);
             toast('위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
@@ -983,7 +998,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             document.getElementById('confirmRestore').onclick = async () => { const previousProjectId = selectedProjectId; await storageSet(SAFETY_KEY, clone(state)); state = restored; selectedProjectId = activeProjects().some((project) => project.id === previousProjectId) ? previousProjectId : (activeProjects()[0]?.id || ''); await saveState(true); closeModal(); renderAll(); showPage('home'); toast('대조를 통과한 백업을 복원했습니다.'); };
         }
         catch (error) {
-            toast(error?.message || '지원되는 DividendOS ZIP이 아닙니다.');
+            toast(errorMessage(error) || '지원되는 DividendOS ZIP이 아닙니다.');
         }
     }
     async function restoreSafetyCopy() {
@@ -1242,8 +1257,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         catch (error) {
             state = before;
-            state.integrations.toss.lastAutoImportReason = error?.message || 'validation';
-            return { imported: 0, reason: error?.message || 'validation' };
+            state.integrations.toss.lastAutoImportReason = errorMessage(error) || 'validation';
+            return { imported: 0, reason: errorMessage(error) || 'validation' };
         }
     }
     async function refreshNativeTossStatus() {
@@ -1265,7 +1280,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             appUpdateStatus = { ...appUpdateStatus, ...await fetchHotUpdateStatus(), checking: false, error: '' };
         }
         catch (error) {
-            appUpdateStatus = { ...appUpdateStatus, checking: false, error: error?.message || '업데이트 확인 실패' };
+            appUpdateStatus = { ...appUpdateStatus, checking: false, error: errorMessage(error) || '업데이트 확인 실패' };
         }
         return appUpdateStatus;
     }
@@ -1280,7 +1295,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             toast('업데이트를 적용하고 다시 시작합니다.');
         }
         catch (error) {
-            appUpdateStatus = { ...appUpdateStatus, checking: false, error: error?.message || '업데이트 실패' };
+            appUpdateStatus = { ...appUpdateStatus, checking: false, error: errorMessage(error) || '업데이트 실패' };
             renderSettings();
             showPage('settings');
             toast(appUpdateStatus.error);
@@ -1293,9 +1308,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             if (modalSaving)
                 return;
             modalSaving = true;
-            const form = new FormData(event.currentTarget);
+            const form = submittedFormData(event);
             try {
-                await saveNativeTossCredentials(form.get('clientId'), form.get('clientSecret'));
+                await saveNativeTossCredentials(String(form.get('clientId') || ''), String(form.get('clientSecret') || ''));
                 nativeTossStatus = { ...nativeTossStatus, configured: true };
                 modalDirty = false;
                 closeModal();
@@ -1305,7 +1320,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 await syncNativeTossReadOnly();
             }
             catch (error) {
-                toast(error?.message || '토스 키를 저장하지 못했습니다.');
+                toast(errorMessage(error) || '토스 키를 저장하지 못했습니다.');
             }
             finally {
                 modalSaving = false;
@@ -1347,7 +1362,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         catch (error) {
             nativeTossStatus = { ...nativeTossStatus, checking: false };
             renderSettings();
-            toast(error?.message || '현재 IP를 확인하지 못했습니다.');
+            toast(errorMessage(error) || '현재 IP를 확인하지 못했습니다.');
             return;
         }
         if (!ipConfirmed && nativeTossStatus.lastPublicIp !== currentIp) {
@@ -1417,7 +1432,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         catch (error) {
             console.error(errorPrefix, error);
-            state.integrations.toss = { ...beforeSync, status: 'error', lastAttemptAt: attemptAt, lastError: error?.message || '토스 조회 파일을 처리하지 못했습니다.' };
+            state.integrations.toss = { ...beforeSync, status: 'error', lastAttemptAt: attemptAt, lastError: errorMessage(error) || '토스 조회 파일을 처리하지 못했습니다.' };
             await saveState();
             renderSettings();
             showPage('settings');
@@ -1500,7 +1515,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         document.getElementById('selectAllTossExceptions').onclick = () => { document.querySelectorAll('#tossDeleteForm input[name="exception"]').forEach((input) => { input.checked = true; }); };
         document.getElementById('tossDeleteForm').onsubmit = (event) => {
             event.preventDefault();
-            const selected = new FormData(event.currentTarget).getAll('exception').map(Number).map(index => rows[index]?.key).filter(Boolean);
+            const selected = submittedFormData(event).getAll('exception').map(Number).map(index => rows[index]?.key).filter(Boolean);
             if (!selected.length) {
                 toast('삭제할 예외를 선택해 주세요.');
                 return;
@@ -1537,7 +1552,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         openModal(`<h3 class="modal-title">토스 신규 기록 검토</h3><p class="modal-desc">선택한 기록만 V4 장부에 저장합니다. 수동 기록과 유사한 후보는 중복 가능성이 있어 기본 선택하지 않습니다.</p><form id="tossReviewForm" class="form-grid"><div class="list">${candidates.map((row, index) => `<label class="list-row"><div><div class="row-title">${esc(row.symbol)} · ${row.type === 'sell' ? '매도' : '매수'} ${fmtShares(row.shares)}주${row.possibleManualDuplicate ? ' · 수동 기록 유사' : ''}</div><div class="row-sub">${fmtDate(row.date)} · 단가 ${fmtMoney(row.price)} · 수수료 ${fmtMoney(row.feeUSD || 0, 2)}${row.accountLabel ? ` · ${esc(row.accountLabel)}` : ''}</div></div><input type="checkbox" name="tradeCandidate" value="${index}" ${row.possibleManualDuplicate ? '' : 'checked'}></label>`).join('')}${dividendCandidates.map((row, index) => `<label class="list-row"><div><div class="row-title">${esc(row.symbol)} · 세후배당 ${fmtMoney(row.amountUSD, 2)}${row.possibleManualDuplicate ? ' · 수동 기록 유사' : ''}</div><div class="row-sub">${fmtDate(row.date)}${row.accountLabel ? ` · ${esc(row.accountLabel)}` : ' · 토스 입금 기록'}</div></div><input type="checkbox" name="dividendCandidate" value="${index}" ${row.possibleManualDuplicate ? '' : 'checked'}></label>`).join('')}</div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">선택 기록 저장</button></div></form>`);
         document.getElementById('tossReviewForm').onsubmit = async (event) => {
             event.preventDefault();
-            const submitted = new FormData(event.currentTarget), selected = new Set(submitted.getAll('tradeCandidate').map(Number)), selectedDividends = new Set(submitted.getAll('dividendCandidate').map(Number));
+            const submitted = submittedFormData(event), selected = new Set(submitted.getAll('tradeCandidate').map(Number)), selectedDividends = new Set(submitted.getAll('dividendCandidate').map(Number));
             if (!selected.size && !selectedDividends.size) {
                 toast('저장할 기록을 선택해 주세요.');
                 return;
@@ -1614,6 +1629,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         };
     }
     function handleClick(event) {
+        if (!(event.target instanceof Element))
+            return;
         const button = event.target.closest('button,[data-open-project],[data-goal-detail]');
         if (!button)
             return;
@@ -2000,9 +2017,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }, true);
         document.addEventListener('click', (event) => { handleClick(event); rememberView(); });
         window.addEventListener('pagehide', rememberView);
-        document.addEventListener('submit', (event) => { if (event.target.id !== 'historyFilterForm')
-            return; event.preventDefault(); const form = new FormData(event.target); historyFilter = { month: String(form.get('month') || ''), kind: String(form.get('kind') || ''), query: String(form.get('query') || '') }; historyLimit = 10; renderProjects(); document.querySelector('.record-center').open = true; });
-        document.addEventListener('change', (event) => { if (event.target.matches('[data-project-select]')) {
+        document.addEventListener('submit', (event) => { if (!(event.target instanceof HTMLFormElement))
+            return; if (event.target.id !== 'historyFilterForm')
+            return; event.preventDefault(); const form = submittedFormData(event); historyFilter = { month: String(form.get('month') || ''), kind: String(form.get('kind') || ''), query: String(form.get('query') || '') }; historyLimit = 10; renderProjects(); document.querySelector('.record-center').open = true; });
+        document.addEventListener('change', (event) => { if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement))
+            return; if (event.target.matches('[data-project-select]')) {
             selectedProjectId = event.target.value;
             renderProjects();
             rememberView();
@@ -2016,22 +2035,27 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return; chartMonth = event.target.value; renderProjects(); rememberView(); });
         document.getElementById('modal').addEventListener('input', () => { modalDirty = true; });
         document.getElementById('modal').addEventListener('change', () => { modalDirty = true; });
-        document.getElementById('modalBackdrop').addEventListener('click', (event) => { if (event.target.id === 'modalBackdrop')
+        document.getElementById('modalBackdrop').addEventListener('click', (event) => { if (event.target instanceof Element && event.target.id === 'modalBackdrop')
             requestCloseModal(); });
-        document.addEventListener('keydown', (event) => { const card = event.target.closest?.('[data-open-project],[data-goal-detail]'); if (card && (event.key === 'Enter' || event.key === ' ')) {
+        document.addEventListener('keydown', (event) => { if (!(event.target instanceof Element))
+            return; const card = event.target.closest('[data-open-project],[data-goal-detail]'); if (card && (event.key === 'Enter' || event.key === ' ')) {
             event.preventDefault();
             card.click();
             return;
         } if (event.key === 'Escape')
             requestCloseModal(); });
-        document.getElementById('dividendReplacementInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)
+        document.getElementById('dividendReplacementInput').addEventListener('change', (event) => { if (!(event.target instanceof HTMLInputElement))
+            return; const file = event.target.files?.[0]; if (file)
             previewDividendReplacement(file); event.target.value = ''; });
-        document.getElementById('restoreInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)
+        document.getElementById('restoreInput').addEventListener('change', (event) => { if (!(event.target instanceof HTMLInputElement))
+            return; const file = event.target.files?.[0]; if (file)
             restoreFromFile(file); event.target.value = ''; });
-        document.getElementById('tossImportInput').addEventListener('change', (event) => { const file = event.target.files?.[0]; if (file)
+        document.getElementById('tossImportInput').addEventListener('change', (event) => { if (!(event.target instanceof HTMLInputElement))
+            return; const file = event.target.files?.[0]; if (file)
             importTossSnapshotFile(file); event.target.value = ''; });
-        document.addEventListener('submit', (event) => { const id = event.target.id; if (id !== 'displaySettingsForm' && id !== 'dividendSettingsForm')
-            return; event.preventDefault(); const form = new FormData(event.target); let next = {}, message = ''; if (id === 'displaySettingsForm') {
+        document.addEventListener('submit', (event) => { if (!(event.target instanceof HTMLFormElement))
+            return; const id = event.target.id; if (id !== 'displaySettingsForm' && id !== 'dividendSettingsForm')
+            return; event.preventDefault(); const form = submittedFormData(event); let next = {}, message = ''; if (id === 'displaySettingsForm') {
             next = { exchangeRate: Math.max(0, n(form.get('exchangeRate'))), exchangeRateMode: form.get('exchangeRateMode') === 'auto' ? 'auto' : 'manual', appearance: String(form.get('appearance')) };
             message = '화면 설정을 저장했습니다.';
         }
