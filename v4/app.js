@@ -657,7 +657,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         preview.className = 'dividend-preview';
         preview.setAttribute('aria-live', 'polite');
         dividendForm.querySelector('.modal-actions').before(preview);
-        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); dividendForm.elements.amountUSD.step = krw ? '1' : '0.01'; if (amount <= 0) {
+        const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); dividendForm.elements.amountUSD.step = krw ? '1' : '0.01'; dividendForm.elements.amountUSD.min = krw ? '1' : '0.01'; if (amount <= 0) {
             preview.textContent = '실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';
             return;
         } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${krw ? Math.round(amount).toLocaleString('ko-KR') + '원' : fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`; };
