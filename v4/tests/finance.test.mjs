@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {buildCsvExports} from '../backup.js';
+import {validateLedger} from '../modules/validation.js';
 import {blankState} from '../modules/state.js';
 import {createPortfolioEngine} from '../modules/portfolio.js';
 import {parseReferenceExchangeRate,applyRocToBasis,dividendCashBreakdown,economicTotalReturn,tradeCashBreakdown} from '../modules/finance.js';
@@ -24,3 +26,16 @@ console.log('Finance contract PASS: fees, taxes, ROC basis, realized P&L, econom
 const fx={base:'USD',quote:'KRW',rate:1450.25,date:'2026-10-01'},fxNow=new Date('2026-10-02T13:00:00Z');
 assert.deepEqual(parseReferenceExchangeRate(fx,fxNow),{rate:1450.25,date:'2026-10-01'});
 for(const invalid of [{...fx,rate:0},{...fx,rate:Infinity},{...fx,base:'EUR'},{...fx,date:'2026-02-30'},{...fx,date:'2026-09-01'},{...fx,date:'2026-10-10'}])assert.throws(()=>parseReferenceExchangeRate(invalid,fxNow));
+
+const zeroNet={...dividend,amountUSD:10,netAmountUSD:0,grossAmountUSD:10,withholdingTaxUSD:10,feeUSD:0};
+const zeroState=blankState();zeroState.dividends=[{...zeroNet,projectId:zeroState.projects[0].id}];
+assert.deepEqual(validateLedger(zeroState),[]);
+assert.equal(dividendCashBreakdown(zeroNet).netUSD,0,'explicit zero must not fall back to a legacy amount');
+assert.equal(dividendCashBreakdown({...dividend,rocAmountUSD:0,rocPercent:50}).rocUSD,0);
+assert.equal(dividendCashBreakdown({...dividend,netAmountUSD:8.5,amountUSD:99}).netUSD,8.5);
+assert.equal(dividendCashBreakdown({amountUSD:8.5,withholdingTaxUSD:1,feeUSD:.5}).grossUSD,10);
+const csv=buildCsvExports({projects:[],dividends:[{...dividend,netAmountUSD:8.5,amountUSD:99}]}).find(row=>row.name==='dividends.csv').data.split('\n')[1].split(',');
+assert.deepEqual(csv.slice(4,8),['10','1','0.5','8.5'],'CSV must match app cash breakdown including withholding tax');
+const zeroCsv=buildCsvExports(zeroState).find(row=>row.name==='dividends.csv').data.split('\n')[1].split(',');
+assert.equal(zeroCsv[7],'0');
+console.log('Dividend boundaries PASS: explicit zero, net precedence, ROC zero, and CSV cash parity');

@@ -53,8 +53,17 @@ body{background:var(--bg);background-image:none}
 .income-hero .income-split>div{background:transparent;border:0;padding:6px 0;text-align:left}
 .income-hero .income-split>div+div{border-left:1px solid var(--line);padding-left:12px}
 .income-split strong{overflow:visible;font-size:16px}
-.topbar{flex-wrap:wrap}
-.save-pill.cloud-error{font-size:10px;max-width:80px}
+/* Reserve the status slot through loading, sync, errors and the empty saved state. */
+.topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.topbar-actions{display:grid;grid-template-columns:auto 180px 44px;align-items:center;gap:8px;min-width:0}
+.topbar-actions .top-icon-btn{margin-left:0;width:44px;height:44px}
+.topbar .save-pill{display:flex!important;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-width:0;max-width:none;height:44px;padding:4px 8px;line-height:1.25;overflow:hidden;overflow-wrap:anywhere}
+.topbar .save-pill:empty{visibility:hidden}
+.save-pill.cloud-error{font-size:10px}
+@media(max-width:600px){
+  .topbar{grid-template-columns:minmax(0,1fr);row-gap:12px;align-items:center}
+  .topbar-actions{width:100%;grid-template-columns:auto minmax(0,1fr) 44px}
+}
 .fit-chart .column-item{min-width:0}
 .fit-chart .column-value{font-size:12px!important}
 .fit-chart .column-label{font-size:11px!important}
