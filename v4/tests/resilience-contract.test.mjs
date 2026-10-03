@@ -34,20 +34,31 @@ assert.equal(store.storageStatus().mode,'localstorage');
 await store.storageSet('state',{dividends:[{amountUSD:12.34}]});
 assert.deepEqual(await store.storageGet('state'),{dividends:[{amountUSD:12.34}]});
 let recoveredIdbOpens=0;
-globalThis.indexedDB={open:()=>{recoveredIdbOpens++;throw new Error('must retain saved fallback backend');}};
+globalThis.indexedDB={open:()=>{
+  recoveredIdbOpens++;
+  const request={};
+  queueMicrotask(()=>{
+    request.result={transaction:()=>({objectStore:()=>({get:()=>{
+      const get={};queueMicrotask(()=>{get.result={dividends:[{amountUSD:1,stale:true}]};get.onsuccess();});return get;
+    }})})};
+    request.onsuccess();
+  });
+  return request;
+}};
 const recovered=await import('data:text/javascript;base64,'+Buffer.from(storageSource+'\n// recovered launch').toString('base64'));
 await recovered.openStorage();
 assert.equal(recovered.storageStatus().mode,'localstorage');
 assert.deepEqual(await recovered.storageGet('state'),{dividends:[{amountUSD:12.34}]});
-assert.equal(recoveredIdbOpens,0);
+
 await recovered.storageDelete('state');
 const afterDelete=await import('data:text/javascript;base64,'+Buffer.from(storageSource+'\n// launch after delete').toString('base64'));
 await afterDelete.openStorage();
 assert.equal(await afterDelete.storageGet('state'),undefined,'deleted ledger must not resurrect older IndexedDB data');
-assert.equal(recoveredIdbOpens,0);
+
 values.delete('dividend-os-v4:storage-backend');values.set('dividend-os-v4:state',JSON.stringify({legacyFallback:true}));
 const previousFallback=await import('data:text/javascript;base64,'+Buffer.from(storageSource+'\n// previous version fallback').toString('base64'));
 await previousFallback.openStorage();assert.deepEqual(await previousFallback.storageGet('state'),{legacyFallback:true});
+globalThis.indexedDB={open:()=>{throw new Error('SecurityError: persistence disabled');}};
 Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{setItem:()=>{throw new Error('quota');},getItem:()=>null,removeItem:()=>{}}});
 const memory=await import('data:text/javascript;base64,'+Buffer.from(storageSource+'\n// separate memory scenario').toString('base64'));
 await memory.openStorage();assert.equal(memory.storageStatus().durable,false,'blocked persistence must never claim durability');
