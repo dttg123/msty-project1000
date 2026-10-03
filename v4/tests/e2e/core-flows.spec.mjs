@@ -57,6 +57,7 @@ test('배당 입력은 실제 입금액만 저장하고 예상값으로 부풀�
 
 
 test('동기화 문구와 빈 상태가 바뀌어도 상단과 목표 카드 위치가 유지된다',async({page},info)=>{
+  await page.emulateMedia({reducedMotion:'reduce'});
   const errors=await openDemo(page);
   await page.locator('[data-page="goal"]').first().click();
   for(const width of [320,360,380,412,430,600,1440]){
