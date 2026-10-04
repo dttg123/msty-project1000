@@ -11,7 +11,7 @@ import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
 import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
-import { APP_VERSION, DATA_SCHEMA_VERSION, buildCsvExportZip, buildPortableBackup, readStateFromBackupFile } from './backup.js';
+import { APP_VERSION, DATA_SCHEMA_VERSION, createStoreZip, buildCsvExportZip, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
 import { blankProject, blankState, migrateLegacy } from './modules/state.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
@@ -963,26 +963,41 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   async function init(): Promise<void> {
+    let startupSnapshot:unknown,startupPhase:'storage'|'records'|'screen'='storage';
     try{
       removeLegacyTossBrowserCredentials();
       await openStorage();
       try{const cached=await storageGet('officialDistributionFeed');if(cached)officialFeed=parseOfficialDistributionFeed(cached);}catch{}
-      const existing=await storageGet(STATE_KEY);
+      const existing=await storageGet(STATE_KEY);startupSnapshot=existing;startupPhase='records';
       legacyMigrationSource=demoMode?null:await readLegacyState();
       if(demoMode)state=demoState();
       else if(existing){state=decodeAppState(existing);if(legacyMigrationSource&&!state.meta.migrationAudit){const audit=auditLegacyAgainstState(legacyMigrationSource,state);if(audit?.passed)state.meta.migrationAudit=audit;else state.meta.legacyMigrationAvailable=true;}}
       else if(legacyMigrationSource)state=prepareLegacyMigration(legacyMigrationSource).candidate;
       else state=blankState();
-      selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);await storageSet(STATE_KEY,state);
-      await confirmHotUpdateReady().catch(()=>{});
-      await Promise.all([refreshAutoBackupStatus().catch(()=>{}),refreshNativeTossStatus().catch(()=>{})]);restoreView();renderAll();bindStaticEvents();showPage(currentPage);hideSplash();setSaveStatus('');
+      selectedProjectId=activeProjects()[0]?.id||'';applyTheme(state.settings.appearance);startupPhase='screen';
+      await Promise.all([refreshAutoBackupStatus().catch(()=>{}),refreshNativeTossStatus().catch(()=>{})]);restoreView();renderAll();bindStaticEvents();showPage(currentPage);
+      try{if(existing&&!await storageGet('startupCompatibilityOriginalV1'))await storageSet('startupCompatibilityOriginalV1',existing);}catch(error){console.warn('Startup original snapshot could not be retained',error);}
+      await storageSet(STATE_KEY,state);await confirmHotUpdateReady().catch(()=>{});hideSplash();setSaveStatus('');
       refreshExchangeRate();refreshOfficialDistributions();
       refreshAppUpdateStatus().then(()=>renderSettings()).catch(()=>{});
       if(!storageStatus().durable)setSaveStatus('임시 저장 · 백업 필요','cloud-error');
       if(demoMode){const banner=document.createElement('aside');banner.className='demo-banner';banner.textContent='테스트 데이터 · 실계좌/클라우드와 분리';document.body.prepend(banner);}
       if(navigator.onLine&&!demoMode)initAuth().catch(()=>setSaveStatus('기기 저장 모드','cloud-error'));
       if(!demoMode&&'serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(console.warn);
-    }catch (error: unknown){console.error(error);document.getElementById('page-home')!.innerHTML='<article class="card danger"><div class="card-title">저장소를 열 수 없습니다.</div><p class="tiny">일반 브라우저 모드에서 다시 열어 주세요.</p></article>';setSaveStatus('오류','cloud-error');hideSplash();}
+    }catch (error: unknown){
+      console.error(error);
+      const title=startupPhase==='storage'?'저장소 연결을 확인해 주세요.':startupPhase==='records'?'기존 기록을 확인할 수 없습니다.':'화면을 준비하지 못했습니다.';
+      document.getElementById('page-home')!.innerHTML=`<article class="card danger"><div class="card-title">${title}</div><p class="tiny">${esc(errorMessage(error)||'앱을 다시 열거나 복구 업데이트를 확인해 주세요.')}</p><p class="tiny">앱 삭제나 데이터 초기화를 하지 마세요.</p><div class="form-grid"><button class="btn soft" id="bootRetry">다시 열기</button>${isRecord(startupSnapshot)?'<button class="btn soft" id="bootOriginalBackup">기존 기록 원본 보관</button>':''}${isHotUpdateAvailable()?'<button class="btn primary" id="bootRecoveryUpdate">복구 업데이트 확인</button>':''}</div></article>`;
+      document.getElementById('bootRetry')!.onclick=()=>location.reload();
+      const update=document.getElementById('bootRecoveryUpdate');if(update)update.onclick=async()=>{try{const status=await fetchHotUpdateStatus();if(!status.updateAvailable){toast('새 업데이트가 아직 없습니다.');return;}await installHotUpdate();}catch(error){toast(errorMessage(error)||'업데이트 정보를 확인하지 못했습니다.');}};
+      const backup=document.getElementById('bootOriginalBackup');if(backup)backup.onclick=async()=>{
+        try{
+          const zip=createStoreZip([{name:'data/state.json',data:JSON.stringify(startupSnapshot)}]),filename=`DividendOS_original_${todayISO()}.zip`,native=window.Capacitor?.Plugins?.BackupFile;
+          if(native){const bytes=new Uint8Array(await zip.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));await native.save({filename,base64:btoa(binary)});}else downloadFile(filename,zip,'application/zip');
+        }catch(error){toast(errorMessage(error)||'원본 보관에 실패했습니다.');}
+      };
+      setSaveStatus('복구 필요','cloud-error');hideSplash();
+    }
   }
 
   init();

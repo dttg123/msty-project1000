@@ -4,24 +4,26 @@ import { validateLedger } from './validation.js';
 import { isRecord } from './utils.js';
 const object = (value) => { if (!isRecord(value))
     throw new Error('기록의 객체 구조를 확인해 주세요.'); return value; };
-const rows = (value) => { if (!Array.isArray(value))
+const rows = (value) => { if (value === undefined || value === null)
+    return []; if (!Array.isArray(value))
     throw new Error('기록 목록을 확인해 주세요.'); return value.map(object); };
-const text = (value, fallback = '') => { if (value === undefined)
+const text = (value, fallback = '') => { if (value === undefined || value === null)
     return fallback; if (typeof value !== 'string')
     throw new Error('기록의 문자 값을 확인해 주세요.'); return value; };
 const number = (value) => { if ((typeof value !== 'number' && typeof value !== 'string') || typeof value === 'string' && !value.trim() || !Number.isFinite(Number(value)))
     throw new Error('금액·수량은 유한한 숫자여야 합니다.'); return Number(value); };
-const bool = (value, fallback = false) => { if (value === undefined)
+const bool = (value, fallback = false) => { if (value === undefined || value === null)
     return fallback; if (typeof value !== 'boolean')
     throw new Error('기록의 선택 값을 확인해 주세요.'); return value; };
-const choice = (value, values, fallback) => { if (value === undefined)
+const choice = (value, values, fallback) => { if (value === undefined || value === null || value === '')
     return fallback; const found = values.find(item => item === value); if (found === undefined)
     throw new Error('기록의 종류를 확인해 주세요.'); return found; };
-const strings = (value) => { if (!Array.isArray(value) || value.some(item => typeof item !== 'string'))
+const strings = (value) => { if (value === undefined || value === null)
+    return []; if (!Array.isArray(value) || value.some(item => typeof item !== 'string'))
     throw new Error('기록의 식별자 목록을 확인해 주세요.'); return value; };
 function optionalText(row, keys) { for (const key of keys)
     if (row[key] !== undefined)
-        text(row[key]); }
+        row[key] = text(row[key]); }
 function isAudit(value) {
     if (!isRecord(value) || typeof value.version !== 'number' || !Number.isFinite(value.version) || typeof value.checkedAt !== 'string' || typeof value.passed !== 'boolean' || !Array.isArray(value.checks) || !isRecord(value.source) || !isRecord(value.target))
         return false;
@@ -30,7 +32,7 @@ function isAudit(value) {
     return matches(value.source) && matches(value.target) && value.checks.every((check) => isRecord(check) && typeof check.key === 'string' && Object.hasOwn(template, check.key) && typeof check.passed === 'boolean' && ['number', 'string', 'boolean'].includes(typeof check.source) && ['number', 'string', 'boolean'].includes(typeof check.target) && (typeof check.source !== 'number' || Number.isFinite(check.source)) && (typeof check.target !== 'number' || Number.isFinite(check.target)));
 }
 function source(value) {
-    if (value === undefined)
+    if (value === undefined || value === null)
         return undefined;
     const row = object(value);
     return { ...row, provider: choice(row.provider, ['manual', 'toss'], 'manual'), ...Object.fromEntries(['externalId', 'sourceId', 'rawExternalId', 'sourceFingerprint', 'status', 'accountId', 'assetKey', 'market', 'securityId', 'importedAt'].filter(key => row[key] !== undefined).map(key => [key, text(row[key])])), ...(row.adoptedManual !== undefined ? { adoptedManual: bool(row.adoptedManual) } : {}), ...(row.sourceIdKind !== undefined ? { sourceIdKind: choice(row.sourceIdKind, ['source', 'fingerprint'], 'source') } : {}) };
@@ -44,7 +46,7 @@ function optionalNumbers(row, keys) {
     const result = {};
     for (const key of keys)
         if (row[key] !== undefined)
-            result[key] = number(row[key]);
+            result[key] = row[key] === null || row[key] === '' ? undefined : number(row[key]);
     return result;
 }
 function project(row) {
@@ -71,16 +73,27 @@ export function decodeAppState(input) {
     for (const key of ['projects', 'trades', 'dividends', 'splits', 'cashAdjustments'])
         if (incoming[key] !== undefined && !Array.isArray(incoming[key]))
             throw new Error('기록 목록을 확인해 주세요.');
-    const migrated = migrate(incoming), errors = validateLedger(migrated);
+    const migrated = migrate(incoming);
+    // Old JSON backups used null for absent optional amounts. Copy rows before normalizing absence.
+    const optionalAmounts = ['feeUSD', 'taxUSD', 'reinvestAmountUSD', 'amountKRW', 'grossAmountUSD', 'withholdingTaxUSD', 'netAmountUSD', 'rocAmountUSD', 'sharesAtPayment', 'referencePrice'];
+    const legacyRows = (items) => items.map(value => { if (!isRecord(value))
+        return value; const row = { ...value }; for (const key of optionalAmounts)
+        if (row[key] === null || row[key] === '')
+            delete row[key]; return row; });
+    const compatible = { ...migrated, trades: legacyRows(migrated.trades), dividends: legacyRows(migrated.dividends) };
+    const errors = validateLedger(compatible);
     if (errors.length)
         throw new Error(errors.join(' '));
-    const raw = object(migrated), base = blankState(), meta = object(raw.meta), toss = object(object(raw.integrations).toss);
+    const raw = object(compatible), base = blankState(), meta = object(raw.meta), toss = object(object(raw.integrations).toss);
     optionalText(meta, ['lastBackupPreparedAt', 'lastCloudAttemptAt', 'lastDividendReplacementFingerprint', 'ledgerRepairV321', 'demoAsOf', 'lastAuthoritativeMstyImportAt']);
     for (const key of ['legacyMigrationAvailable', 'demo'])
         if (meta[key] !== undefined)
-            bool(meta[key]);
-    if (meta.migrationAudit !== undefined && meta.migrationAudit !== null && !isAudit(meta.migrationAudit))
-        throw new Error('이전 점검 기록을 확인해 주세요.');
+            meta[key] = bool(meta[key]);
+    if (meta.migrationAudit !== undefined && meta.migrationAudit !== null && !isAudit(meta.migrationAudit)) {
+        meta.legacyMigrationAudit = meta.migrationAudit;
+        meta.migrationAudit = null;
+        meta.legacyMigrationAvailable = true;
+    }
     const decodedMeta = { ...base.meta, ...meta, createdAt: text(meta.createdAt), updatedAt: text(meta.updatedAt), lastBackupAt: text(meta.lastBackupAt), lastLocalSaveAt: text(meta.lastLocalSaveAt), lastCloudSaveAt: text(meta.lastCloudSaveAt), migratedFrom: text(meta.migratedFrom), migrationCheckedAt: text(meta.migrationCheckedAt), celebratedMilestones: strings(meta.celebratedMilestones) };
     return { ...raw, version: 4, schemaVersion: 4, settings: settings(object(raw.settings)), projects: rows(raw.projects).map(project), trades: rows(raw.trades).map(trade), dividends: rows(raw.dividends).map(dividend), splits: rows(raw.splits).map(split), cashAdjustments: rows(raw.cashAdjustments).map(cash), meta: decodedMeta, integrations: { toss: { ...base.integrations.toss, ...toss, status: choice(toss.status, ['not_connected', 'connected', 'error', 'syncing', 'partial'], 'not_connected'), lastSyncAt: text(toss.lastSyncAt), lastSuccessfulAt: text(toss.lastSuccessfulAt), lastPartialAt: text(toss.lastPartialAt), lastAttemptAt: text(toss.lastAttemptAt), lastError: text(toss.lastError), accountScopeId: text(toss.accountScopeId), syncStatus: choice(toss.syncStatus, ['', 'complete', 'partial'], ''), candidates: rows(toss.candidates), dividendCandidates: rows(toss.dividendCandidates), correctionCandidates: rows(toss.correctionCandidates), dividendCorrectionCandidates: rows(toss.dividendCorrectionCandidates), holdings: rows(toss.holdings), comparisons: rows(toss.comparisons), accountResults: rows(toss.accountResults), failedAccountCount: number(toss.failedAccountCount), historyTruncated: bool(toss.historyTruncated), ...(toss.dismissedExceptionKeys !== undefined ? { dismissedExceptionKeys: strings(toss.dismissedExceptionKeys) } : {}), ...(toss.syncMilestones !== undefined ? { syncMilestones: strings(toss.syncMilestones) } : {}), syncCursor: object(toss.syncCursor), capabilities: Object.fromEntries(Object.entries(object(toss.capabilities)).map(([key, value]) => [key, bool(value)])), sourceLedger: { orders: rows(object(toss.sourceLedger).orders), dividends: rows(object(toss.sourceLedger).dividends) } } } };
 }
