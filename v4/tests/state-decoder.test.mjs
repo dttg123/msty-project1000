@@ -30,6 +30,13 @@ const compatible=structuredClone(raw);compatible.projects[0].priceSource='';comp
 const beforeCompatibility=structuredClone(compatible),checked=decodeAppState(compatible);
 assert.deepEqual(compatible,beforeCompatibility);assert.equal(checked.trades[0].source,undefined);assert.equal(checked.dividends[0].referencePrice,undefined);assert.equal(checked.projects[0].priceSource,'manual');assert.equal(checked.cashAdjustments[0].purpose,'balanceAdjustment');assert.equal(checked.meta.migrationAudit,null);assert.deepEqual(checked.meta.legacyMigrationAudit,compatible.meta.migrationAudit);
 assert.equal(createPortfolioEngine(()=>checked,()=>project.id).computeProject(project.id).shares,19);
+const historical=JSON.parse(readFileSync(new URL('./fixtures/historical-reinvest-state.json',import.meta.url),'utf8'));
+const oldBefore=structuredClone(historical.state),oldDecoded=decodeAppState(historical.state);
+assert.equal(oldDecoded.projects[0].afterGoalMode,'reinvest');assert.deepEqual(historical.state,oldBefore);
+assert.equal(createPortfolioEngine(()=>oldDecoded,()=>oldDecoded.projects[0].id).computeProject(oldDecoded.projects[0].id).shares,247);
+assert.deepEqual(oldDecoded.trades,historical.state.trades);assert.deepEqual(oldDecoded.dividends,historical.state.dividends);
+const transitional=structuredClone(historical.state);transitional.projects[0].afterGoalMode='continue';assert.equal(decodeAppState(transitional).projects[0].afterGoalMode,'reinvest');
+const unknownMode=structuredClone(historical.state);unknownMode.projects[0].afterGoalMode='invalid';assert.throws(()=>decodeAppState(unknownMode),/afterGoalMode/);
 // Prevent explicit any from returning to the runtime sources, including the entry point.
 const root=resolve(import.meta.dirname,'..');
 for(const dir of [root,resolve(root,'modules'),resolve(root,'types')])for(const name of readdirSync(dir).filter(name=>name.endsWith('.ts'))){

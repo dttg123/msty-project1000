@@ -89,7 +89,7 @@ export interface Project {
   distributionFrequencyMode: 'auto' | 'manual';
   initialDividendBalance: number;
   initialDividendBalanceDate: string;
-  afterGoalMode: 'cashflow' | 'continue';
+  afterGoalMode: 'cashflow' | 'reinvest';
   recovery: RecoveryPlan;
   brokerLinks: Array<{provider:'toss';assetKey:string;market?:string;securityId?:string}>;
   status: SecurityStatus;

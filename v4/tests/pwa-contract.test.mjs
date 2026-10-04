@@ -43,7 +43,7 @@ assert.deepEqual([...handlers.keys()].sort(),['activate','fetch','install']);
 let pending;
 handlers.get('install')({waitUntil:value=>{pending=value;}});await pending;
 assert.equal(skipped,true,'new worker must activate without leaving mixed app shells');
-const current=[...stores.keys()].find(name=>name.includes('dividend-os-v0.12.25-r86'));
+const current=[...stores.keys()].find(name=>name.includes('dividend-os-v0.12.26-r87'));
 assert.ok(current,'cache name must contain the displayed deployment version');
 for(const required of ['./','./index.html','./app.js','./styles.css','./manifest.webmanifest'])assert.ok(stores.get(current).has(key(required)),`precache missing ${required}`);
 
@@ -71,5 +71,5 @@ assert.equal(manifest.start_url,'./');assert.equal(manifest.scope,'./');assert.e
 assert.deepEqual(manifest.icons.map(icon=>icon.sizes),['192x192','512x512']);
 assert.ok(index.includes('<link rel="manifest" href="manifest.webmanifest" />'));
 assert.equal(manifest.name,'DividendOS');assert.equal(manifest.short_name,'DividendOS');
-assert.ok(index.includes('v0.12.25')&&source.includes('v0.12.25-r86'),'visible and cached releases must agree');
+assert.ok(index.includes('v0.12.26')&&source.includes('v0.12.26-r87'),'visible and cached releases must agree');
 console.log('PWA contract PASS: install, update cleanup, online revalidation, offline shell, manifest, and version coherence');
