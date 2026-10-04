@@ -19,9 +19,11 @@ export interface SourceRef {
   market?: string;
   securityId?: string;
   importedAt?: string;
+  adoptedManual?: boolean;
 }
 
 export interface LedgerRow {
+  source?: SourceRef;
   symbol?: string;
   note?: string;
   createdAt?: string;
@@ -48,7 +50,8 @@ export interface SellTrade extends LedgerRow {
   projectId: string;
   date: string;
   type: 'sell';
-  buyType?: BuyType;
+  buyType?: BuyType | '';
+  reinvestAmountUSD?: number;
   shares: number;
   price: number;
   feeUSD?: number;
@@ -91,7 +94,7 @@ export interface Project {
   brokerLinks: Array<{provider:'toss';assetKey:string;market?:string;securityId?:string}>;
   status: SecurityStatus;
   corporateActions: CorporateAction[];
-  dividendAnnouncement?: {exDate:string;payDate:string;sourceURL:string;recordedAt:string;verification:'user'};
+  dividendAnnouncement?: {exDate:string;payDate:string;sourceURL:string;recordedAt:string;verification:'user'} | null;
   colorIndex: number;
   archived: boolean;
 }
@@ -125,6 +128,7 @@ export interface DividendRecord extends LedgerRow {
   rocPercent?: number | null;
   rocStatus?: 'none' | 'estimated' | 'confirmed' | 'final';
   sharesAtPayment?: number;
+  referencePrice?: number;
   source?: SourceRef;
 }
 
@@ -148,7 +152,7 @@ export interface DividendCashBreakdown {
 }
 
 export interface SplitRecord extends LedgerRow {
-  type?: 'forward'|'reverse';
+  type?: 'forward'|'reverse'|'split';
   id: string;
   projectId: string;
   symbol?: string;
@@ -196,7 +200,7 @@ export interface TossSnapshot {
 }
 
 export interface TossIntegrationState {
-  status: 'not_connected' | 'connected' | 'error';
+  status: 'not_connected' | 'connected' | 'error' | 'syncing' | 'partial';
   lastSyncAt: string;
   lastSuccessfulAt: string;
   lastPartialAt: string;
@@ -207,6 +211,17 @@ export interface TossIntegrationState {
   syncStatus: '' | 'complete' | 'partial';
   capabilities: Record<string, boolean>;
   sourceLedger: {orders: unknown[];dividends: unknown[]};
+  candidates: Record<string,unknown>[];
+  dividendCandidates: Record<string,unknown>[];
+  correctionCandidates: Record<string,unknown>[];
+  dividendCorrectionCandidates: Record<string,unknown>[];
+  holdings: Record<string,unknown>[];
+  comparisons: Record<string,unknown>[];
+  accountResults: Record<string,unknown>[];
+  failedAccountCount: number;
+  historyTruncated: boolean;
+  dismissedExceptionKeys?: string[];
+  syncMilestones?: string[];
   [key: string]: unknown;
 }
 
@@ -240,6 +255,7 @@ export interface AppSettings {
   appearance: 'system' | 'light' | 'dark';
   exchangeRateDate?: string;
   exchangeRateUpdatedAt?: string;
+  exchangeRateSource?: string;
 }
 export interface AppMetadata {
   createdAt: string;
@@ -258,6 +274,7 @@ export interface AppMetadata {
   ledgerRepairV321?: string;
   demo?: boolean;
   demoAsOf?: string;
+  lastAuthoritativeMstyImportAt?: string;
 }
 export type LedgerCollection = 'trades'|'dividends'|'splits'|'cashAdjustments';
 export type DatedRow = {id:string;date:string;createdAt?:string};

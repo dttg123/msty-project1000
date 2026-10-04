@@ -11,7 +11,7 @@ if(!profiles.includes(profile)){
 
 const suites={
   fast:[
-    'domain.test.mjs','finance.test.mjs','dividend-currency.test.mjs','official-distributions.test.mjs','toss-client-security.test.mjs','toss-native.test.mjs',
+    'domain.test.mjs','state-decoder.test.mjs','finance.test.mjs','dividend-currency.test.mjs','official-distributions.test.mjs','toss-client-security.test.mjs','toss-native.test.mjs',
     'hot-update.test.mjs','static.test.mjs','tooling-gates.test.mjs'
   ],
   core:[

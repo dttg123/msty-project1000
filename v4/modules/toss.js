@@ -330,11 +330,12 @@ export function tossCandidateToTrade(candidate, { projectId, id, createdAt = new
     const row = normalizeTossOrder(candidate);
     if (!row || row.currency !== 'USD' || !projectId || !id)
         return null;
-    return {
-        id, projectId, symbol: row.symbol, date: row.date, type: row.type, buyType: row.type === 'buy' ? 'direct' : undefined,
+    const base = {
+        id, projectId, symbol: row.symbol, date: row.date,
         shares: row.shares, price: row.price, feeUSD: row.feeUSD, taxUSD: row.taxUSD, reinvestAmountUSD: 0, note: row.note, createdAt,
         source: { provider: 'toss', externalId: row.externalId, rawExternalId: row.rawExternalId, sourceIdKind: row.sourceIdKind, sourceFingerprint: row.sourceFingerprint, status: row.status, accountId: row.accountId, assetKey: row.assetKey, market: row.market, securityId: row.securityId, importedAt: createdAt }
     };
+    return row.type === 'buy' ? { ...base, type: 'buy', buyType: 'direct' } : { ...base, type: 'sell', buyType: undefined };
 }
 export function tossCandidateToDividend(candidate, { projectId, id, sharesAtPayment = 0, createdAt = new Date().toISOString() } = {}) {
     const row = normalizeTossDividend(candidate);
@@ -444,7 +445,7 @@ export function automaticTossDividendAdoptions(candidates = []) {
     }
     return adoptions;
 }
-export function disconnectedTossState(toss = {}) {
+export function disconnectedTossState(toss) {
     return { ...toss, status: 'not_connected', lastError: '', accountLabel: '', holdings: [], comparisons: [], candidates: [], dividendCandidates: [], correctionCandidates: [], dividendCorrectionCandidates: [], accountResults: [], failedAccountCount: 0 };
 }
 export const TOSS_EXCEPTION_FIELDS = ['candidates', 'dividendCandidates', 'correctionCandidates', 'dividendCorrectionCandidates'];
@@ -453,10 +454,8 @@ export function tossExceptionKey(field, input, scope = '') {
     return JSON.stringify([scope, field, String(row?.externalId || ''), String(row?.sourceFingerprint || '')]);
 }
 export function filterDismissedTossExceptions(toss, keys = Array.isArray(toss.dismissedExceptionKeys) ? toss.dismissedExceptionKeys.filter((key) => typeof key === 'string') : []) {
-    const dismissed = new Set(keys), result = { ...toss };
-    for (const field of TOSS_EXCEPTION_FIELDS)
-        result[field] = records(toss[field]).filter((row) => !dismissed.has(tossExceptionKey(field, row, String(toss.accountScopeId || ''))));
-    return result;
+    const dismissed = new Set(keys), keep = (field) => records(toss[field]).filter(row => !dismissed.has(tossExceptionKey(field, row, String(toss.accountScopeId || ''))));
+    return { ...toss, candidates: keep('candidates'), dividendCandidates: keep('dividendCandidates'), correctionCandidates: keep('correctionCandidates'), dividendCorrectionCandidates: keep('dividendCorrectionCandidates') };
 }
 export function dismissTossExceptions(toss, selectedKeys) {
     const available = new Set(TOSS_EXCEPTION_FIELDS.flatMap(field => records(toss[field]).map((row) => tossExceptionKey(field, row, String(toss.accountScopeId || '')))));

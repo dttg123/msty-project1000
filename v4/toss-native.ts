@@ -1,3 +1,4 @@
+import type {TossSnapshotPayload} from './toss-client.js';
 import { isRecord } from './modules/utils.js';
 const object=(value:unknown):Record<string, unknown>=>isRecord(value)?value:{};
 interface NativeAccount {accountSeq:number;accountNo:string;accountType:string;accountLabel?:string;}
@@ -49,7 +50,7 @@ function validDate(value: unknown,fallback: string){const raw=String(value||''),
 function todayKST(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 async function scopeId(accounts: NativeAccount[]): Promise<string>{const source=accounts.map((row)=>`${row.accountSeq}:${row.accountNo}`).sort().join('|'),bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source));return [...new Uint8Array(bytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('').slice(0,24);}
 
-export async function fetchNativeTossSnapshot({from='2020-01-01',symbols=[]}: {from?:string;symbols?:unknown[]}={}){
+export async function fetchNativeTossSnapshot({from='2020-01-01',symbols=[]}: {from?:string;symbols?:unknown[]}={}):Promise<TossSnapshotPayload>{
   if(!plugin())throw new Error('갤럭시 설치판에서만 토스 원터치 갱신을 사용할 수 있습니다.');
   const accounts=parseAccounts((await tossGet('/api/v1/accounts')).items);
   const selected=accounts.filter((row)=>row.accountType==='BROKERAGE').slice(0,5).map((row)=>({...row,accountLabel:accountLabel(row)}));

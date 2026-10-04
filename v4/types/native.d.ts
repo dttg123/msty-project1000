@@ -15,3 +15,7 @@ interface DividendNativePlugins {
   BackupFile?: {save(options:{filename:string;base64:string}):Promise<{saved?:boolean;cancelled?:boolean}>;download(options:{filename:string;base64:string}):Promise<{saved?:boolean;cancelled?:boolean}>};
 }
 interface Window {Capacitor?: {isNativePlatform?():boolean;Plugins?:DividendNativePlugins};}
+
+interface Window {
+  showSaveFilePicker?: (options:{suggestedName:string;types:Array<{description:string;accept:Record<string,string[]>}>})=>Promise<{createWritable():Promise<{write(data:Blob):Promise<void>;close():Promise<void>}>}>;
+}
