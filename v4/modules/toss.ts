@@ -261,7 +261,7 @@ export function buildTossSync(snapshotInput: unknown, {existingTrades=[],existin
   return {
     accountLabel:String(snapshot?.accountLabel||'토스증권 계좌'),
     fetchedAt:String(snapshot?.fetchedAt||new Date().toISOString()),
-    accountScopeId:String(snapshot?.accountScopeId||''),syncStatus:snapshot?.syncStatus==='partial'?'partial':'complete',syncCursor:record(snapshot.syncCursor),accountResults:records(snapshot.accountResults),capabilities:Object.fromEntries(Object.entries(record(snapshot.capabilities)).filter((entry):entry is [string,boolean]=>typeof entry[1]==='boolean')),failedAccountCount:Math.max(0,n(snapshot?.failedAccountCount)),
+    accountScopeId:String(snapshot?.accountScopeId||''),syncStatus:snapshot?.syncStatus==='partial'?'partial' as const:'complete' as const,syncCursor:record(snapshot.syncCursor),accountResults:records(snapshot.accountResults),capabilities:Object.fromEntries(Object.entries(record(snapshot.capabilities)).filter((entry):entry is [string,boolean]=>typeof entry[1]==='boolean')),failedAccountCount:Math.max(0,n(snapshot?.failedAccountCount)),
     holdings,prices,comparisons,candidates,dividendCandidates,correctionCandidates,dividendCorrectionCandidates,
     ignoredCount:ignored.length,matchedExistingCount,matchedExistingDividendCount,historyTruncated:!!snapshot?.historyTruncated,
     unsupportedCurrencyCount:ignored.filter(row=>row.reason==='currency').length
@@ -295,14 +295,15 @@ export function mergeTossDividendCandidates(current: unknown =[],incoming: unkno
   return [...map.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.externalId).localeCompare(String(b.externalId)));
 }
 
-export function tossCandidateToTrade(candidate: unknown,{projectId,id,createdAt=new Date().toISOString()}: {projectId?:string;id?:string;createdAt?:string}={}) {
+export function tossCandidateToTrade(candidate: unknown,{projectId,id,createdAt=new Date().toISOString()}: {projectId?:string;id?:string;createdAt?:string}={}): Trade|null {
   const row=normalizeTossOrder(candidate);
   if(!row||row.currency!=='USD'||!projectId||!id)return null;
-  return {
-    id,projectId,symbol:row.symbol,date:row.date,type:row.type,buyType:row.type==='buy'?'direct' as const:undefined,
+  const base={
+    id,projectId,symbol:row.symbol,date:row.date,
     shares:row.shares,price:row.price,feeUSD:row.feeUSD,taxUSD:row.taxUSD,reinvestAmountUSD:0,note:row.note,createdAt,
     source:{provider:'toss' as const,externalId:row.externalId,rawExternalId:row.rawExternalId,sourceIdKind:row.sourceIdKind,sourceFingerprint:row.sourceFingerprint,status:row.status,accountId:row.accountId,assetKey:row.assetKey,market:row.market,securityId:row.securityId,importedAt:createdAt}
   };
+  return row.type==='buy'?{...base,type:'buy',buyType:'direct'}:{...base,type:'sell',buyType:undefined};
 }
 
 
@@ -407,8 +408,8 @@ export function automaticTossDividendAdoptions(candidates: unknown=[]){
   return adoptions;
 }
 
-export function disconnectedTossState(toss: RawRow ={}){
-  return {...toss,status:'not_connected',lastError:'',accountLabel:'',holdings:[],comparisons:[],candidates:[],dividendCandidates:[],correctionCandidates:[],dividendCorrectionCandidates:[],accountResults:[],failedAccountCount:0};
+export function disconnectedTossState<T extends RawRow>(toss: T){
+  return {...toss,status:'not_connected' as const,lastError:'',accountLabel:'',holdings:[],comparisons:[],candidates:[],dividendCandidates:[],correctionCandidates:[],dividendCorrectionCandidates:[],accountResults:[],failedAccountCount:0};
 }
 
 export const TOSS_EXCEPTION_FIELDS = ['candidates','dividendCandidates','correctionCandidates','dividendCorrectionCandidates'] as const;
@@ -416,12 +417,11 @@ export function tossExceptionKey(field: string,input: unknown,scope: string=''):
   const row=record(input);
   return JSON.stringify([scope,field,String(row?.externalId||''),String(row?.sourceFingerprint||'')]);
 }
-export function filterDismissedTossExceptions(toss: RawRow,keys: string[]=Array.isArray(toss.dismissedExceptionKeys)?toss.dismissedExceptionKeys.filter((key):key is string=>typeof key==='string'):[]) {
-  const dismissed=new Set(keys),result={...toss};
-  for(const field of TOSS_EXCEPTION_FIELDS)result[field]=records(toss[field]).filter((row)=>!dismissed.has(tossExceptionKey(field,row,String(toss.accountScopeId||''))));
-  return result;
+export function filterDismissedTossExceptions<T extends RawRow>(toss: T,keys: string[]=Array.isArray(toss.dismissedExceptionKeys)?toss.dismissedExceptionKeys.filter((key):key is string=>typeof key==='string'):[]) {
+  const dismissed=new Set(keys),keep=(field:string)=>records(toss[field]).filter(row=>!dismissed.has(tossExceptionKey(field,row,String(toss.accountScopeId||''))));
+  return {...toss,candidates:keep('candidates'),dividendCandidates:keep('dividendCandidates'),correctionCandidates:keep('correctionCandidates'),dividendCorrectionCandidates:keep('dividendCorrectionCandidates')};
 }
-export function dismissTossExceptions(toss: RawRow,selectedKeys: string[]) {
+export function dismissTossExceptions<T extends RawRow>(toss: T,selectedKeys: string[]) {
   const available=new Set(TOSS_EXCEPTION_FIELDS.flatMap(field=>records(toss[field]).map((row)=>tossExceptionKey(field,row,String(toss.accountScopeId||'')))));
   const dismissedExceptionKeys=[...new Set([...(Array.isArray(toss.dismissedExceptionKeys)?toss.dismissedExceptionKeys.filter((key):key is string=>typeof key==='string'):[]),...selectedKeys.filter(key=>available.has(key))])];
   return filterDismissedTossExceptions({...toss,dismissedExceptionKeys});

@@ -1,3 +1,4 @@
+import type {decodeAppState} from '../modules/state-decoder.js';
 import type { AppState, Trade } from './domain.js';
 import type { createPortfolioEngine, ProjectCalculation } from '../modules/portfolio.js';
 import type { incomeEstimate } from '../modules/income.js';
@@ -11,7 +12,7 @@ import type { User } from 'firebase/auth';
 type Assert<T extends true> = T;
 type IsAny<T> = 0 extends (1 & T) ? true : false;
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
-// Prevent a future refactor from silently reopening these boundaries with any.
+// Prevent a future refactor from silently reopening these boundaries with unchecked types.
 type StateIsTyped = Assert<Equal<IsAny<AppState>, false>>;
 type TradeQuantityIsNumeric = Assert<Equal<Trade['shares'], number>>;
 type EngineInputIsState = Assert<Equal<ReturnType<Parameters<typeof createPortfolioEngine>[0]>, AppState>>;
@@ -29,4 +30,6 @@ type TossDividendAmountIsNumeric = Assert<Equal<NonNullable<ReturnType<typeof no
 type TossCandidateIsTyped = Assert<Equal<IsAny<ReturnType<typeof buildTossSync>['candidates'][number]>, false>>;
 type ViewStateIsTyped = Assert<Equal<ReturnType<ViewContext['getState']>, AppState>>;
 type LegacyAuditBasisIsNumeric = Assert<Equal<ReturnType<typeof summarizeLegacyState>['costBasis'], number>>;
+type DecoderAcceptsUnknown = Assert<Equal<Parameters<typeof decodeAppState>[0],unknown>>;
+type DecoderProducesState = Assert<Equal<ReturnType<typeof decodeAppState>,AppState>>;
 export {};
