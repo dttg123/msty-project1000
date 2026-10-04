@@ -1,0 +1,114 @@
+{
+  "sourceCommit": "d32f77b8b90a5a75213c89ded5ff3592df6e0968",
+  "sourcePath": "v4/modules/state.js",
+  "sourceVersion": "0.12.5",
+  "savedGoalChoice": "reinvest",
+  "state": {
+    "version": 4,
+    "settings": {
+      "exchangeRate": 1370,
+      "exchangeRateMode": "manual",
+      "displayCurrency": "KRW",
+      "targetMonthlyDividend": 500,
+      "warningKRW": 18000000,
+      "thresholdKRW": 20000000,
+      "appearance": "system"
+    },
+    "projects": [
+      {
+        "id": "legacy-msty",
+        "symbol": "MSTY",
+        "name": "YieldMax MSTR Option Income",
+        "tag": "PROJECT1000",
+        "targetUnits": 250,
+        "monthlyPlanShares": 0,
+        "projectStart": "2026-01-01",
+        "currentPrice": 0,
+        "priceSource": "manual",
+        "priceUpdatedAt": "",
+        "distributionFrequency": "weekly",
+        "initialDividendBalance": 0,
+        "initialDividendBalanceDate": "",
+        "afterGoalMode": "reinvest",
+        "recovery": {
+          "locked": false,
+          "basis": 0,
+          "startDate": "",
+          "targetReachedDate": "",
+          "calculatedBasisAtLock": 0,
+          "confirmedAt": "",
+          "method": "withdrawnOnly"
+        },
+        "category": "highYield",
+        "brokerLinks": [],
+        "colorIndex": 0,
+        "archived": false
+      }
+    ],
+    "trades": [
+      {
+        "id": "historical-buy",
+        "projectId": "legacy-msty",
+        "symbol": "MSTY",
+        "date": "2026-01-01",
+        "type": "buy",
+        "buyType": "direct",
+        "shares": 247,
+        "price": 12,
+        "reinvestAmountUSD": 0,
+        "note": "",
+        "createdAt": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "dividends": [
+      {
+        "id": "historical-dividend",
+        "projectId": "legacy-msty",
+        "symbol": "MSTY",
+        "date": "2026-01-02",
+        "amountUSD": 30,
+        "rocPercent": null,
+        "rocStatus": "estimated",
+        "sharesAtPayment": 247,
+        "referencePrice": 12,
+        "note": ""
+      }
+    ],
+    "splits": [],
+    "cashAdjustments": [],
+    "integrations": {
+      "toss": {
+        "status": "not_connected",
+        "lastSyncAt": "",
+        "lastSuccessfulAt": "",
+        "lastAttemptAt": "",
+        "lastError": "",
+        "accountLabel": "",
+        "candidates": [],
+        "dividendCandidates": [],
+        "holdings": [],
+        "comparisons": [],
+        "ignoredCount": 0,
+        "matchedExistingCount": 0,
+        "matchedExistingDividendCount": 0,
+        "unsupportedCurrencyCount": 0,
+        "historyTruncated": false,
+        "syncSequence": 0,
+        "sourceLedger": {
+          "orders": [],
+          "dividends": []
+        }
+      }
+    },
+    "meta": {
+      "createdAt": "2026-10-04T15:30:48.275Z",
+      "updatedAt": "2026-10-04T15:30:48.275Z",
+      "lastBackupAt": "",
+      "lastLocalSaveAt": "",
+      "lastCloudSaveAt": "",
+      "migratedFrom": "",
+      "migrationCheckedAt": "",
+      "celebratedMilestones": []
+    }
+  }
+}

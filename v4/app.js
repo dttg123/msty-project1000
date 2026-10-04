@@ -1873,7 +1873,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const project = projectById(id);
             if (!project || project.afterGoalMode === mode)
                 return;
-            if (mode !== 'cashflow' && mode !== 'continue')
+            if (mode !== 'cashflow' && mode !== 'reinvest')
                 return;
             project.afterGoalMode = mode;
             saveState(true).then(() => { renderAll(); showPage('goal'); const cards = [...document.querySelectorAll('.goal-step-card')]; cards.find((card) => card.querySelector('[data-goal-mode]')?.dataset.goalMode?.startsWith(id + ':'))?.setAttribute('open', ''); toast('목표 달성 후 운용 방식을 저장했습니다.'); });
