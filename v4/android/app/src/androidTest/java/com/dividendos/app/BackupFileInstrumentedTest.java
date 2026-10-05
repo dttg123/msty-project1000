@@ -77,6 +77,45 @@ public class BackupFileInstrumentedTest {
             own.edit().putString("activeVersion",beforeVersion).commit();web.edit().putString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH,beforePath).commit();
         }
     }
+    private String javascript(ActivityScenario<MainActivity> scenario,String script) throws Exception {
+        CountDownLatch done=new CountDownLatch(1);java.util.concurrent.atomic.AtomicReference<String> result=new java.util.concurrent.atomic.AtomicReference<>();
+        scenario.onActivity(activity->activity.getBridge().getWebView().evaluateJavascript(script,value->{result.set(value);done.countDown();}));
+        assertTrue("WebView callback timed out",done.await(10,TimeUnit.SECONDS));return result.get();
+    }
+    private void waitForJavascript(ActivityScenario<MainActivity> scenario,String expression) throws Exception {
+        for(int i=0;i<160;i++){if("true".equals(javascript(scenario,expression)))return;Thread.sleep(250);}
+        fail("Actual app condition not reached: "+expression);
+    }
+    @Test public void actualWebViewBackupButtonWritesRestorableZip() throws Exception {
+        ContentResolver resolver=InstrumentationRegistry.getInstrumentation().getTargetContext().getContentResolver();
+        java.util.Set<Long> before=new java.util.HashSet<>();
+        try(Cursor cursor=resolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,new String[]{MediaStore.Downloads._ID},null,null,null)){
+            if(cursor!=null)while(cursor.moveToNext())before.add(cursor.getLong(0));
+        }
+        java.util.List<Uri> created=new java.util.ArrayList<>();
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            waitForJavascript(scenario,"!!document.querySelector('[data-backup]') && !document.querySelector('#splashScreen')");
+            javascript(scenario,"document.querySelector('[data-page=\"settings\"]').click();document.querySelector('[data-backup]').closest('details').open=true;document.querySelector('[data-backup]').click()");
+            waitForJavascript(scenario,"!!document.querySelector('[data-backup-download]')");
+            assertEquals("true",javascript(scenario,"!document.querySelector('[data-backup-save]')"));
+            javascript(scenario,"document.querySelector('[data-backup-download]').click()");
+            waitForJavascript(scenario,"document.querySelector('#toast').textContent.includes('다운로드 폴더에 ZIP 백업을 저장')");
+            try(Cursor cursor=resolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,new String[]{MediaStore.Downloads._ID,MediaStore.Downloads.DISPLAY_NAME,MediaStore.Downloads.IS_PENDING},null,null,null)){
+                if(cursor!=null)while(cursor.moveToNext())if(!before.contains(cursor.getLong(0))&&cursor.getString(1).startsWith("DividendOS_v")){
+                    assertEquals(0,cursor.getInt(2));created.add(ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI,cursor.getLong(0)));
+                }
+            }
+            assertEquals("Actual backup button must create one download",1,created.size());
+            byte[] bytes;try(InputStream input=resolver.openInputStream(created.get(0))){assertNotNull(input);bytes=input.readAllBytes();}
+            assertTrue("Portable app ZIP is unexpectedly empty",bytes.length>700000);
+            boolean stateFound=false,runtimeFound=false;
+            try(ZipInputStream zip=new ZipInputStream(new java.io.ByteArrayInputStream(bytes))){ZipEntry entry;while((entry=zip.getNextEntry())!=null){
+                if(entry.getName().equals("data/state.json")){org.json.JSONObject state=new org.json.JSONObject(new String(zip.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));assertTrue(state.getJSONArray("projects").length()>0);assertNotNull(state.getJSONArray("trades"));assertNotNull(state.getJSONArray("dividends"));stateFound=true;}
+                if(entry.getName().equals("app/hot-update.js"))runtimeFound=true;
+            }}
+            assertTrue("State is missing from the actual downloaded ZIP",stateFound);assertTrue("Portable runtime dependency is missing",runtimeFound);
+        } finally {for(Uri uri:created)resolver.delete(uri,null,null);}
+    }
     @Test public void emptyPayloadFailsWithoutCreatingZeroByteFile() throws Exception {
         String name="DividendOS-native-empty-"+System.nanoTime()+".zip";
         ContentResolver resolver=InstrumentationRegistry.getInstrumentation().getTargetContext().getContentResolver();
