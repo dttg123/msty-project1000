@@ -192,7 +192,7 @@ test('같은 날 토스 매수·매도는 원본 체결시각 순서로 저장�
     {id:'a-sell-first-in-response',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'sell',shares:5,price:12,filledAt:'2026-01-01T11:00:00+09:00'},
     {id:'z-buy',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:10,price:10,filledAt:'2026-01-01T10:00:00+09:00'}
   ]};
-  await page.locator('#tossImportInput').setInputFiles({name:'same-day.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,snapshot}))});
+  await page.locator('#tossImportInput').setInputFiles({name:'same-day.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-01-02T00:00:00Z',snapshot}))});
   await expect(page.locator('.toast')).toContainText('매수 1건');
   const saved=await readLedger(page);expect(saved.trades).toHaveLength(2);expect(saved.trades.every(row=>!!row.source.filledAt)).toBe(true);
   expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
