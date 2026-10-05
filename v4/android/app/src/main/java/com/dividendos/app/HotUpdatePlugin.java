@@ -44,10 +44,22 @@ public class HotUpdatePlugin extends Plugin {
 
     public static void rollbackPendingUpdate(Context context) {
         SharedPreferences own = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        if (!own.getBoolean("pending", false)) return;
-        String previous = own.getString("previousPath", "");
-        context.getSharedPreferences(WebView.WEBVIEW_PREFS_NAME, Activity.MODE_PRIVATE).edit().putString(WebView.CAP_SERVER_PATH, previous).apply();
-        own.edit().putBoolean("pending", false).putString("failedVersion", own.getString("pendingVersion", "")).remove("pendingVersion").apply();
+        SharedPreferences web = context.getSharedPreferences(WebView.WEBVIEW_PREFS_NAME, Activity.MODE_PRIVATE);
+        if (own.getBoolean("pending", false)) {
+            String previous = own.getString("previousPath", "");
+            web.edit().putString(WebView.CAP_SERVER_PATH, previous).apply();
+            own.edit().putBoolean("pending", false).putString("failedVersion", own.getString("pendingVersion", "")).remove("pendingVersion").apply();
+        }
+        // A newer APK must not keep rendering an older retained web bundle.
+        try {
+            String binary = cleanVersion(context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName);
+            String active = own.getString("activeVersion", "0.0.0");
+            if (!binary.isEmpty() && compareVersions(binary,active)>0 && !web.getString(WebView.CAP_SERVER_PATH, "").isEmpty()) {
+                web.edit().putString(WebView.CAP_SERVER_PATH, "").apply();
+                own.edit().putString("activeVersion",binary).apply();
+            }
+        } catch (Exception ignored) {}
+
     }
 
     @PluginMethod

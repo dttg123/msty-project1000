@@ -15,6 +15,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.OutputStream;
+import java.io.InputStream;
 
 @CapacitorPlugin(name = "BackupFile")
 public class BackupFilePlugin extends Plugin {
@@ -32,6 +33,7 @@ public class BackupFilePlugin extends Plugin {
     }
     @PluginMethod
     public void save(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { download(call); return; }
         try {
             bytes(call);
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -59,6 +61,17 @@ public class BackupFilePlugin extends Plugin {
             if (stream == null) throw new Exception("No output stream");
             stream.write(value); stream.flush();
         }
+        // Do not claim completion until the actual stored bytes can be read back.
+        try (InputStream input = getContext().getContentResolver().openInputStream(uri)) {
+            if (input == null) throw new Exception("No input stream");
+            byte[] buffer = new byte[16384]; int offset = 0, read;
+            while ((read = input.read(buffer)) != -1) {
+                if (offset + read > value.length) throw new Exception("Backup verification failed");
+                for (int i=0;i<read;i++) if(buffer[i]!=value[offset+i]) throw new Exception("Backup verification failed");
+                offset += read;
+            }
+            if (offset != value.length) throw new Exception("Incomplete backup");
+        }
     }
     @PluginMethod
     public void download(PluginCall call) {
@@ -75,10 +88,10 @@ public class BackupFilePlugin extends Plugin {
                 if (uri == null) throw new Exception("No download location");
                 write(uri, value);
                 ContentValues ready = new ContentValues(); ready.put(MediaStore.Downloads.IS_PENDING, 0);
-                getContext().getContentResolver().update(uri, ready, null, null);
+                if (getContext().getContentResolver().update(uri, ready, null, null) != 1) throw new Exception("Download publication failed");
                 call.resolve(new JSObject().put("saved", true));
             } catch (Exception error) {
-                if (uri != null) getContext().getContentResolver().delete(uri, null, null);
+                if (uri != null) try { getContext().getContentResolver().delete(uri, null, null); } catch (Exception ignored) {}
                 call.reject("다운로드 폴더 저장에 실패했습니다.", error);
             }
         });

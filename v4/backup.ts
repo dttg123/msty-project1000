@@ -134,13 +134,16 @@ export function buildCsvExports(state: Partial<AppState> ={}) {
 export function buildCsvExportZip(state: AppState) { return createStoreZip(buildCsvExports(state)); }
 
 function readStoreZip(bytes: Uint8Array) {
+  if(bytes.length<22)throw new Error('백업 파일이 비어 있거나 손상되었습니다. 파일 크기를 확인해 주세요.');
+  const end=new DataView(bytes.buffer,bytes.byteOffset+bytes.length-22,22);
+  if(end.getUint32(0,true)!==0x06054b50||end.getUint16(20,true)!==0)throw new Error('백업 ZIP의 끝부분이 누락되거나 손상되었습니다.');
   const entries=new Map<string, Uint8Array>();let offset=0;
   while(offset+30<=bytes.length){
     const view=new DataView(bytes.buffer,bytes.byteOffset+offset);if(view.getUint32(0,true)!==0x04034b50)break;
     const flags=view.getUint16(6,true),method=view.getUint16(8,true),size=view.getUint32(18,true),nameLen=view.getUint16(26,true),extraLen=view.getUint16(28,true);
     if(flags&0x0008)throw new Error('지원하지 않는 ZIP 형식입니다.');if(method!==0)throw new Error('압축된 ZIP은 지원하지 않습니다. 이 앱에서 만든 ZIP을 사용하세요.');
     const name=decoder.decode(bytes.slice(offset+30,offset+30+nameLen)),start=offset+30+nameLen+extraLen;if(start+size>bytes.length)throw new Error('백업 파일 일부가 손상되었습니다.');
-    const data=bytes.slice(start,start+size);if(crc32(data)!==view.getUint32(14,true))throw new Error('백업 데이터 검증에 실패했습니다.');entries.set(name,data);offset=start+size;
+    const data=bytes.slice(start,start+size);if(crc32(data)!==view.getUint32(14,true))throw new Error('백업 데이터 검증에 실패했습니다.');if(entries.has(name))throw new Error('백업 ZIP 안에 중복 파일이 있습니다.');entries.set(name,data);offset=start+size;
   }
   return entries;
 }

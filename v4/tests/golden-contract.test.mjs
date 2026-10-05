@@ -24,6 +24,11 @@ const serialized=JSON.stringify(state);
 const zip=createStoreZip([{name:'data/state.json',data:serialized}]);
 const restored=await readStateFromBackupFile({name:'golden.zip',arrayBuffer:()=>zip.arrayBuffer()});
 assert.deepEqual(restored,state);
+const intact=new Uint8Array(await zip.arrayBuffer());
+await assert.rejects(readStateFromBackupFile({name:'zero.zip',arrayBuffer:async()=>new ArrayBuffer(0)}),/비어/);
+await assert.rejects(readStateFromBackupFile({name:'truncated.zip',arrayBuffer:async()=>intact.slice(0,-22).buffer}),/끝부분/);
+const duplicate=createStoreZip([{name:'data/state.json',data:serialized},{name:'data/state.json',data:serialized}]);
+await assert.rejects(readStateFromBackupFile({name:'duplicate.zip',arrayBuffer:()=>duplicate.arrayBuffer()}),/중복 파일/);
 const legacyV4=structuredClone(state);delete legacyV4.schemaVersion;
 for(const project of legacyV4.projects){delete project.securityId;delete project.status;delete project.corporateActions;}
 assert.deepEqual(validateLedger(migrate(legacyV4)),[],'pre-schema V4 backups must gain stable identity and corporate-action defaults before validation');

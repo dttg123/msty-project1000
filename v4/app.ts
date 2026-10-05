@@ -171,6 +171,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const uid=currentUser.uid,generation=cloudConnectGeneration;
     const isCurrent=()=>currentUser?.uid===uid&&generation===cloudConnectGeneration;
     try {
+      const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));
       setSaveStatus('동기화 중','cloud-busy');
       const now=new Date().toISOString();state.meta.lastCloudAttemptAt=now;cloudWritePending=true;
       const sent=clone(state);sent.meta.lastCloudSaveAt=now;const sentSignature=syncSignature(sent);
@@ -188,7 +189,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
   async function saveState(immediate =false): Promise<void> {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
-    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
+    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
     if(immediate)await run();else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
 
@@ -504,7 +505,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const result=await native.download({filename:preparedBackupFilename,base64:btoa(binary)});
       if(result?.cancelled)return true;
       if(result?.saved!==true)throw new Error('Android에서 파일 저장 완료를 확인하지 못했습니다.');
-      state.meta.lastBackupAt=new Date().toISOString();await saveState(true);closeModal();toast('다운로드 폴더에 ZIP 백업을 저장했습니다.');return true;
+      state.meta.lastBackupAt=new Date().toISOString();try{await saveState(true);}catch{closeModal();toast('ZIP 파일은 저장됐지만 앱의 저장 상태 갱신에 실패했습니다. 다운로드 폴더를 확인해 주세요.');return true;}closeModal();toast('다운로드 폴더에 ZIP 백업을 저장했습니다.');return true;
     }finally{nativeBackupRunning=false;controls.forEach(button=>button.disabled=false);}
   }
   async function downloadPreparedBackup(): Promise<void> {
@@ -965,7 +966,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('dividendReplacementInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
     document.getElementById('restoreInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
-    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=submittedFormData(event);let next: Partial<AppSettings>={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:form.get('appearance')==='dark'?'dark':form.get('appearance')==='light'?'light':'system'};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.entries(next).every(([key,value])=>Object.entries(state.settings).some(([setting,current])=>setting===key&&current===value))){toast('바뀐 설정이 없습니다.');return;}Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();});});
+    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=submittedFormData(event);let next: Partial<AppSettings>={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:form.get('appearance')==='dark'?'dark':form.get('appearance')==='light'?'light':'system'};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.entries(next).every(([key,value])=>Object.entries(state.settings).some(([setting,current])=>setting===key&&current===value))){toast('바뀐 설정이 없습니다.');return;}const beforeSettings=clone(state.settings);Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();}).catch(()=>{state.settings=beforeSettings;applyTheme(state.settings.appearance);renderAll();showPage('settings');});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
   }

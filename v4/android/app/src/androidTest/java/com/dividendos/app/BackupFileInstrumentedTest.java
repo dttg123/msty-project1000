@@ -62,6 +62,21 @@ public class BackupFileInstrumentedTest {
             }
         } finally { if(written==null)written=find(resolver,name);if(written!=null)resolver.delete(written,null,null); }
     }
+    @Test public void newerApkDoesNotRenderAnOlderRetainedWebBundle() throws Exception {
+        android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+        android.content.SharedPreferences own=context.getSharedPreferences("dividend_os_hot_update",0);
+        android.content.SharedPreferences web=context.getSharedPreferences(com.getcapacitor.plugin.WebView.WEBVIEW_PREFS_NAME,0);
+        String beforePath=web.getString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH,""),beforeVersion=own.getString("activeVersion","");
+        try {
+            own.edit().putString("activeVersion","0.12.25").putBoolean("pending",false).commit();
+            web.edit().putString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH,"/retained/older/bundle").commit();
+            HotUpdatePlugin.rollbackPendingUpdate(context);
+            assertEquals("",web.getString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH,""));
+            assertEquals(context.getPackageManager().getPackageInfo(context.getPackageName(),0).versionName,own.getString("activeVersion",""));
+        } finally {
+            own.edit().putString("activeVersion",beforeVersion).commit();web.edit().putString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH,beforePath).commit();
+        }
+    }
     @Test public void emptyPayloadFailsWithoutCreatingZeroByteFile() throws Exception {
         String name="DividendOS-native-empty-"+System.nanoTime()+".zip";
         ContentResolver resolver=InstrumentationRegistry.getInstrumentation().getTargetContext().getContentResolver();

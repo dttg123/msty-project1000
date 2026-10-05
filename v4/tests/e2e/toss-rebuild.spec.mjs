@@ -198,3 +198,14 @@ test('같은 날 토스 매수·매도는 원본 체결시각 순서로 저장�
   expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
 });
+
+
+test('시작 시 거부되는 과도한 설정값은 저장 전에 차단되고 기존 기록으로 다시 열린다',async({page})=>{
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));await setup(page,247);const before=await readLedger(page);
+  const display=page.locator('details.settings-section').filter({has:page.locator('#displaySettingsForm')});await display.locator(':scope > summary').click();
+  await page.locator('#displaySettingsForm [name="exchangeRate"]').fill('10000000000000000');
+  await page.locator('#displaySettingsForm button[type="submit"]').click();
+  await expect(page.locator('.toast')).toContainText('기기 저장에 실패');
+  expect((await readLedger(page)).settings).toEqual(before.settings);expect((await readLedger(page)).trades).toEqual(before.trades);
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#bootRetry')).toHaveCount(0);expect((await readLedger(page)).settings).toEqual(before.settings);expect(errors).toEqual([]);
+});

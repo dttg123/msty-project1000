@@ -271,6 +271,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         const uid = currentUser.uid, generation = cloudConnectGeneration;
         const isCurrent = () => currentUser?.uid === uid && generation === cloudConnectGeneration;
         try {
+            const issues = validateLedger(state);
+            if (issues.length)
+                throw new Error(issues.join(' '));
             setSaveStatus('동기화 중', 'cloud-busy');
             const now = new Date().toISOString();
             state.meta.lastCloudAttemptAt = now;
@@ -332,6 +335,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         clearTimeout(saveTimer);
         clearTimeout(cloudTimer);
         const run = async () => { state.meta.lastLocalSaveAt = new Date().toISOString(); try {
+            const issues = validateLedger(state);
+            if (issues.length)
+                throw new Error(issues.join(' '));
             await storageSet(STATE_KEY, state);
             await autoBackup('ledger-change');
         }
@@ -944,7 +950,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             if (result?.saved !== true)
                 throw new Error('Android에서 파일 저장 완료를 확인하지 못했습니다.');
             state.meta.lastBackupAt = new Date().toISOString();
-            await saveState(true);
+            try {
+                await saveState(true);
+            }
+            catch {
+                closeModal();
+                toast('ZIP 파일은 저장됐지만 앱의 저장 상태 갱신에 실패했습니다. 다운로드 폴더를 확인해 주세요.');
+                return true;
+            }
             closeModal();
             toast('다운로드 폴더에 ZIP 백업을 저장했습니다.');
             return true;
@@ -2152,9 +2165,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         } if (Object.entries(next).every(([key, value]) => Object.entries(state.settings).some(([setting, current]) => setting === key && current === value))) {
             toast('바뀐 설정이 없습니다.');
             return;
-        } Object.assign(state.settings, next); if (id === 'displaySettingsForm')
+        } const beforeSettings = clone(state.settings); Object.assign(state.settings, next); if (id === 'displaySettingsForm')
             applyTheme(state.settings.appearance); saveState(true).then(() => { renderAll(); showPage('settings'); toast(message); if (id === 'displaySettingsForm' && state.settings.exchangeRateMode === 'auto')
-            refreshExchangeRate(); }); });
+            refreshExchangeRate(); }).catch(() => { state.settings = beforeSettings; applyTheme(state.settings.appearance); renderAll(); showPage('settings'); }); });
         matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change', () => { if (state.settings.appearance === 'system')
             applyTheme('system'); });
         window.addEventListener('online', () => { if (currentUser)
