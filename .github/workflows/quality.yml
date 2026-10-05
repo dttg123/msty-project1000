@@ -229,6 +229,24 @@ jobs:
       - name: Install DividendOS tooling
         working-directory: v4
         run: npm ci
+      - name: Isolate Chromium system dependency repositories
+        run: |
+          # Chromium needs Ubuntu packages, not the runner's optional Microsoft feed.
+          # A 403 from that unrelated feed must not disable actual browser QA.
+          sudo python3 - <<'PYTHON'
+          from pathlib import Path
+          for file in Path('/etc/apt/sources.list.d').glob('*'):
+              if file.suffix not in ('.list', '.sources'):
+                  continue
+              content = file.read_text()
+              if 'packages.microsoft.com' not in content:
+                  continue
+              if file.suffix == '.list':
+                  kept = '\n'.join(line for line in content.splitlines() if 'packages.microsoft.com' not in line)
+              else:
+                  kept = '\n\n'.join(part for part in content.split('\n\n') if 'packages.microsoft.com' not in part)
+              file.write_text(kept + '\n')
+          PYTHON
       - name: Install Chromium
         working-directory: v4
         run: npx playwright install --with-deps chromium

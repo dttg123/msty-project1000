@@ -188,7 +188,7 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
 
 test('같은 날 토스 매수·매도는 원본 체결시각 순서로 저장하고 재시작해도 유지한다',async({page})=>{
   await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
-  const snapshot={accountScopeId:'0123456789abcdef01234567',syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:5}],orders:[
+  const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-01-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:5}],orders:[
     {id:'a-sell-first-in-response',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'sell',shares:5,price:12,filledAt:'2026-01-01T11:00:00+09:00'},
     {id:'z-buy',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:10,price:10,filledAt:'2026-01-01T10:00:00+09:00'}
   ]};
