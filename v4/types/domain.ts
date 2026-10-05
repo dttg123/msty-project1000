@@ -19,6 +19,7 @@ export interface SourceRef {
   market?: string;
   securityId?: string;
   importedAt?: string;
+  filledAt?: string;
   adoptedManual?: boolean;
 }
 

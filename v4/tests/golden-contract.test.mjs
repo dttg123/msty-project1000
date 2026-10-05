@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {migrate,normalizeV4} from '../modules/state.js';
@@ -38,6 +39,9 @@ for(const invalidInfo of [null,[],42]){
   const broken=createStoreZip([{name:'backup-info.json',data:JSON.stringify(invalidInfo)},{name:'data/state.json',data:canonicalStringify(state)}]);
   await assert.rejects(readStateFromBackupFile({name:'bad-info.zip',arrayBuffer:()=>broken.arrayBuffer()}),/백업 정보 형식/);
 }
-const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response('portable-runtime-file',{status:200});
+const fetchedRuntimeFiles=[];const originalFetch=globalThis.fetch;globalThis.fetch=async(url)=>{fetchedRuntimeFiles.push(String(url));return new Response('portable-runtime-file',{status:200});};
 try{const portable=await buildPortableBackup(state);assert.deepEqual(await readStateFromBackupFile({name:'portable.zip',arrayBuffer:()=>portable.arrayBuffer()}),state);}finally{globalThis.fetch=originalFetch;}
+assert.ok(fetchedRuntimeFiles.includes('./hot-update.js'),'portable backup must include app hot-update dependency');
+const appSource=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+for(const match of appSource.matchAll(/from ['"](\.\/[^'"]+)['"]/g))assert.ok(fetchedRuntimeFiles.includes(match[1]),`portable app dependency missing: ${match[1]}`);
 console.log('Golden contract PASS: ledger totals and backup round trip unchanged');

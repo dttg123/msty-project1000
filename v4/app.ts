@@ -489,20 +489,28 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   function downloadFile(filename: string,content: BlobPart,type: string ='application/octet-stream') { const blob=content instanceof Blob?content:new Blob([content],{type});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
   let backupRunning=false,backupObjectUrl='',preparedBackup: Blob|null=null,preparedBackupFilename='';
-  async function nativeBackupFile(download=false): Promise<boolean> {
+  let nativeBackupRunning=false;
+  async function nativeBackupFile(): Promise<boolean> {
     const native=window?.Capacitor?.Plugins?.BackupFile;
     if(!native||!preparedBackup)return false;
-    const data=await preparedBackup.arrayBuffer();
-    if(data.byteLength>32*1024*1024)throw new Error('백업 파일이 너무 큽니다.');
-    const bytes=new Uint8Array(data);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
-    const result=await native[download?'download':'save']({filename:preparedBackupFilename,base64:btoa(binary)});
-    if(!result?.cancelled&&result?.saved){state.meta.lastBackupAt=new Date().toISOString();await saveState(true);closeModal();toast(download?'다운로드 폴더에 ZIP 백업을 저장했습니다.':'선택한 위치에 ZIP 백업을 저장했습니다.');}
-    return true;
+    if(nativeBackupRunning)return true;
+    if(typeof native.download!=='function')throw new Error('다운로드 저장을 지원하는 APK가 필요합니다.');
+    nativeBackupRunning=true;
+    const controls=[...document.querySelectorAll<HTMLButtonElement>('[data-backup-save],[data-backup-download]')];controls.forEach(button=>button.disabled=true);
+    try{
+      const data=await preparedBackup.arrayBuffer();if(data.byteLength===0||data.byteLength>32*1024*1024)throw new Error('백업 파일 크기를 확인해 주세요.');
+      const bytes=new Uint8Array(data);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      // Never open an Activity while its retained PluginCall contains the entire backup.
+      const result=await native.download({filename:preparedBackupFilename,base64:btoa(binary)});
+      if(result?.cancelled)return true;
+      if(result?.saved!==true)throw new Error('Android에서 파일 저장 완료를 확인하지 못했습니다.');
+      state.meta.lastBackupAt=new Date().toISOString();await saveState(true);closeModal();toast('다운로드 폴더에 ZIP 백업을 저장했습니다.');return true;
+    }finally{nativeBackupRunning=false;controls.forEach(button=>button.disabled=false);}
   }
   async function downloadPreparedBackup(): Promise<void> {
     if(!preparedBackup){toast('백업을 다시 준비해 주세요.');return;}
     try{
-      if(await nativeBackupFile(true))return;
+      if(await nativeBackupFile())return;
       if(window?.Capacitor?.isNativePlatform?.()){toast('파일 저장을 지원하는 새 APK로 업데이트해 주세요. 앱은 삭제하지 마세요.');return;}
       downloadFile(preparedBackupFilename,preparedBackup,'application/zip');toast('브라우저에 백업 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
     }catch (error: unknown){toast('백업 저장에 실패했습니다. 다시 시도해 주세요.');}
@@ -537,7 +545,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       backupObjectUrl=URL.createObjectURL(zip);
       const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\\.\\d{3}Z$/,'Z').replace('T','_'),filename=`DividendOS_v${APP_VERSION}_${stamp}.zip`;
       preparedBackup=zip;preparedBackupFilename=filename;
-      openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 직접 선택하거나 다운로드 폴더에 바로 저장할 수 있습니다.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button></div><p class="detail-note">설치 앱은 Android 저장 창을 사용합니다. 웹에서는 지원되는 저장 창·공유·다운로드를 사용합니다. 저장 후 파일을 확인해 주세요.</p>`);
+      openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>다운로드 폴더에 저장할 수 있습니다. 웹에서는 저장 위치를 선택할 수도 있습니다.</p><div class="form-grid">${window.Capacitor?.Plugins?.BackupFile?'<button class="btn primary backup-download" data-backup-download>다운로드 폴더에 저장</button>':'<button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button>'}</div><p class="detail-note">설치 앱은 다운로드 폴더에 바로 저장합니다. 웹에서는 지원되는 저장 창·공유·다운로드를 사용합니다. 저장 후 파일을 확인해 주세요.</p>`);
       state.meta.lastBackupPreparedAt=new Date().toISOString();await saveState(true);
     }catch (error: unknown){console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
     finally{backupRunning=false;}
@@ -993,7 +1001,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const backup=document.getElementById('bootOriginalBackup');if(backup)backup.onclick=async()=>{
         try{
           const zip=createStoreZip([{name:'data/state.json',data:JSON.stringify(startupSnapshot)}]),filename=`DividendOS_original_${todayISO()}.zip`,native=window.Capacitor?.Plugins?.BackupFile;
-          if(native){const bytes=new Uint8Array(await zip.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));await native.save({filename,base64:btoa(binary)});}else downloadFile(filename,zip,'application/zip');
+          if(native){const bytes=new Uint8Array(await zip.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const result=await native.download({filename,base64:btoa(binary)});if(result?.saved!==true)throw new Error('원본 파일 저장 완료를 확인하지 못했습니다.');}else downloadFile(filename,zip,'application/zip');
         }catch(error){toast(errorMessage(error)||'원본 보관에 실패했습니다.');}
       };
       setSaveStatus('복구 필요','cloud-error');hideSplash();

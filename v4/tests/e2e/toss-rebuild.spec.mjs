@@ -122,18 +122,30 @@ test('환율 갱신 성공과 실패를 구분하며 실패 시 저장 환율을
   expect((await readLedger(page)).settings.exchangeRate).toBe(1450.25);
 });
 
-test('Android 백업 저장 버튼은 네이티브 저장 창을 호출하고 취소 시 완료로 표시하지 않는다',async({page})=>{
-  await page.addInitScript(()=>{window.Capacitor={isNativePlatform:()=>true,Plugins:{BackupFile:{save:async(data)=>{window.backupSaveCall=data;return {cancelled:true};},download:async(data)=>{window.backupDownloadCall=data;return {saved:true};}}}};});
-  await setup(page,247);
+test('Android 백업은 저장 창 없이 다운로드하며 실패·중복 요청을 완료로 표시하지 않는다',async({page})=>{
+  await page.addInitScript(()=>{window.backupCalls=0;window.backupMode='pending';window.Capacitor={isNativePlatform:()=>true,Plugins:{BackupFile:{save:async()=>{throw new Error('unsafe picker invoked');},download:async(data)=>{window.backupCalls++;window.backupDownloadCall=data;if(window.backupMode==='pending')return new Promise((resolve,reject)=>{window.rejectBackup=reject;});return window.backupMode==='unconfirmed'?{}:{saved:true};}}}};});
+  await setup(page,247);const before=await readLedger(page);
   const advanced=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});await advanced.locator(':scope > summary').click();
-  await page.locator('[data-backup]').click();await expect(page.locator('[data-backup-save]')).toBeVisible();
-  await page.locator('[data-backup-save]').click();
-  await expect.poll(()=>page.evaluate(()=>window.backupSaveCall?.filename||'')).toMatch(/\.zip$/);
-  await expect(page.locator('[data-backup-save]')).toBeVisible();
-  await page.locator('[data-backup-download]').click();
+  await page.locator('[data-backup]').click();await expect(page.locator('[data-backup-download]')).toBeVisible();
+  await expect(page.locator('[data-backup-save]')).toHaveCount(0);
+  await page.evaluate(()=>{const button=document.querySelector('[data-backup-download]');button.click();button.click();});
+  await expect.poll(()=>page.evaluate(()=>window.backupCalls)).toBe(1);
+  await expect(page.locator('[data-backup-download]')).toBeDisabled();
+  expect((await readLedger(page)).meta.lastBackupAt).toBe(before.meta.lastBackupAt);
+  await page.evaluate(()=>window.rejectBackup(new Error('disk full')));
+  await expect(page.locator('.toast')).toContainText('백업 저장에 실패');
+  await expect(page.locator('[data-backup-download]')).toBeEnabled();
+  await page.evaluate(()=>window.backupMode='unconfirmed');await page.locator('[data-backup-download]').click();
+  await expect.poll(()=>page.evaluate(()=>window.backupCalls)).toBe(2);
+  await expect(page.locator('[data-backup-download]')).toBeEnabled();
+  expect((await readLedger(page)).meta.lastBackupAt).toBe(before.meta.lastBackupAt);
+  await page.evaluate(()=>window.backupMode='saved');await page.locator('[data-backup-download]').click();
   await expect(page.locator('.toast')).toContainText('다운로드 폴더에 ZIP 백업을 저장');
-  const file=await page.evaluate(()=>window.backupDownloadCall);
-  expect(Buffer.from(file.base64,'base64').subarray(0,2).toString()).toBe('PK');
+  const file=await page.evaluate(()=>window.backupDownloadCall),bytes=Buffer.from(file.base64,'base64');
+  expect(bytes.length).toBeGreaterThan(700000);expect(bytes.subarray(0,2).toString()).toBe('PK');
+  const restored=await page.evaluate(async(base64)=>{const {readStateFromBackupFile}=await import('/backup.js');return readStateFromBackupFile(new File([Uint8Array.from(atob(base64),c=>c.charCodeAt(0))],'backup.zip'));},file.base64);
+  expect(restored.trades).toEqual(before.trades);expect(restored.dividends).toEqual(before.dividends);
+  const saved=await readLedger(page);expect(saved.trades).toEqual(before.trades);expect(saved.dividends).toEqual(before.dividends);expect(saved.meta.lastBackupAt).toBeTruthy();
 });
 
 test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장하고 재조회해도 251주를 유지한다',async({page})=>{
@@ -171,5 +183,18 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   expect((await readLedger(page)).trades).toEqual(saved.trades);
   if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
   await expect(page.locator('.toss-sync-warning')).toBeVisible();await expect(page.locator('.toss-sync-warning')).toContainText('보유주수');
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
+});
+
+test('같은 날 토스 매수·매도는 원본 체결시각 순서로 저장하고 재시작해도 유지한다',async({page})=>{
+  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
+  const snapshot={accountScopeId:'0123456789abcdef01234567',syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:5}],orders:[
+    {id:'a-sell-first-in-response',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'sell',shares:5,price:12,filledAt:'2026-01-01T11:00:00+09:00'},
+    {id:'z-buy',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:10,price:10,filledAt:'2026-01-01T10:00:00+09:00'}
+  ]};
+  await page.locator('#tossImportInput').setInputFiles({name:'same-day.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,snapshot}))});
+  await expect(page.locator('.toast')).toContainText('매수 1건');
+  const saved=await readLedger(page);expect(saved.trades).toHaveLength(2);expect(saved.trades.every(row=>!!row.source.filledAt)).toBe(true);
+  expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
 });

@@ -301,7 +301,7 @@ export function tossCandidateToTrade(candidate: unknown,{projectId,id,createdAt=
   const base={
     id,projectId,symbol:row.symbol,date:row.date,
     shares:row.shares,price:row.price,feeUSD:row.feeUSD,taxUSD:row.taxUSD,reinvestAmountUSD:0,note:row.note,createdAt,
-    source:{provider:'toss' as const,externalId:row.externalId,rawExternalId:row.rawExternalId,sourceIdKind:row.sourceIdKind,sourceFingerprint:row.sourceFingerprint,status:row.status,accountId:row.accountId,assetKey:row.assetKey,market:row.market,securityId:row.securityId,importedAt:createdAt}
+    source:{provider:'toss' as const,externalId:row.externalId,rawExternalId:row.rawExternalId,sourceIdKind:row.sourceIdKind,sourceFingerprint:row.sourceFingerprint,status:row.status,filledAt:row.filledAt,accountId:row.accountId,assetKey:row.assetKey,market:row.market,securityId:row.securityId,importedAt:createdAt}
   };
   return row.type==='buy'?{...base,type:'buy',buyType:'direct'}:{...base,type:'sell',buyType:undefined};
 }

@@ -140,3 +140,21 @@ const numericStringOrder=normalizeTossOrder({...row,shares:'2',price:'12.5',feeU
 assert.equal(numericStringOrder.shares,2);
 assert.equal(numericStringOrder.price,12.5);
 assert.equal(numericStringOrder.feeUSD,0);
+
+// Broker identifiers and import time must not reorder a complete execution day.
+const {blankState}=await import('../modules/state.js');
+const {createPortfolioEngine}=await import('../modules/portfolio.js');
+const executionState=blankState(),executionProject=executionState.projects[0];
+const executionOrders=[
+ {id:'a-sell',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'sell',shares:10,price:12,filledAt:'2026-01-01T11:00:00+09:00'},
+ {id:'z-buy',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:10,price:10,filledAt:'2026-01-01T10:00:00+09:00'}
+];
+executionState.trades=executionOrders.map(order=>tossCandidateToTrade(order,{projectId:executionProject.id,id:order.id,createdAt:'2026-10-05T00:00:00Z'}));
+const engine=createPortfolioEngine(()=>executionState,()=>executionProject.id);
+assert.equal(executionState.trades[0].source.filledAt,executionOrders[0].filledAt);
+assert.equal(engine.computeProject(executionProject).oversells.length,0);
+assert.equal(engine.computeProject(executionProject).shares,0);assert.equal(engine.computeProject(executionProject).realized,20);
+executionState.trades[0].source.filledAt='2026-01-01T09:00:00+09:00';
+assert.equal(engine.computeProject(executionProject).oversells.length,1,'real oversell remains blocked');
+delete executionState.trades[0].source.filledAt;
+assert.equal(engine.computeProject(executionProject).oversells.length,1,'incomplete historical times retain original order');

@@ -15,7 +15,27 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         const state = getState();
         return state[key].filter(row => row.projectId === projectId || (!row.projectId && projectById(projectId)?.symbol === 'MSTY'));
     }
+    function executionOrder(projectId) {
+        // Use broker execution times only when the entire trading day has them.
+        // Mixed/manual and historical days retain their existing ordering.
+        const byDate = new Map();
+        for (const row of projectRows('trades', projectId)) {
+            const rows = byDate.get(row.date) || [];
+            rows.push(row);
+            byDate.set(row.date, rows);
+        }
+        const completeDays = new Set([...byDate].filter(([, rows]) => rows.every(row => row.source?.provider === 'toss' && row.source.filledAt?.slice(0, 10) === row.date && Number.isFinite(Date.parse(row.source.filledAt)))).map(([date]) => date));
+        return (a, b) => {
+            if (a.date === b.date && completeDays.has(a.date) && a.source?.filledAt && b.source?.filledAt) {
+                const time = Date.parse(a.source.filledAt) - Date.parse(b.source.filledAt);
+                if (time)
+                    return time;
+            }
+            return String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id));
+        };
+    }
     function sortedEvents(projectId) {
+        const compareExecution = executionOrder(projectId);
         const trades = projectRows('trades', projectId).map((row) => ({ ...row, eventType: 'trade' }));
         const splits = projectRows('splits', projectId).map((row) => ({ ...row, eventType: 'split' }));
         return [...trades, ...splits].sort((a, b) => {
@@ -25,7 +45,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
             const byType = (a.eventType === 'split' ? 0 : 1) - (b.eventType === 'split' ? 0 : 1);
             if (byType)
                 return byType;
-            return String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id));
+            return compareExecution(a, b);
         });
     }
     function sharesAtDate(projectId, date) {
@@ -61,8 +81,8 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         let directShares = 0, reinvestShares = 0, reinvestAmount = 0, reinvestCount = 0, targetReachedDate = '', targetBasisSuggestion = 0;
         const milestoneDates = { 25: '', 50: '', 75: '', 100: '' }, oversells = [], effectiveSells = [];
         const postedTradeIds = new Set(postedTrades.map((row) => row.id));
-        const eventOrder = { split: 0, trade: 1, roc: 2 };
-        const financialEvents = [...sortedEvents(project.id).filter((row) => row.eventType === 'trade' ? postedTradeIds.has(row.id) : isDate(row.date) && String(row.date) <= asOf && n(row.from) > 0 && n(row.to) > 0), ...postedDividends.map((row) => ({ ...row, eventType: 'roc' }))].sort((a, b) => String(a.date).localeCompare(String(b.date)) || ((eventOrder[a.eventType] ?? 3) - (eventOrder[b.eventType] ?? 3)) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id)));
+        const eventOrder = { split: 0, trade: 1, roc: 2 }, compareExecution = executionOrder(project.id);
+        const financialEvents = [...sortedEvents(project.id).filter((row) => row.eventType === 'trade' ? postedTradeIds.has(row.id) : isDate(row.date) && String(row.date) <= asOf && n(row.from) > 0 && n(row.to) > 0), ...postedDividends.map((row) => ({ ...row, eventType: 'roc' }))].sort((a, b) => String(a.date).localeCompare(String(b.date)) || ((eventOrder[a.eventType] ?? 3) - (eventOrder[b.eventType] ?? 3)) || compareExecution(a, b));
         for (const event of financialEvents) {
             if (event.eventType === 'split') {
                 const ratio = n(event.to) / n(event.from);
