@@ -22,7 +22,7 @@ function isAudit(value:unknown):value is MigrationAudit{
 }
 function source(value:unknown):SourceRef|undefined{
   if(value===undefined||value===null)return undefined;const row=object(value);
-  return {...row,provider:choice(row.provider,['manual','toss'],'manual','provider'),...Object.fromEntries(['externalId','sourceId','rawExternalId','sourceFingerprint','status','accountId','assetKey','market','securityId','importedAt'].filter(key=>row[key]!==undefined).map(key=>[key,text(row[key])])),...(row.adoptedManual!==undefined?{adoptedManual:bool(row.adoptedManual)}:{}),...(row.sourceIdKind!==undefined?{sourceIdKind:choice(row.sourceIdKind,['source','fingerprint'],'source','sourceIdKind')}:{} )};
+  return {...row,provider:choice(row.provider,['manual','toss'],'manual','provider'),...Object.fromEntries(['externalId','sourceId','rawExternalId','sourceFingerprint','status','accountId','assetKey','market','securityId','importedAt','filledAt'].filter(key=>row[key]!==undefined).map(key=>[key,text(row[key])])),...(row.adoptedManual!==undefined?{adoptedManual:bool(row.adoptedManual)}:{}),...(row.sourceIdKind!==undefined?{sourceIdKind:choice(row.sourceIdKind,['source','fingerprint'],'source','sourceIdKind')}:{} )};
 }
 function recovery(value:unknown):RecoveryPlan{
   const row=object(value),base=blankRecovery();return {...row,locked:bool(row.locked),basis:number(row.basis??base.basis),startDate:text(row.startDate),targetReachedDate:text(row.targetReachedDate),calculatedBasisAtLock:number(row.calculatedBasisAtLock??0),confirmedAt:text(row.confirmedAt),method:choice(row.method,['withdrawnOnly'],'withdrawnOnly','method')};

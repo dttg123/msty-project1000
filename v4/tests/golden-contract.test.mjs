@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {migrate,normalizeV4} from '../modules/state.js';
@@ -23,6 +24,11 @@ const serialized=JSON.stringify(state);
 const zip=createStoreZip([{name:'data/state.json',data:serialized}]);
 const restored=await readStateFromBackupFile({name:'golden.zip',arrayBuffer:()=>zip.arrayBuffer()});
 assert.deepEqual(restored,state);
+const intact=new Uint8Array(await zip.arrayBuffer());
+await assert.rejects(readStateFromBackupFile({name:'zero.zip',arrayBuffer:async()=>new ArrayBuffer(0)}),/비어/);
+await assert.rejects(readStateFromBackupFile({name:'truncated.zip',arrayBuffer:async()=>intact.slice(0,-22).buffer}),/끝부분/);
+const duplicate=createStoreZip([{name:'data/state.json',data:serialized},{name:'data/state.json',data:serialized}]);
+await assert.rejects(readStateFromBackupFile({name:'duplicate.zip',arrayBuffer:()=>duplicate.arrayBuffer()}),/중복 파일/);
 const legacyV4=structuredClone(state);delete legacyV4.schemaVersion;
 for(const project of legacyV4.projects){delete project.securityId;delete project.status;delete project.corporateActions;}
 assert.deepEqual(validateLedger(migrate(legacyV4)),[],'pre-schema V4 backups must gain stable identity and corporate-action defaults before validation');
@@ -38,6 +44,9 @@ for(const invalidInfo of [null,[],42]){
   const broken=createStoreZip([{name:'backup-info.json',data:JSON.stringify(invalidInfo)},{name:'data/state.json',data:canonicalStringify(state)}]);
   await assert.rejects(readStateFromBackupFile({name:'bad-info.zip',arrayBuffer:()=>broken.arrayBuffer()}),/백업 정보 형식/);
 }
-const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response('portable-runtime-file',{status:200});
+const fetchedRuntimeFiles=[];const originalFetch=globalThis.fetch;globalThis.fetch=async(url)=>{fetchedRuntimeFiles.push(String(url));return new Response('portable-runtime-file',{status:200});};
 try{const portable=await buildPortableBackup(state);assert.deepEqual(await readStateFromBackupFile({name:'portable.zip',arrayBuffer:()=>portable.arrayBuffer()}),state);}finally{globalThis.fetch=originalFetch;}
+assert.ok(fetchedRuntimeFiles.includes('./hot-update.js'),'portable backup must include app hot-update dependency');
+const appSource=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+for(const match of appSource.matchAll(/from ['"](\.\/[^'"]+)['"]/g))assert.ok(fetchedRuntimeFiles.includes(match[1]),`portable app dependency missing: ${match[1]}`);
 console.log('Golden contract PASS: ledger totals and backup round trip unchanged');

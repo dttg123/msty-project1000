@@ -1,12 +1,12 @@
 import { isRecord } from './modules/utils.js';
-export const APP_VERSION = '0.12.26';
+export const APP_VERSION = '0.12.27';
 export const DATA_SCHEMA_VERSION = 4;
 import { dividendCashBreakdown } from './modules/finance.js';
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
 const APP_FILES = [
     'index.html', 'styles.css', 'styles-refined.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
     'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js', 'toss-native.js',
-    'backup.js', 'sw.js',
+    'backup.js', 'sw.js', 'hot-update.js',
     'modules/activity.js', 'modules/constants.js', 'modules/utils.js', 'modules/state.js', 'modules/state-decoder.js',
     'modules/income.js', 'modules/dividend-analytics.js', 'modules/finance.js', 'modules/corporate-actions.js', 'modules/cloud-api.js', 'modules/cloud-contract.js', 'modules/backup-history.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
 ];
@@ -151,6 +151,11 @@ export function buildCsvExports(state = {}) {
 }
 export function buildCsvExportZip(state) { return createStoreZip(buildCsvExports(state)); }
 function readStoreZip(bytes) {
+    if (bytes.length < 22)
+        throw new Error('백업 파일이 비어 있거나 손상되었습니다. 파일 크기를 확인해 주세요.');
+    const end = new DataView(bytes.buffer, bytes.byteOffset + bytes.length - 22, 22);
+    if (end.getUint32(0, true) !== 0x06054b50 || end.getUint16(20, true) !== 0)
+        throw new Error('백업 ZIP의 끝부분이 누락되거나 손상되었습니다.');
     const entries = new Map();
     let offset = 0;
     while (offset + 30 <= bytes.length) {
@@ -168,6 +173,8 @@ function readStoreZip(bytes) {
         const data = bytes.slice(start, start + size);
         if (crc32(data) !== view.getUint32(14, true))
             throw new Error('백업 데이터 검증에 실패했습니다.');
+        if (entries.has(name))
+            throw new Error('백업 ZIP 안에 중복 파일이 있습니다.');
         entries.set(name, data);
         offset = start + size;
     }

@@ -20,7 +20,20 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
     return state[key].filter(row => row.projectId === projectId || (!row.projectId && projectById(projectId)?.symbol === 'MSTY')) as AppState[K];
   }
 
+  function executionOrder(projectId: string) {
+    // Use broker execution times only when the entire trading day has them.
+    // Mixed/manual and historical days retain their existing ordering.
+    const byDate=new Map<string,Array<BuyTrade|SellTrade>>();
+    for(const row of projectRows('trades',projectId)){const rows=byDate.get(row.date)||[];rows.push(row);byDate.set(row.date,rows);}
+    const completeDays=new Set([...byDate].filter(([,rows])=>rows.every(row=>row.source?.provider==='toss'&&row.source.filledAt?.slice(0,10)===row.date&&Number.isFinite(Date.parse(row.source.filledAt)))).map(([date])=>date));
+    return (a:DatedRow & {source?:BuyTrade['source']},b:DatedRow & {source?:BuyTrade['source']})=>{
+      if(a.date===b.date&&completeDays.has(a.date)&&a.source?.filledAt&&b.source?.filledAt){const time=Date.parse(a.source.filledAt)-Date.parse(b.source.filledAt);if(time)return time;}
+      return String(a.createdAt||a.id).localeCompare(String(b.createdAt||b.id));
+    };
+  }
+
   function sortedEvents(projectId: string) {
+    const compareExecution=executionOrder(projectId);
     const trades = projectRows('trades',projectId).map((row) => ({...row,eventType:'trade' as const}));
     const splits = projectRows('splits',projectId).map((row) => ({...row,eventType:'split' as const}));
     return [...trades,...splits].sort((a,b) => {
@@ -28,7 +41,7 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
       if(byDate)return byDate;
       const byType=(a.eventType==='split'?0:1)-(b.eventType==='split'?0:1);
       if(byType)return byType;
-      return String(a.createdAt||a.id).localeCompare(String(b.createdAt||b.id));
+      return compareExecution(a,b);
     });
   }
 
@@ -60,8 +73,8 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
     let directShares=0, reinvestShares=0, reinvestAmount=0, reinvestCount=0, targetReachedDate='', targetBasisSuggestion=0;
     const milestoneDates: MilestoneDates={25:'',50:'',75:'',100:''}, oversells: SellTrade[]=[], effectiveSells: Array<SellTrade & {effectiveShares:number;effectiveProceeds:number}>=[];
     const postedTradeIds=new Set(postedTrades.map((row)=>row.id));
-    const eventOrder={split:0,trade:1,roc:2};
-    const financialEvents=[...sortedEvents(project.id).filter((row)=>row.eventType==='trade'?postedTradeIds.has(row.id):isDate(row.date)&&String(row.date)<=asOf&&n(row.from)>0&&n(row.to)>0),...postedDividends.map((row)=>({...row,eventType:'roc' as const}))].sort((a,b)=>String(a.date).localeCompare(String(b.date))||((eventOrder[a.eventType]??3)-(eventOrder[b.eventType]??3))||String(a.createdAt||a.id).localeCompare(String(b.createdAt||b.id)));
+    const eventOrder={split:0,trade:1,roc:2},compareExecution=executionOrder(project.id);
+    const financialEvents=[...sortedEvents(project.id).filter((row)=>row.eventType==='trade'?postedTradeIds.has(row.id):isDate(row.date)&&String(row.date)<=asOf&&n(row.from)>0&&n(row.to)>0),...postedDividends.map((row)=>({...row,eventType:'roc' as const}))].sort((a,b)=>String(a.date).localeCompare(String(b.date))||((eventOrder[a.eventType]??3)-(eventOrder[b.eventType]??3))||compareExecution(a,b));
     for (const event of financialEvents) {
       if (event.eventType === 'split') {
         const ratio=n(event.to)/n(event.from);
