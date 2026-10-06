@@ -1,0 +1,36 @@
+import {test,expect} from '@playwright/test';
+test.use({serviceWorkers:'block'});
+const cloud=`export async function initGoogleAuth(){};export async function getGoogleIdToken(){return null;}export async function logoutGoogle(){};export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){return {revision:1};}export async function subscribeCloudDocument(){return ()=>{};}`;
+async function setup(page){
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:cloud}));
+ await page.route(/\/storage\.js$/,r=>r.fulfill({contentType:'application/javascript',body:`export * from './storage.js?atomic-original=1';import {storageSet as original} from './storage.js?atomic-original=1';export async function storageSet(key,value){if(key==='state'&&window.__failMutation)throw new DOMException('Synthetic full disk','QuotaExceededError');if(key==='state'&&window.__delayMutation)await new Promise(resolve=>{window.__finishMutation=resolve;});return original(key,value);}`}));
+ await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();return errors;
+}
+async function read(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('state');});}
+async function manual(page,kind){for(const section of ['record-center','manual-tools'])if(await page.locator('.'+section).getAttribute('open')===null)await page.locator('.'+section+' > summary').click();await page.locator(`[data-${kind}]`).click();}
+async function recoverAndFlush(page){await page.evaluate(()=>window.__failMutation=false);await page.locator('[data-close-modal]').first().click();if(await page.locator('[data-discard-modal]').count())await page.locator('[data-discard-modal]').click();await page.locator('#usdBtn').click();await expect.poll(async()=>(await read(page)).settings.displayCurrency).toBe('USD');}
+for(const kind of ['cash','split','price','project'])test(`저장 실패한 ${kind} 값은 다른 설정 저장과 재시작에 섞이지 않는다`,async({page})=>{
+ const errors=await setup(page),before=await read(page);await page.evaluate(()=>window.__failMutation=true);
+ if(kind==='project'){await page.locator('[data-add-project]').click();await page.locator('#projectForm [name="symbol"]').fill('QAGHOST');await page.locator('#projectForm button[type="submit"]').click();}
+ else {await manual(page,kind==='price'?'edit-price':'add-'+kind);if(kind==='cash'){await page.locator('#cashForm [name="amountUSD"]').fill('12.34');await page.locator('#cashForm [name="label"]').fill('synthetic');}if(kind==='price')await page.locator('#priceForm [name="price"]').fill('123');await page.locator(`#${kind==='price'?'price':kind}Form button[type="submit"]`).click();}
+ await expect(page.locator('.toast')).toContainText('기기 저장에 실패');await recoverAndFlush(page);const after=await read(page);expect(after.projects).toEqual(before.projects);expect(after.cashAdjustments).toEqual(before.cashAdjustments);expect(after.splits).toEqual(before.splits);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await read(page)).projects).toEqual(before.projects);expect(errors).toEqual([]);
+});
+
+test('잔액 저장 재시도와 연속 누르기는 보정 기록 한 건만 만든다',async({page})=>{
+ const errors=await setup(page);await manual(page,'add-cash');await page.locator('#cashForm [name="amountUSD"]').fill('12.34');await page.locator('#cashForm [name="label"]').fill('synthetic');await page.evaluate(()=>window.__failMutation=true);await page.locator('#cashForm button[type="submit"]').click();await expect(page.locator('.toast')).toContainText('기기 저장에 실패');
+ await page.waitForTimeout(850);await page.evaluate(()=>{window.__failMutation=false;window.__delayMutation=true;const form=document.querySelector('#cashForm');form.requestSubmit();form.requestSubmit();});await expect.poll(()=>page.evaluate(()=>!!window.__finishMutation)).toBe(true);await page.evaluate(()=>{window.__delayMutation=false;window.__finishMutation();});await expect(page.locator('#cashForm')).toBeHidden();expect((await read(page)).cashAdjustments).toHaveLength(1);expect(errors).toEqual([]);
+});
+
+test('현재가 수정 저장 실패 후 같은 창에서 재시도하면 실제 종목에 반영된다',async({page})=>{
+ const errors=await setup(page),before=await read(page);await manual(page,'edit-price');await page.locator('#priceForm [name="price"]').fill('123');await page.evaluate(()=>window.__failMutation=true);await page.locator('#priceForm button[type="submit"]').click();await expect(page.locator('.toast')).toContainText('기기 저장에 실패');expect((await read(page)).projects).toEqual(before.projects);await page.evaluate(()=>window.__failMutation=false);await page.locator('#priceForm button[type="submit"]').click();await expect(page.locator('#priceForm')).toBeHidden();expect((await read(page)).projects[0].currentPrice).toBe(123);expect(errors).toEqual([]);
+});
+
+test('초기화 저장 실패는 기존 기기 기록을 지우지 않는다',async({page})=>{
+ const errors=await setup(page);await manual(page,'add-cash');await page.locator('#cashForm [name="amountUSD"]').fill('12.34');await page.locator('#cashForm button[type="submit"]').click();await expect(page.locator('#cashForm')).toBeHidden();const before=await read(page);await page.locator('[data-page="settings"]').first().click();await page.locator('#page-settings details.settings-section').filter({hasText:'데이터 · 고급 설정'}).locator('summary').first().click();await page.evaluate(()=>window.__failMutation=true);await page.locator('[data-reset]').click();await page.locator('#modalConfirm').click();await expect(page.locator('.toast')).toContainText('기기 저장에 실패');expect((await read(page)).cashAdjustments).toEqual(before.cashAdjustments);await recoverAndFlush(page);expect((await read(page)).cashAdjustments).toEqual(before.cashAdjustments);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await read(page)).cashAdjustments).toEqual(before.cashAdjustments);expect(errors).toEqual([]);
+});
+
+test('복원 저장 실패 후 다른 설정을 저장해도 원래 장부를 유지한다',async({page})=>{
+ const errors=await setup(page),before=await read(page),incoming=structuredClone(before);incoming.projects[0].currentPrice=456;
+ const {createStoreZip}=await import('../../backup.js');const zip=createStoreZip([{name:'data/state.json',data:JSON.stringify(incoming)}]);await page.locator('#restoreInput').setInputFiles({name:'synthetic-restore.zip',mimeType:'application/zip',buffer:Buffer.from(await zip.arrayBuffer())});await expect(page.locator('#confirmRestore')).toBeVisible();await page.evaluate(()=>window.__failMutation=true);await page.locator('#confirmRestore').click();await expect(page.locator('.toast')).toContainText('기기 저장에 실패');await recoverAndFlush(page);expect((await read(page)).projects).toEqual(before.projects);expect(errors).toEqual([]);
+});
