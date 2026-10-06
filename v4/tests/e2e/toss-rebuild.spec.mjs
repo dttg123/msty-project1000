@@ -174,6 +174,7 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   expect(safety.trades).toEqual(before.trades);
   await load();await expect.poll(async()=>(await readLedger(page)).integrations.toss.syncSequence).toBeGreaterThan(saved.integrations.toss.syncSequence);
   expect((await readLedger(page)).trades).toEqual(saved.trades);
+  expect((await readLedger(page)).dividends).toEqual(before.dividends);
   const section=page.locator('details.settings-section').filter({has:page.locator('[data-review-toss]')});
   if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
   await expect(page.locator('.toss-sync-warning')).toHaveCount(0);
@@ -184,6 +185,10 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
   await expect(page.locator('.toss-sync-warning')).toBeVisible();await expect(page.locator('.toss-sync-warning')).toContainText('보유주수');
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
+  const after=await readLedger(page);expect(after.dividends).toEqual(before.dividends);
+  const {createStoreZip,readStateFromBackupFile}=await import('../../backup.js');const zip=createStoreZip([{name:'data/state.json',data:JSON.stringify(after)}]);
+  await page.locator('#restoreInput').setInputFiles({name:'preserved-dividend.zip',mimeType:'application/zip',buffer:Buffer.from(await zip.arrayBuffer())});await page.locator('#confirmRestore').click();await expect(page.locator('#confirmRestore')).toBeHidden();
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).dividends).toEqual(before.dividends);
 });
 
 test('같은 날 토스 매수·매도는 원본 체결시각 순서로 저장하고 재시작해도 유지한다',async({page})=>{
