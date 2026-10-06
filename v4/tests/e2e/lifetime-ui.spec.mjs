@@ -117,7 +117,8 @@ test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP �
   await testInfo.attach('lifetime-ui-evidence',{
     body:JSON.stringify({scope:'localhost isolated browser, synthetic data only',years:30,individualSaves:720,tradeCount:360,dividendCount:360,shares:450,dividendCents:64980,restart:true,zipRestore:true,safetyRollback:true,pageErrors:errors},null,2),contentType:'application/json'
   });
-  await openAdvancedSettings(page);
+  await page.locator('[data-page="settings"]').first().click();
+  await page.locator('details.settings-advanced > summary').click();
   await page.locator('[data-reset]').click();
   await page.locator('#modalConfirm').click();
   await expect(page.locator('#modalConfirm')).toBeHidden();

@@ -1211,3 +1211,27 @@ html[data-theme="dark"] .project-hero { background:var(--surface); border-color:
 .toss-sync-warning strong { color:var(--red); font-size:14px; }
 .toss-sync-warning p { margin:8px 0; font-size:13px; }
 .toss-sync-warning span { color:var(--muted); font-size:12px; }
+
+/* Compact settings and nested connection tools. */
+.settings-list { gap:8px; }
+.settings-group>.settings-section>summary { min-height:60px;padding:12px 16px;gap:8px; }
+.settings-group>.settings-section>summary .card-title { font-size:16px; }
+.settings-group>.settings-section>summary .sub-number { font-size:12px;font-weight:400; }
+.settings-group-label { color:var(--muted);font-size:12px;margin:12px 4px 2px; }
+.settings-status { padding:0; }
+.settings-status>summary { display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;list-style:none;font-size:13px;cursor:pointer; }
+.settings-status>summary::-webkit-details-marker { display:none; }
+.settings-status>p { padding:0 16px 12px;margin:0; }
+.settings-connection { padding:0;margin-bottom:8px; }
+.settings-connection>summary { display:flex;align-items:center;gap:8px;padding:12px;cursor:pointer;list-style:none; }
+.settings-connection>summary>div { flex:1; }
+.settings-connection>summary .card-title { font-size:15px; }
+.settings-connection>summary .sub-number { font-size:12px; }
+.settings-connection>summary::-webkit-details-marker { display:none; }
+.settings-advanced>summary .sub-number { display:none; }
+.settings-list>.settings-advanced { background:transparent;border-color:transparent; }
+.settings-list>.settings-advanced>summary { min-height:44px; }
+
+.settings-group { border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--surface); }
+.settings-group>.settings-section { border:0;border-radius:0;box-shadow:none;background:transparent;margin:0; }
+.settings-group>.settings-section+ .settings-section { border-top:1px solid var(--line); }
