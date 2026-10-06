@@ -210,9 +210,12 @@ test('시작 시 거부되는 과도한 설정값은 저장 전에 차단되고 
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#bootRetry')).toHaveCount(0);expect((await readLedger(page)).settings).toEqual(before.settings);expect(errors).toEqual([]);
 });
 
+test.describe('legacy execution and storage failure recovery',()=>{
+// Failure injection must reach module requests on every reload, not a cached worker response.
+test.use({serviceWorkers:'block'});
 for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed','ledger-save-failed'])test(`과거 토스 체결시각 복원과 신규 저장: ${scenario}`,async({page})=>{
   const saveFailure=scenario.endsWith('save-failed'),errors=[];page.on('pageerror',error=>errors.push(error.message));
-  if(saveFailure)await page.route(/\/storage\.js$/,route=>route.fulfill({contentType:'application/javascript',body:`export * from './storage.js?qa-original=1';import {storageSet as original} from './storage.js?qa-original=1';export async function storageSet(key,value){if(window.__failTossSave===key)throw new DOMException('Synthetic full disk','QuotaExceededError');return original(key,value);}`}));
+  if(saveFailure)await page.route(/\/storage\.js$/,route=>route.fulfill({contentType:'application/javascript',body:`export * from './storage.js?qa-original=1';import {storageSet as original} from './storage.js?qa-original=1';export async function storageSet(key,value){(window.__tossWriteAttempts??=[]).push(key);if(window.__failTossSave===key)throw new DOMException('Synthetic full disk','QuotaExceededError');return original(key,value);}`}));
   await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
   const orders=[
     {id:'a-old-sell',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'sell',shares:10,price:12,filledAt:scenario==='real-oversell'?'2026-01-01T09:00:00+09:00':'2026-01-01T11:00:00+09:00'},
@@ -231,6 +234,7 @@ for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed'
   if(saveFailure)await page.evaluate(key=>window.__failTossSave=key,scenario==='safety-save-failed'?'safetyBackup':'state');
   await load();
   if(saveFailure){
+    await expect.poll(()=>page.evaluate(()=>window.__tossWriteAttempts||[])).toContain(scenario==='safety-save-failed'?'safetyBackup':'state');
     await expect(page.locator('.toast')).toContainText(scenario==='safety-save-failed'?'Synthetic full disk':'기기 저장에 실패');
     expect((await readLedger(page)).trades).toEqual(before.trades);
     await page.evaluate(()=>window.__failTossSave='');
@@ -251,4 +255,6 @@ for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed'
     expect((await readLedger(page)).trades).toEqual(before.trades);
   }
   const after=await readLedger(page);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(after.trades);
+});
+
 });
