@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {tossExceptionKey,dismissTossExceptions,filterDismissedTossExceptions,accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,rebuildProjectFromTossSource,refreshTossCandidateConflicts,restoreTossExecutionTimes,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
+import {tossExceptionKey,dismissTossExceptions,filterDismissedTossExceptions,accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,scopeAutomaticTossImport,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,rebuildProjectFromTossSource,refreshTossCandidateConflicts,restoreTossExecutionTimes,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
 const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
 assert.equal(normalizeTossOrder(row).shares,2);
 for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
@@ -187,3 +187,8 @@ const genuineOversell=executionOrders.map(order=>({...order,filledAt:order.type=
 executionState.trades=restoreTossExecutionTimes(legacyTrades,genuineOversell);
 assert.equal(engine.computeProject(executionProject).oversells.length,1,'genuine oversells remain blocked');
 console.log('Legacy Toss execution metadata recovery safety checks passed');
+
+const scoped=scopeAutomaticTossImport({candidates:[{symbol:'MSTY'},{symbol:'TSLA'},{symbol:'JEPQ'}],correctionCandidates:[{symbol:'TSLA'}],holdings:[{symbol:'JEPQ',currency:'USD',shares:2}]},[{symbol:'MSTY'}]);
+assert.deepEqual(scoped.candidates.map(row=>row.symbol),['MSTY','JEPQ']);
+assert.equal(scoped.correctionCandidates.length,0,'unmanaged past corrections do not block current holdings');
+assert.deepEqual(scopeAutomaticTossImport({candidates:[{symbol:'MSTY'}]},[{symbol:'MSTY',archived:true}]).candidates,[]);

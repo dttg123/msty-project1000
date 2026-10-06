@@ -12,7 +12,7 @@ interface DividendNativePlugins {
     openToss():Promise<void>;
     request(options:{path:string;accountSeq:string}):Promise<unknown>;
   };
-  BackupFile?: {save(options:{filename:string;base64:string}):Promise<{saved?:boolean;cancelled?:boolean}>;download(options:{filename:string;base64:string}):Promise<{saved?:boolean;cancelled?:boolean}>};
+  BackupFile?: {saveAtLocation?(options:{filename:string;base64:string}):Promise<{saved?:boolean;cancelled?:boolean}>;save(options:{filename:string;base64:string}):Promise<{saved?:boolean;cancelled?:boolean}>;download(options:{filename:string;base64:string}):Promise<{saved?:boolean;cancelled?:boolean}>};
 }
 interface Window {Capacitor?: {isNativePlatform?():boolean;Plugins?:DividendNativePlugins};}
 

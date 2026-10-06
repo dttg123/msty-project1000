@@ -12,7 +12,7 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { TOSS_EXCEPTION_FIELDS, tossExceptionKey, dismissTossExceptions, filterDismissedTossExceptions, accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, normalizeTossDividend, rebuildProjectFromTossSource, refreshTossCandidateConflicts, restoreTossExecutionTimes, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { TOSS_EXCEPTION_FIELDS, tossExceptionKey, dismissTossExceptions, filterDismissedTossExceptions, accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, normalizeTossDividend, rebuildProjectFromTossSource, refreshTossCandidateConflicts, restoreTossExecutionTimes, scopeAutomaticTossImport, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
@@ -924,14 +924,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     function downloadFile(filename, content, type = 'application/octet-stream') { const blob = content instanceof Blob ? content : new Blob([content], { type }); const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500); }
     let backupRunning = false, backupObjectUrl = '', preparedBackup = null, preparedBackupFilename = '';
     let nativeBackupRunning = false;
-    async function nativeBackupFile() {
+    async function nativeBackupFile(chooseLocation = false) {
         const native = window?.Capacitor?.Plugins?.BackupFile;
         if (!native || !preparedBackup)
             return false;
         if (nativeBackupRunning)
             return true;
-        if (typeof native.download !== 'function')
-            throw new Error('다운로드 저장을 지원하는 APK가 필요합니다.');
+        const saveNative = chooseLocation ? native.saveAtLocation : native.download;
+        if (typeof saveNative !== 'function')
+            throw new Error('저장 위치 선택을 지원하는 v0.12.29 APK로 업데이트해 주세요.');
         nativeBackupRunning = true;
         const controls = [...document.querySelectorAll('[data-backup-save],[data-backup-download]')];
         controls.forEach(button => button.disabled = true);
@@ -944,7 +945,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             for (let i = 0; i < bytes.length; i += 8192)
                 binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
             // Never open an Activity while its retained PluginCall contains the entire backup.
-            const result = await native.download({ filename: preparedBackupFilename, base64: btoa(binary) });
+            const result = await saveNative({ filename: preparedBackupFilename, base64: btoa(binary) });
             if (result?.cancelled)
                 return true;
             if (result?.saved !== true)
@@ -959,7 +960,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 return true;
             }
             closeModal();
-            toast('다운로드 폴더에 ZIP 백업을 저장했습니다.');
+            toast(chooseLocation ? '선택한 위치에 ZIP 백업을 저장했습니다.' : '다운로드 폴더에 ZIP 백업을 저장했습니다.');
             return true;
         }
         finally {
@@ -992,7 +993,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         try {
-            if (await nativeBackupFile())
+            if (await nativeBackupFile(true))
                 return;
             if (window?.Capacitor?.isNativePlatform?.()) {
                 toast('저장 위치 선택은 새 APK에서 지원합니다. 앱은 삭제하지 말고 업데이트해 주세요.');
@@ -1022,7 +1023,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             if (isRecord(error) && error.name === 'AbortError')
                 return;
             console.error(error);
-            toast('위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
+            toast(errorMessage(error).includes('APK') ? errorMessage(error) : '위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
         }
     }
     async function downloadBackup() {
@@ -1038,7 +1039,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}Z$/, 'Z').replace('T', '_'), filename = `DividendOS_v${APP_VERSION}_${stamp}.zip`;
             preparedBackup = zip;
             preparedBackupFilename = filename;
-            openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>다운로드 폴더에 저장할 수 있습니다. 웹에서는 저장 위치를 선택할 수도 있습니다.</p><div class="form-grid">${window.Capacitor?.Plugins?.BackupFile ? '<button class="btn primary backup-download" data-backup-download>다운로드 폴더에 저장</button>' : '<button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button>'}</div><p class="detail-note">설치 앱은 다운로드 폴더에 바로 저장합니다. 웹에서는 지원되는 저장 창·공유·다운로드를 사용합니다. 저장 후 파일을 확인해 주세요.</p>`);
+            openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 선택하거나 다운로드 폴더에 저장하세요.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button></div><p class="detail-note">저장을 취소하면 백업 파일을 만들지 않습니다. 저장 완료 후 파일을 확인해 주세요.</p>`);
             state.meta.lastBackupPreparedAt = new Date().toISOString();
             await saveState(true);
         }
@@ -1283,7 +1284,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     async function tryAutomaticTossImport() {
         refreshTossCandidateConflicts(state.integrations.toss, state.trades, state.dividends);
-        const plan = automaticTossImportPlan(state.integrations.toss);
+        const plan = automaticTossImportPlan(scopeAutomaticTossImport(state.integrations.toss, state.projects));
         if (!plan.eligible) {
             const comparisons = (state.integrations.toss.comparisons || []).filter((row) => row.supported);
             const matches = comparisons.length > 0 && comparisons.every((row) => Math.abs(n(row.difference)) < .0001);
