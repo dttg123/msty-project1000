@@ -47,6 +47,7 @@ async function setup(page,holdingShares){
   await expect(page.locator('[data-rebuild-msty-toss]')).toBeAttached();
   const section=page.locator('details.settings-section').filter({has:page.locator('[data-rebuild-msty-toss]')});
   if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
+  if(await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).getAttribute('open')===null)await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).locator(':scope > summary').click();
 }
 
 test('토스 원본 재구축은 238주를 247주로 대조하고 배당과 안전 사본을 보존한다',async({page})=>{
@@ -177,12 +178,14 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   expect((await readLedger(page)).dividends).toEqual(before.dividends);
   const section=page.locator('details.settings-section').filter({has:page.locator('[data-review-toss]')});
   if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
+  if(await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).getAttribute('open')===null)await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).locator(':scope > summary').click();
   await expect(page.locator('.toss-sync-warning')).toHaveCount(0);
   snapshot.holdings[0].shares=253;
   snapshot.orders.push({id:'missing-counterpart',symbol:'MSTY',currency:'USD',date:'2026-02-02',type:'buy',shares:1,price:16.25});
   await load();await expect(page.locator('.toast')).toContainText('체결 합계와 보유주수 불일치');
   expect((await readLedger(page)).trades).toEqual(saved.trades);
   if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
+  if(await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).getAttribute('open')===null)await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).locator(':scope > summary').click();
   await expect(page.locator('.toss-sync-warning')).toBeVisible();await expect(page.locator('.toss-sync-warning')).toContainText('보유주수');
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
   const after=await readLedger(page);expect(after.dividends).toEqual(before.dividends);

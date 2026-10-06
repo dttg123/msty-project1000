@@ -234,13 +234,21 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(displayOnly){document.querySelectorAll<HTMLDetailsElement>('.goal-step-card').forEach((el)=>{el.open=opened.includes(el.dataset.goalProject);});const history=document.querySelector<HTMLDetailsElement>('.record-center');if(history)history.open=!!historyOpen;window.scrollTo(0,scrollY);}
   }
   function showPage(page: string) {
-    if(!PAGES.includes(page))page='home'; currentPage=page;
+    if(!PAGES.includes(page))page='home'; const changed=currentPage!==page;currentPage=page;
     document.querySelectorAll('.page').forEach((el)=>el.classList.toggle('active',el.id===`page-${page}`));
     document.querySelectorAll<HTMLElement>('.nav-btn').forEach((el)=>el.classList.toggle('active',el.dataset.page===page));
-    window.scrollTo({top:0,behavior:'instant'});
+    if(changed)window.scrollTo({top:0,behavior:'instant'});
+    if(page==='settings')ensureUiHistory();
     rememberView();
   }
+  let uiHistoryActive=false;
+  let modalRevision=0;
+  function ensureUiHistory(): void {
+    if(uiHistoryActive)return;
+    history.pushState({dividendUi:true},'');uiHistoryActive=true;
+  }
   function openModal(html: string): void {
+    ensureUiHistory();modalRevision++;
     const modal=document.getElementById('modal')!,backdrop=document.getElementById('modalBackdrop')!;
     if(!backdrop.classList.contains('show')){modalFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;modalScroll=window.scrollY;document.body.style.position='fixed';document.body.style.top=`-${modalScroll}px`;document.body.style.width='100%';}
     modalDirty=false;modal.innerHTML=`<button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button><div class="modal-handle"></div>${html}`;
@@ -257,6 +265,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     closeModal();
   }
   function closeModal(): void {
+    modalRevision++;
     if(cloudChoiceResolve){const resolve=cloudChoiceResolve;cloudChoiceResolve=null;resolve('cancel');}
     document.getElementById('modalBackdrop')!.classList.remove('show');document.getElementById('modal')!.innerHTML='';
     modalDirty=false;document.body.style.position='';document.body.style.top='';document.body.style.width='';
@@ -568,15 +577,17 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   async function downloadBackup(): Promise<void> {
     if(backupRunning)return;backupRunning=true;
     openModal('<h3 class="modal-title">백업 준비</h3><p class="modal-desc" role="status">앱과 기록을 ZIP으로 묶고 있습니다.</p>');
+    const revision=modalRevision;
     try{
       const zip=await buildPortableBackup(clone(state));
+      if(revision!==modalRevision)return;
       if(backupObjectUrl)URL.revokeObjectURL(backupObjectUrl);
       backupObjectUrl=URL.createObjectURL(zip);
       const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\\.\\d{3}Z$/,'Z').replace('T','_'),filename=`DividendOS_v${APP_VERSION}_${stamp}.zip`;
       preparedBackup=zip;preparedBackupFilename=filename;
       openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 선택하거나 다운로드 폴더에 저장하세요.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button></div><p class="detail-note">저장을 취소하면 백업 파일을 만들지 않습니다. 저장 완료 후 파일을 확인해 주세요.</p>`);
       state.meta.lastBackupPreparedAt=new Date().toISOString();await saveState(true);
-    }catch (error: unknown){console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
+    }catch (error: unknown){if(revision!==modalRevision)return;console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
     finally{backupRunning=false;}
   }
   async function restoreFromFile(file: File): Promise<void> {
@@ -983,6 +994,22 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   function bindStaticEvents() {
+    history.scrollRestoration='manual';
+    window.addEventListener('popstate',()=>{
+      if(!uiHistoryActive)return;
+      uiHistoryActive=false;
+      if(document.getElementById('modalBackdrop')?.classList.contains('show')){
+        if(modalDirty||modalSaving)ensureUiHistory();
+        requestCloseModal();
+      }else if(currentPage==='settings'){
+        const opened=[...document.querySelectorAll<HTMLDetailsElement>('#page-settings details[open]')];
+        if(opened.length){opened[opened.length-1].open=false;}
+        else showPage('home');
+      }
+      if(currentPage==='settings'||document.getElementById('modalBackdrop')?.classList.contains('show'))ensureUiHistory();
+    });
+    document.getElementById('page-settings')!.addEventListener('toggle',()=>{if(currentPage==='settings')ensureUiHistory();},true);
+
     window.addEventListener('online',()=>{refreshExchangeRate();refreshOfficialDistributions();});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshExchangeRate();});
     document.addEventListener('submit',(event: Event)=>{

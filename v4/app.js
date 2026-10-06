@@ -422,13 +422,27 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     function showPage(page) {
         if (!PAGES.includes(page))
             page = 'home';
+        const changed = currentPage !== page;
         currentPage = page;
         document.querySelectorAll('.page').forEach((el) => el.classList.toggle('active', el.id === `page-${page}`));
         document.querySelectorAll('.nav-btn').forEach((el) => el.classList.toggle('active', el.dataset.page === page));
-        window.scrollTo({ top: 0, behavior: 'instant' });
+        if (changed)
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        if (page === 'settings')
+            ensureUiHistory();
         rememberView();
     }
+    let uiHistoryActive = false;
+    let modalRevision = 0;
+    function ensureUiHistory() {
+        if (uiHistoryActive)
+            return;
+        history.pushState({ dividendUi: true }, '');
+        uiHistoryActive = true;
+    }
     function openModal(html) {
+        ensureUiHistory();
+        modalRevision++;
         const modal = document.getElementById('modal'), backdrop = document.getElementById('modalBackdrop');
         if (!backdrop.classList.contains('show')) {
             modalFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -462,6 +476,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         closeModal();
     }
     function closeModal() {
+        modalRevision++;
         if (cloudChoiceResolve) {
             const resolve = cloudChoiceResolve;
             cloudChoiceResolve = null;
@@ -1074,8 +1089,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         backupRunning = true;
         openModal('<h3 class="modal-title">백업 준비</h3><p class="modal-desc" role="status">앱과 기록을 ZIP으로 묶고 있습니다.</p>');
+        const revision = modalRevision;
         try {
             const zip = await buildPortableBackup(clone(state));
+            if (revision !== modalRevision)
+                return;
             if (backupObjectUrl)
                 URL.revokeObjectURL(backupObjectUrl);
             backupObjectUrl = URL.createObjectURL(zip);
@@ -1087,6 +1105,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             await saveState(true);
         }
         catch (error) {
+            if (revision !== modalRevision)
+                return;
             console.error(error);
             openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');
         }
@@ -2149,6 +2169,29 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
     }
     function bindStaticEvents() {
+        history.scrollRestoration = 'manual';
+        window.addEventListener('popstate', () => {
+            if (!uiHistoryActive)
+                return;
+            uiHistoryActive = false;
+            if (document.getElementById('modalBackdrop')?.classList.contains('show')) {
+                if (modalDirty || modalSaving)
+                    ensureUiHistory();
+                requestCloseModal();
+            }
+            else if (currentPage === 'settings') {
+                const opened = [...document.querySelectorAll('#page-settings details[open]')];
+                if (opened.length) {
+                    opened[opened.length - 1].open = false;
+                }
+                else
+                    showPage('home');
+            }
+            if (currentPage === 'settings' || document.getElementById('modalBackdrop')?.classList.contains('show'))
+                ensureUiHistory();
+        });
+        document.getElementById('page-settings').addEventListener('toggle', () => { if (currentPage === 'settings')
+            ensureUiHistory(); }, true);
         window.addEventListener('online', () => { refreshExchangeRate(); refreshOfficialDistributions(); });
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible')
             refreshExchangeRate(); });
