@@ -16,6 +16,8 @@ import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.OutputStream;
 import java.io.InputStream;
+import java.io.File;
+import java.nio.file.Files;
 
 @CapacitorPlugin(name = "BackupFile")
 public class BackupFilePlugin extends Plugin {
@@ -32,29 +34,48 @@ public class BackupFilePlugin extends Plugin {
         return name.matches("[A-Za-z0-9_.-]{1,160}\\.zip") ? name : "DividendOS-backup.zip";
     }
     @PluginMethod
+    public void saveAtLocation(PluginCall call) { save(call); }
+    @PluginMethod
     public void save(PluginCall call) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { download(call); return; }
         try {
-            bytes(call);
+            byte[] value = bytes(call);
+            File staged = File.createTempFile("backup-picker-", ".zip", getContext().getCacheDir());
+            call.getData().put("backupPath", staged.getAbsolutePath());
+            Files.write(staged.toPath(), value);
+            // Activity state must retain only a path, never the full backup payload.
+            call.getData().remove("base64");
+            call.getData().put("backupPath", staged.getAbsolutePath());
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("application/zip");
             intent.putExtra(Intent.EXTRA_TITLE, filename(call));
             startActivityForResult(call, intent, "saveResult");
-        } catch (Exception error) { call.reject("저장 위치를 열 수 없습니다.", error); }
+        } catch (Exception error) { cleanup(call); call.reject("저장 위치를 열 수 없습니다.", error); }
     }
     @ActivityCallback
     private void saveResult(PluginCall call, ActivityResult result) {
         if (call == null) return;
         if (result.getResultCode() != Activity.RESULT_OK) {
-            JSObject value = new JSObject(); value.put("cancelled", true); call.resolve(value); return;
+            cleanup(call); JSObject value = new JSObject(); value.put("cancelled", true); call.resolve(value); return;
         }
         Uri uri = result.getData() == null ? null : result.getData().getData();
-        if (uri == null) { call.reject("저장 위치가 없습니다."); return; }
+        if (uri == null) { cleanup(call); call.reject("저장 위치가 없습니다."); return; }
         getBridge().execute(() -> {
-            try { write(uri, bytes(call)); call.resolve(new JSObject().put("saved", true)); }
+            try {
+                File staged = new File(call.getString("backupPath", ""));
+                if (!staged.getCanonicalFile().getParentFile().equals(getContext().getCacheDir().getCanonicalFile()) || staged.length() == 0 || staged.length() > MAX_BYTES) throw new Exception("Invalid staged backup");
+                write(uri, Files.readAllBytes(staged.toPath())); call.resolve(new JSObject().put("saved", true));
+            }
             catch (Exception error) { call.reject("백업 파일 쓰기에 실패했습니다.", error); }
+            finally { cleanup(call); }
         });
+    }
+    private void cleanup(PluginCall call) {
+        String path = call.getString("backupPath", "");
+        if (!path.isEmpty()) try {
+            File staged = new File(path);
+            if (staged.getCanonicalFile().getParentFile().equals(getContext().getCacheDir().getCanonicalFile())) staged.delete();
+        } catch (Exception ignored) {}
     }
     private void write(Uri uri, byte[] value) throws Exception {
         try (OutputStream stream = getContext().getContentResolver().openOutputStream(uri, "wt")) {

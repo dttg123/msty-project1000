@@ -392,6 +392,15 @@ export function tossSyncProgress(previousInput: unknown ={},resultInput: unknown
   return {syncCursor:accountsComplete?record(result.syncCursor||previous.syncCursor):record(previous.syncCursor),lastSuccessfulAt:complete?String(result.fetchedAt||''):String(previous.lastSuccessfulAt||''),lastPartialAt:complete?String(previous.lastPartialAt||''):String(result.fetchedAt||previous.lastPartialAt||'')};
 }
 
+// Keep all broker originals, but import only managed securities and current USD holdings.
+// Closed, unmanaged history can lack splits or opening balances and must not block a live portfolio.
+export function scopeAutomaticTossImport(input: unknown,projects: Project[]) {
+  const toss=record(input),managed=projects.filter(project=>!project.archived);
+  const holdings=records(toss.holdings).filter(row=>row.currency==='USD'&&n(row.shares)>0);
+  const inScope=(row: RawRow)=>managed.some(project=>project.symbol===row.symbol||(project.brokerLinks||[]).some(link=>link.provider==='toss'&&link.assetKey&&link.assetKey===row.assetKey))||holdings.some(holding=>holding.assetKey&&row.assetKey?holding.assetKey===row.assetKey:holding.symbol===row.symbol);
+  return {...toss,...Object.fromEntries(['candidates','dividendCandidates','correctionCandidates','dividendCorrectionCandidates'].map(key=>[key,records(toss[key]).filter(inScope)]))};
+}
+
 export function automaticTossImportPlan(input: unknown ={}){
   const toss=record(input);
   const candidates=records(toss.candidates);

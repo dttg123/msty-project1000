@@ -97,7 +97,7 @@ public class BackupFileInstrumentedTest {
             waitForJavascript(scenario,"!!document.querySelector('[data-backup]') && !document.querySelector('#splashScreen')");
             javascript(scenario,"document.querySelector('[data-page=\"settings\"]').click();document.querySelector('[data-backup]').closest('details').open=true;document.querySelector('[data-backup]').click()");
             waitForJavascript(scenario,"!!document.querySelector('[data-backup-download]')");
-            assertEquals("true",javascript(scenario,"!document.querySelector('[data-backup-save]')"));
+            assertEquals("true",javascript(scenario,"!!document.querySelector('[data-backup-save]')"));
             javascript(scenario,"document.querySelector('[data-backup-download]').click()");
             waitForJavascript(scenario,"document.querySelector('#toast').textContent.includes('다운로드 폴더에 ZIP 백업을 저장')");
             try(Cursor cursor=resolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,new String[]{MediaStore.Downloads._ID,MediaStore.Downloads.DISPLAY_NAME,MediaStore.Downloads.IS_PENDING},null,null,null)){
@@ -125,4 +125,36 @@ public class BackupFileInstrumentedTest {
             assertTrue(call.done.await(30,TimeUnit.SECONDS));assertNotNull(call.error);assertNull(call.result);assertNull(find(resolver,name));
         }
     }
+    @Test public void pickerRetainsSmallCallAndWritesSelectedLocation() throws Exception {
+        android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+        android.content.Context context=instrumentation.getTargetContext();
+        ContentResolver resolver=context.getContentResolver();
+        android.content.ContentValues values=new android.content.ContentValues();
+        values.put(MediaStore.Downloads.DISPLAY_NAME,"DividendOS-picker-qa-"+System.nanoTime()+".zip");values.put(MediaStore.Downloads.MIME_TYPE,"application/zip");
+        Uri destination=resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);assertNotNull(destination);
+        android.content.IntentFilter filter=new android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT);filter.addCategory(android.content.Intent.CATEGORY_OPENABLE);filter.addDataType("application/zip");
+        android.app.Instrumentation.ActivityMonitor monitor=instrumentation.addMonitor(filter,new android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,new android.content.Intent().setData(destination)),true);
+        byte[] expected=new byte[2*1024*1024];new Random(29).nextBytes(expected);
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            CapturedCall call=new CapturedCall(new JSObject().put("filename","DividendOS-picker.zip").put("base64",Base64.encodeToString(expected,Base64.NO_WRAP)));
+            scenario.onActivity(activity->((BackupFilePlugin)activity.getBridge().getPlugin("BackupFile").getInstance()).save(call));
+            assertTrue("Picker write timed out",call.done.await(30,TimeUnit.SECONDS));assertNull(call.error);assertTrue(call.result.getBoolean("saved",false));
+            assertFalse("Large payload retained across Activity",call.getData().has("base64"));
+            assertTrue("System picker was not invoked",monitor.getHits()>0);
+            try(InputStream input=resolver.openInputStream(destination)){assertArrayEquals(expected,input.readAllBytes());}
+            assertFalse(new java.io.File(call.getString("backupPath","")).exists());
+        } finally {instrumentation.removeMonitor(monitor);resolver.delete(destination,null,null);}
+    }
+    @Test public void pickerCancellationRemovesStagedPayload() throws Exception {
+        android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+        android.content.IntentFilter filter=new android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT);filter.addCategory(android.content.Intent.CATEGORY_OPENABLE);filter.addDataType("application/zip");
+        android.app.Instrumentation.ActivityMonitor monitor=instrumentation.addMonitor(filter,new android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null),true);
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            CapturedCall call=new CapturedCall(new JSObject().put("filename","DividendOS-cancel.zip").put("base64",Base64.encodeToString(new byte[1024],Base64.NO_WRAP)));
+            scenario.onActivity(activity->((BackupFilePlugin)activity.getBridge().getPlugin("BackupFile").getInstance()).save(call));
+            assertTrue(call.done.await(30,TimeUnit.SECONDS));assertNull(call.error);assertTrue(call.result.getBoolean("cancelled",false));assertFalse(call.result.getBoolean("saved",false));
+            assertFalse(call.getData().has("base64"));assertFalse(new java.io.File(call.getString("backupPath","")).exists());
+        } finally {instrumentation.removeMonitor(monitor);}
+    }
+
 }

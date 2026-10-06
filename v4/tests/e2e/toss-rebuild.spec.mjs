@@ -127,7 +127,7 @@ test('Android 백업은 저장 창 없이 다운로드하며 실패·중복 요�
   await setup(page,247);const before=await readLedger(page);
   const advanced=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});await advanced.locator(':scope > summary').click();
   await page.locator('[data-backup]').click();await expect(page.locator('[data-backup-download]')).toBeVisible();
-  await expect(page.locator('[data-backup-save]')).toHaveCount(0);
+  await expect(page.locator('[data-backup-save]')).toBeVisible();
   await page.evaluate(()=>{const button=document.querySelector('[data-backup-download]');button.click();button.click();});
   await expect.poll(()=>page.evaluate(()=>window.backupCalls)).toBe(1);
   await expect(page.locator('[data-backup-download]')).toBeDisabled();
@@ -257,4 +257,23 @@ for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed'
   const after=await readLedger(page);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(after.trades);
 });
 
+});
+
+
+test('관리하지 않는 과거 종목의 초과 매도가 MSTY 251 갱신을 막지 않는다',async({page})=>{
+  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
+  const snapshot={syncCursor:{ordersThrough:'2026-02-02'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,accountScopeId:'0123456789abcdef01234567',prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:251}],orders:[{id:'old-msty',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:247,price:10},{id:'new-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16},{id:'closed-old-sell',symbol:'TSLA',currency:'USD',date:'2023-02-21',type:'sell',shares:0.441733,price:200}]};
+  const load=()=>page.locator('#tossImportInput').setInputFiles({name:'scope.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-02T00:00:00Z',snapshot}))});
+  await load();await expect(page.locator('.toast')).toContainText('매수 2건');
+  const saved=await readLedger(page);expect(saved.projects.map(p=>p.symbol)).toEqual(['MSTY']);expect(saved.trades.reduce((sum,t)=>sum+t.shares,0)).toBe(251);expect(saved.integrations.toss.comparisons[0].difference).toBe(0);expect(saved.integrations.toss.sourceLedger.orders).toHaveLength(3);expect(saved.integrations.toss.candidates).toHaveLength(1);
+  await load();await expect.poll(async()=>(await readLedger(page)).integrations.toss.syncSequence).toBeGreaterThan(saved.integrations.toss.syncSequence);expect((await readLedger(page)).trades).toEqual(saved.trades);
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
+});
+
+for(const outcome of ['saved','cancelled','failed'])test(`Android 백업 위치 선택: ${outcome}`,async({page})=>{
+  await page.addInitScript(outcome=>{window.Capacitor={isNativePlatform:()=>true,Plugins:{BackupFile:{saveAtLocation:async data=>{window.pickerCall=data;if(outcome==='failed')throw new Error('write failed');return outcome==='cancelled'?{cancelled:true}:{saved:true};},download:async()=>{throw new Error('wrong backup route');}}}};},outcome);
+  await setup(page,247);const before=await readLedger(page);
+  const section=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});await section.locator(':scope > summary').click();await page.locator('[data-backup]').click();await expect(page.locator('[data-backup-save]')).toBeVisible();await page.locator('[data-backup-save]').click();await expect.poll(()=>page.evaluate(()=>!!window.pickerCall)).toBe(true);
+  if(outcome==='saved'){await expect(page.locator('.toast')).toContainText('선택한 위치에 ZIP 백업');expect((await readLedger(page)).meta.lastBackupAt).toBeTruthy();}
+  else {await expect(page.locator('[data-backup-save]')).toBeEnabled();expect((await readLedger(page)).meta.lastBackupAt).toBe(before.meta.lastBackupAt);if(outcome==='failed')await expect(page.locator('.toast')).toContainText('위치 선택 저장에 실패');}
 });
