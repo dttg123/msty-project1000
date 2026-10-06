@@ -12,7 +12,7 @@ import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
 import { buildMigrationAudit } from './modules/migration.js';
-import { TOSS_EXCEPTION_FIELDS, tossExceptionKey, dismissTossExceptions, filterDismissedTossExceptions, accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, normalizeTossDividend, rebuildProjectFromTossSource, refreshTossCandidateConflicts, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
+import { TOSS_EXCEPTION_FIELDS, tossExceptionKey, dismissTossExceptions, filterDismissedTossExceptions, accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, normalizeTossDividend, rebuildProjectFromTossSource, refreshTossCandidateConflicts, restoreTossExecutionTimes, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
 import { clearNativeTossCredentials, fetchNativeTossSnapshot, isNativeTossAvailable, markNativeTossPublicIp, nativePublicIp, nativeTossCredentialStatus, openTossIpManagement, saveNativeTossCredentials } from './toss-native.js';
 import { validateLedger } from './modules/validation.js';
@@ -1295,6 +1295,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         const before = clone(state), importedTradeIds = new Set(), importedDividendIds = new Set(), affectedProjectIds = new Set();
         let buys = 0, sells = 0, dividends = 0;
         try {
+            const restoredTrades = restoreTossExecutionTimes(state.trades, state.integrations.toss.sourceLedger.orders);
+            restoredTrades.forEach((trade, index) => { if (trade !== state.trades[index])
+                affectedProjectIds.add(trade.projectId); });
+            state.trades = restoredTrades;
             for (const row of plan.candidates) {
                 const normalized = normalizeTossOrder(row);
                 if (!normalized || normalized.currency !== 'USD')
@@ -1504,10 +1508,20 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 project.priceUpdatedAt = price.timestamp || new Date().toISOString();
             }
         }
-        const beforeAutomaticChanges = clone(state), adoptedDividends = adoptMatchingTossDividends(), automatic = await tryAutomaticTossImport();
-        if (adoptedDividends || automatic.imported)
-            await storageSet(SAFETY_KEY, beforeAutomaticChanges);
-        await saveState(true);
+        const beforeAutomaticChanges = clone(state);
+        let adoptedDividends = 0, automatic;
+        try {
+            adoptedDividends = adoptMatchingTossDividends();
+            automatic = await tryAutomaticTossImport();
+            if (adoptedDividends || automatic.imported)
+                await storageSet(SAFETY_KEY, beforeAutomaticChanges);
+            await saveState(true);
+        }
+        catch (error) {
+            state = beforeAutomaticChanges;
+            renderAll();
+            throw error;
+        }
         renderAll();
         showPage('settings');
         const found = result.candidates.length + result.dividendCandidates.length, changed = result.correctionCandidates.length + result.dividendCorrectionCandidates.length;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {tossExceptionKey,dismissTossExceptions,filterDismissedTossExceptions,accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,rebuildProjectFromTossSource,refreshTossCandidateConflicts,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
+import {tossExceptionKey,dismissTossExceptions,filterDismissedTossExceptions,accountScopeChanged,automaticTossDividendAdoptions,automaticTossImportPlan,buildTossSync,disconnectedTossState,normalizeTossOrder,mergeTossCandidates,mergeTossCorrectionCandidates,mergeTossDividendCandidates,mergeTossSourceLedger,nextTossSyncFrom,normalizeTossDividend,rebuildProjectFromTossSource,refreshTossCandidateConflicts,restoreTossExecutionTimes,tossCandidateToDividend,tossCandidateToTrade,tossSyncProgress} from '../modules/toss.js';
 const row={id:'order-1',symbol:'MSTY',date:'2026-01-01',side:'BUY',shares:2,price:10,currency:'USD'};
 assert.equal(normalizeTossOrder(row).shares,2);
 for(const bad of [{...row,shares:0},{...row,price:Infinity},{...row,date:'2026-02-30'},{...row,symbol:'<img>'}])assert.equal(normalizeTossOrder(bad),null);
@@ -158,3 +158,32 @@ executionState.trades[0].source.filledAt='2026-01-01T09:00:00+09:00';
 assert.equal(engine.computeProject(executionProject).oversells.length,1,'real oversell remains blocked');
 delete executionState.trades[0].source.filledAt;
 assert.equal(engine.computeProject(executionProject).oversells.length,1,'incomplete historical times retain original order');
+
+// Pre-0.12.27 ledgers retain originals but can lack execution metadata.
+const legacyTrades=executionOrders.map(order=>{
+  const trade=tossCandidateToTrade(order,{projectId:executionProject.id,id:order.id,createdAt:'2026-10-05T00:00:00Z'});
+  delete trade.source.filledAt;return trade;
+});
+const legacyOriginal=structuredClone(legacyTrades);
+executionState.trades=legacyTrades;
+assert.equal(engine.computeProject(executionProject).oversells.length,1);
+const recovered=restoreTossExecutionTimes(legacyTrades,executionOrders);
+assert.deepEqual(legacyTrades,legacyOriginal,'recovery does not mutate original records');
+executionState.trades=recovered;
+assert.equal(engine.computeProject(executionProject).oversells.length,0);
+assert.equal(engine.computeProject(executionProject).realized,20);
+assert.deepEqual(recovered.map(({source,...financial})=>financial),legacyTrades.map(({source,...financial})=>financial),'financial records remain unchanged');
+assert.deepEqual(restoreTossExecutionTimes(recovered,executionOrders),recovered);
+for(const changes of [{shares:11},{price:13},{feeUSD:1},{taxUSD:1},{status:'CANCELED'},{accountId:'other-account'},{symbol:'SCHD'},{filledAt:'2026-01-02T11:00:00+09:00'},{filledAt:'2026-01-01T11:00:00'},{filledAt:'invalid'}]){
+  assert.strictEqual(restoreTossExecutionTimes([legacyTrades[0]],[{...executionOrders[0],...changes}])[0],legacyTrades[0],`unsafe original rejected: ${JSON.stringify(changes)}`);
+}
+assert.strictEqual(restoreTossExecutionTimes([legacyTrades[0]],[executionOrders[0],executionOrders[0]])[0],legacyTrades[0],'ambiguous originals rejected');
+assert.strictEqual(restoreTossExecutionTimes([legacyTrades[0],legacyTrades[0]],executionOrders)[0],legacyTrades[0],'duplicate ledger identity rejected');
+const manual={...legacyTrades[0],source:{provider:'manual'}};
+assert.strictEqual(restoreTossExecutionTimes([manual],executionOrders)[0],manual);
+const unsignedLegacy={...legacyTrades[0],source:{...legacyTrades[0].source,sourceFingerprint:undefined}};
+assert.strictEqual(restoreTossExecutionTimes([unsignedLegacy],executionOrders)[0],unsignedLegacy);
+const genuineOversell=executionOrders.map(order=>({...order,filledAt:order.type==='sell'?'2026-01-01T09:00:00+09:00':order.filledAt}));
+executionState.trades=restoreTossExecutionTimes(legacyTrades,genuineOversell);
+assert.equal(engine.computeProject(executionProject).oversells.length,1,'genuine oversells remain blocked');
+console.log('Legacy Toss execution metadata recovery safety checks passed');
