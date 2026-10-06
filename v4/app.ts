@@ -771,9 +771,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const project=findProjectForToss(price);
       if(project){project.currentPrice=price.lastPrice;project.priceSource='toss';project.priceUpdatedAt=price.timestamp||new Date().toISOString();}
     }
-    const beforeAutomaticChanges=clone(state),adoptedDividends=adoptMatchingTossDividends(),automatic=await tryAutomaticTossImport();
-    if(adoptedDividends||automatic.imported)await storageSet(SAFETY_KEY,beforeAutomaticChanges);
-    await saveState(true);renderAll();showPage('settings');const found=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;
+    const beforeAutomaticChanges=clone(state);
+    let adoptedDividends=0,automatic: Awaited<ReturnType<typeof tryAutomaticTossImport>>;
+    try{
+      adoptedDividends=adoptMatchingTossDividends();automatic=await tryAutomaticTossImport();
+      if(adoptedDividends||automatic.imported)await storageSet(SAFETY_KEY,beforeAutomaticChanges);
+      await saveState(true);
+    }catch(error: unknown){state=beforeAutomaticChanges;renderAll();throw error;}
+    renderAll();showPage('settings');const found=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;
     toast(automatic.imported?`자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends?` · 배당 ${automatic.dividends}건`:''}${adoptedDividends?` · 기존 배당 ${adoptedDividends}건 연결`:''}`:adoptedDividends?`기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.`:result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:automatic.reason==='current'?'토스 보유주수와 일치합니다. 새로 저장할 거래는 없습니다.':automatic.reason&&automatic.reason!=='empty'?`조회 완료 · 거래 저장 보류: ${({duplicate:'기존 수동 거래와 중복 가능',correction:'기존 체결 원본 변경',reconciliation:'체결 합계와 보유주수 불일치',oversell:'중간 보유주수 초과 매도',truncated:'체결 조회 누락',partial:'일부 계좌 조회 실패',ledger:'장부 검증 실패',validation:'장부 검증 실패'})[automatic.reason]||'거래 검증 필요'}`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
   }
 

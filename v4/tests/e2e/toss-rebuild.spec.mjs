@@ -210,7 +210,9 @@ test('시작 시 거부되는 과도한 설정값은 저장 전에 차단되고 
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#bootRetry')).toHaveCount(0);expect((await readLedger(page)).settings).toEqual(before.settings);expect(errors).toEqual([]);
 });
 
-for(const scenario of ['matched','mismatch','real-oversell'])test(`과거 토스 체결시각 복원과 신규 저장: ${scenario}`,async({page})=>{
+for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed','ledger-save-failed'])test(`과거 토스 체결시각 복원과 신규 저장: ${scenario}`,async({page})=>{
+  const saveFailure=scenario.endsWith('save-failed'),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  if(saveFailure)await page.route(/\/storage\.js$/,route=>route.fulfill({contentType:'application/javascript',body:`export * from './storage.js?qa-original=1';import {storageSet as original} from './storage.js?qa-original=1';export async function storageSet(key,value){if(window.__failTossSave===key)throw new DOMException('Synthetic full disk','QuotaExceededError');return original(key,value);}`}));
   await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
   const orders=[
     {id:'a-old-sell',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'sell',shares:10,price:12,filledAt:scenario==='real-oversell'?'2026-01-01T09:00:00+09:00':'2026-01-01T11:00:00+09:00'},
@@ -226,8 +228,17 @@ for(const scenario of ['matched','mismatch','real-oversell'])test(`과거 토스
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();const before=await readLedger(page);
   const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-02-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:scenario==='mismatch'?252:251}],orders:[...orders,{id:'new-buy-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16,filledAt:'2026-02-01T10:00:00+09:00'}]};
   const load=()=>page.locator('#tossImportInput').setInputFiles({name:'legacy-execution.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-02T00:00:00Z',snapshot}))});
+  if(saveFailure)await page.evaluate(key=>window.__failTossSave=key,scenario==='safety-save-failed'?'safetyBackup':'state');
   await load();
-  if(scenario==='matched'){
+  if(saveFailure){
+    await expect(page.locator('.toast')).toContainText(scenario==='safety-save-failed'?'Synthetic full disk':'기기 저장에 실패');
+    expect((await readLedger(page)).trades).toEqual(before.trades);
+    await page.evaluate(()=>window.__failTossSave='');
+    await page.locator('#krwBtn').click();await expect.poll(async()=>(await readLedger(page)).settings.displayCurrency).toBe('KRW');
+    expect((await readLedger(page)).trades).toEqual(before.trades);
+    await load();await expect(page.locator('.toast')).toContainText('매수 1건');
+    expect((await readLedger(page)).trades).toHaveLength(4);expect(errors).toEqual([]);
+  }else if(scenario==='matched'){
     await expect(page.locator('.toast')).toContainText('매수 1건');const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
     expect(saved.trades).toHaveLength(4);expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
     expect(saved.trades.slice(0,3).every(trade=>!!trade.source.filledAt)).toBe(true);

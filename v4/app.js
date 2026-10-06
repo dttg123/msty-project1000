@@ -1508,10 +1508,20 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 project.priceUpdatedAt = price.timestamp || new Date().toISOString();
             }
         }
-        const beforeAutomaticChanges = clone(state), adoptedDividends = adoptMatchingTossDividends(), automatic = await tryAutomaticTossImport();
-        if (adoptedDividends || automatic.imported)
-            await storageSet(SAFETY_KEY, beforeAutomaticChanges);
-        await saveState(true);
+        const beforeAutomaticChanges = clone(state);
+        let adoptedDividends = 0, automatic;
+        try {
+            adoptedDividends = adoptMatchingTossDividends();
+            automatic = await tryAutomaticTossImport();
+            if (adoptedDividends || automatic.imported)
+                await storageSet(SAFETY_KEY, beforeAutomaticChanges);
+            await saveState(true);
+        }
+        catch (error) {
+            state = beforeAutomaticChanges;
+            renderAll();
+            throw error;
+        }
         renderAll();
         showPage('settings');
         const found = result.candidates.length + result.dividendCandidates.length, changed = result.correctionCandidates.length + result.dividendCorrectionCandidates.length;
