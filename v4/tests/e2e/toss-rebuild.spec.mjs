@@ -209,3 +209,35 @@ test('시작 시 거부되는 과도한 설정값은 저장 전에 차단되고 
   expect((await readLedger(page)).settings).toEqual(before.settings);expect((await readLedger(page)).trades).toEqual(before.trades);
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#bootRetry')).toHaveCount(0);expect((await readLedger(page)).settings).toEqual(before.settings);expect(errors).toEqual([]);
 });
+
+for(const scenario of ['matched','mismatch','real-oversell'])test(`과거 토스 체결시각 복원과 신규 저장: ${scenario}`,async({page})=>{
+  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
+  const orders=[
+    {id:'a-old-sell',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'sell',shares:10,price:12,filledAt:scenario==='real-oversell'?'2026-01-01T09:00:00+09:00':'2026-01-01T11:00:00+09:00'},
+    {id:'z-old-buy',symbol:'MSTY',currency:'USD',date:'2026-01-01',type:'buy',shares:10,price:10,filledAt:'2026-01-01T10:00:00+09:00'},
+    {id:'old-position',symbol:'MSTY',currency:'USD',date:'2026-01-02',type:'buy',shares:247,price:11,filledAt:'2026-01-02T10:00:00+09:00'}
+  ];
+  await page.evaluate(async orders=>{
+    const {blankState}=await import('/modules/state.js'),{tossCandidateToTrade}=await import('/modules/toss.js');
+    const state=blankState();state.trades=orders.map(order=>{const trade=tossCandidateToTrade(order,{projectId:state.projects[0].id,id:order.id,createdAt:'2026-10-01T00:00:00Z'});delete trade.source.filledAt;return trade;});
+    state.integrations.toss.sourceLedger.orders=orders;
+    await new Promise((resolve,reject)=>{const request=indexedDB.open('DividendOSDB_V4');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(state,'state');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};});
+  },orders);
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();const before=await readLedger(page);
+  const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-02-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:scenario==='mismatch'?252:251}],orders:[...orders,{id:'new-buy-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16,filledAt:'2026-02-01T10:00:00+09:00'}]};
+  const load=()=>page.locator('#tossImportInput').setInputFiles({name:'legacy-execution.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-02T00:00:00Z',snapshot}))});
+  await load();
+  if(scenario==='matched'){
+    await expect(page.locator('.toast')).toContainText('매수 1건');const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
+    expect(saved.trades).toHaveLength(4);expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
+    expect(saved.trades.slice(0,3).every(trade=>!!trade.source.filledAt)).toBe(true);
+    expect(saved.trades.slice(0,3).map(({source,...row})=>row)).toEqual(before.trades.map(({source,...row})=>row));
+    expect(safety.trades).toEqual(before.trades);
+    await load();await expect.poll(async()=>(await readLedger(page)).integrations.toss.syncSequence).toBeGreaterThan(saved.integrations.toss.syncSequence);
+    expect((await readLedger(page)).trades).toEqual(saved.trades);
+  }else{
+    await expect(page.locator('.toast')).toContainText(scenario==='mismatch'?'체결 합계와 보유주수 불일치':'중간 보유주수 초과 매도');
+    expect((await readLedger(page)).trades).toEqual(before.trades);
+  }
+  const after=await readLedger(page);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(after.trades);
+});

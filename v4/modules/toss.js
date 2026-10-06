@@ -337,6 +337,37 @@ export function tossCandidateToTrade(candidate, { projectId, id, createdAt = new
     };
     return row.type === 'buy' ? { ...base, type: 'buy', buyType: 'direct' } : { ...base, type: 'sell', buyType: undefined };
 }
+// Recover only missing execution metadata from an unchanged, uniquely identified
+// broker original. Financial values and existing timestamps remain untouched.
+export function restoreTossExecutionTimes(trades, orders) {
+    const byId = new Map();
+    for (const input of orders) {
+        const row = normalizeTossOrder(input);
+        if (!row)
+            continue;
+        byId.set(row.externalId, [...(byId.get(row.externalId) || []), row]);
+    }
+    const counts = new Map();
+    for (const trade of trades)
+        if (trade.source?.provider === 'toss' && trade.source.externalId)
+            counts.set(trade.source.externalId, (counts.get(trade.source.externalId) || 0) + 1);
+    return trades.map(trade => {
+        const source = trade.source;
+        if (source?.provider !== 'toss' || source.filledAt || !source.externalId || !source.sourceFingerprint || counts.get(source.externalId) !== 1)
+            return trade;
+        const matches = byId.get(source.externalId);
+        if (matches?.length !== 1)
+            return trade;
+        const row = matches[0];
+        if (row.currency !== 'USD' || row.sourceFingerprint !== source.sourceFingerprint || row.accountId !== (source.accountId || '') ||
+            (source.assetKey && source.assetKey !== row.assetKey) || (source.market && source.market !== row.market) || (source.securityId && source.securityId !== row.securityId) ||
+            row.symbol !== trade.symbol || row.date !== trade.date || row.type !== trade.type || row.shares !== trade.shares || row.price !== trade.price ||
+            row.feeUSD !== (trade.feeUSD || 0) || row.taxUSD !== (trade.taxUSD || 0) || row.status !== (source.status || 'FILLED') ||
+            row.filledAt.slice(0, 10) !== trade.date || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(row.filledAt) || !Number.isFinite(Date.parse(row.filledAt)))
+            return trade;
+        return { ...trade, source: { ...source, filledAt: row.filledAt } };
+    });
+}
 export function tossCandidateToDividend(candidate, { projectId, id, sharesAtPayment = 0, createdAt = new Date().toISOString() } = {}) {
     const row = normalizeTossDividend(candidate);
     if (!row || row.currency !== 'USD' || !projectId || !id)

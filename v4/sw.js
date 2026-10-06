@@ -3,7 +3,7 @@
 // This module is loaded only as a Service Worker, never as a window script.
 const serviceWorker = globalThis;
 const CACHE_PREFIX = 'dividend-os-' + new URL(serviceWorker.registration.scope).pathname + '-';
-const CACHE = CACHE_PREFIX + 'dividend-os-v0.12.27-r88';
+const CACHE = CACHE_PREFIX + 'dividend-os-v0.12.28-r89';
 const ASSETS = [
     './', './index.html', './styles.css', './styles-refined.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
     './app.js', './firebase.js', './auth.js', './storage.js', './cloud.js', './backup.js', './hot-update.js', './runtime-config.js', './toss-client.js', './toss-native.js',
