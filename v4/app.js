@@ -477,6 +477,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         window.scrollTo(0, modalScroll);
         modalFocus?.focus?.({ preventScroll: true });
     }
+    function restoreRecord(target, saved) {
+        if (!saved)
+            return;
+        for (const key of Object.keys(target))
+            Reflect.deleteProperty(target, key);
+        Object.assign(target, saved);
+    }
     let stateActionRunning = false;
     async function runStateAction(action) {
         if (stateActionRunning || modalSaving)
@@ -497,8 +504,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             function restoreRows(saved, original) {
                 const byId = new Map(original.map(row => [row.id, row]));
                 return saved.map(row => { const target = byId.get(row.id); if (!target)
-                    return row; for (const key of Object.keys(target))
-                    Reflect.deleteProperty(target, key); Object.assign(target, row); return target; });
+                    return row; restoreRecord(target, row); return target; });
             }
             state = { ...before, projects: restoreRows(before.projects, references.projects), trades: restoreRows(before.trades, references.trades), dividends: restoreRows(before.dividends, references.dividends), splits: restoreRows(before.splits, references.splits), cashAdjustments: restoreRows(before.cashAdjustments, references.cashAdjustments) };
             selectedProjectId = previousProjectId;
@@ -597,7 +603,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         } const row = record || { id: uid('t'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString(), date, type: 'buy', buyType: 'direct', shares, price }, before = record ? clone(record) : null; assignFields(row, type === 'sell' ? { date, type, buyType: '', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() } : { date, type, buyType: buyType || 'direct', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() }); if (!edit)
             state.trades.push(row); const invalid = computeProject(project).oversells.length; if (invalid) {
             if (edit)
-                Object.assign(row, before);
+                restoreRecord(row, before);
             else
                 state.trades = state.trades.filter((item) => item !== row);
             toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');
@@ -607,7 +613,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         catch {
             if (edit)
-                Object.assign(row, before);
+                restoreRecord(row, before);
             else
                 state.trades = state.trades.filter((item) => item !== row);
             controls.forEach((el, i) => el.disabled = disabled[i]);
@@ -780,7 +786,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             }
             catch (error) {
                 if (edit)
-                    Object.assign(row, before);
+                    restoreRecord(row, before);
                 else
                     state.dividends = state.dividends.filter((item) => item !== row);
                 controls.forEach((el, i) => el.disabled = disabled[i]);
@@ -838,7 +844,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         } const row = record || { id: uid('s'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString(), date, from, to }, before = record ? clone(record) : null; assignFields(row, { date, from, to, type: to < from ? 'reverse' : 'forward' }); if (!edit)
             state.splits.push(row); if (computeProject(project).oversells.length) {
             if (edit)
-                Object.assign(row, before);
+                restoreRecord(row, before);
             else
                 state.splits = state.splits.filter((item) => item !== row);
             toast('이 분할을 반영하면 이후 매도 기록이 보유주수를 초과합니다.');
