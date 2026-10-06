@@ -89,7 +89,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   let legacyMigrationSource: unknown = null;
   let tossSyncRunning = false;
   let nativeTossStatus={available:isNativeTossAvailable(),configured:false,publicIp:'',lastPublicIp:'',checking:false};
-  let appUpdateStatus={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:APP_VERSION,updateAvailable:false,nativeUpdateRequired:false,error:''};
+  let appUpdateStatus={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:'',updateAvailable:false,nativeUpdateRequired:false,error:''};
   let exchangeRateBusy=false,exchangeRateError='',lastExchangeRateAttempt=0;
   let officialFeed: OfficialDistributionFeed | null=null,officialBusy=false,officialError='',officialAttempt=0;
   async function refreshOfficialDistributions(manual=false):Promise<void>{
@@ -729,10 +729,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   async function refreshAppUpdateStatus(){
-    if(!appUpdateStatus.available)return appUpdateStatus;
+    if(!appUpdateStatus.available||appUpdateStatus.checking)return appUpdateStatus;
     appUpdateStatus={...appUpdateStatus,checking:true,error:''};
     try{appUpdateStatus={...appUpdateStatus,...await fetchHotUpdateStatus(),checking:false,error:''};}
-    catch (error: unknown){appUpdateStatus={...appUpdateStatus,checking:false,error:errorMessage(error)||'업데이트 확인 실패'};}
+    catch (error: unknown){appUpdateStatus={...appUpdateStatus,checking:false,updateAvailable:false,nativeUpdateRequired:false,error:errorMessage(error)||'업데이트 확인 실패'};}
     return appUpdateStatus;
   }
 
@@ -965,7 +965,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('syncToss'in button.dataset){syncTossReadOnly();return;}
     if('rebuildMstyToss'in button.dataset){confirmAction('MSTY 기록 다시 만들기','기존 MSTY 거래만 지우고 보존된 토스 전체 체결 원본으로 다시 만듭니다. 분할 기록과 다른 종목은 유지하며, 토스 배당 조회가 지원되지 않으면 기존 배당도 유지합니다.',rebuildMstyFromToss,'다시 만들기');return;}
     if('installHotUpdate'in button.dataset){applyAppUpdate();return;}
-    if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{renderSettings();showPage('settings');toast(appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':'현재 최신 버전입니다.');});return;}
+    if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{renderSettings();showPage('settings');toast(appUpdateStatus.error|| (appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':appUpdateStatus.latestVersion!==appUpdateStatus.currentVersion?'설치 버전이 배포 버전보다 최신입니다.':'현재 최신 버전입니다.'));});return;}
     if('refreshOfficialDistributions'in button.dataset){refreshOfficialDistributions(true);return;}
     if('refreshExchangeRate'in button.dataset){refreshExchangeRate(true);return;}
     if('deleteTossExceptions'in button.dataset){openTossExceptionDeletion();return;}
