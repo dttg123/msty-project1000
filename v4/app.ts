@@ -221,7 +221,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(!legacyMigrationSource){toast('이 기기에서 V3.2.1 데이터를 찾지 못했습니다.');return;}
     const preview=prepareLegacyMigration(legacyMigrationSource),audit=preview.audit;if(!audit){toast('이전 데이터를 확인할 수 없습니다.');return;}
     openModal(`<h3 class="modal-title">V3.2.1 → V4 이전 점검</h3><p class="modal-desc">V3 원본은 읽기만 합니다. 아래 값이 모두 일치할 때 V4 전용 저장소에 복사합니다.</p><div class="list">${migrationCheckRows(audit)}</div><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmLegacyMigration" ${audit.passed?'':'disabled'}>일치 확인 후 복사</button></div>`);
-    const confirm=document.getElementById('confirmLegacyMigration');if(confirm)confirm.onclick=async()=>{await storageSet(SAFETY_KEY,clone(state));state=preview.candidate;selectedProjectId=state.projects[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('settings');toast('V3.2.1 데이터를 V4에 복사했습니다.');};
+    const confirm=document.getElementById('confirmLegacyMigration');if(confirm)confirm.onclick=()=>{void runStateAction(async()=>{await storageSet(SAFETY_KEY,clone(state));state=preview.candidate;selectedProjectId=state.projects[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('settings');toast('V3.2.1 데이터를 V4에 복사했습니다.');});};
   }
   function renderAll(displayOnly =false): void {
     const opened=displayOnly?[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card[open]')].map(el=>el.dataset.goalProject):[],historyOpen=displayOnly&&document.querySelector<HTMLDetailsElement>('.record-center')?.open,scrollY=window.scrollY;
@@ -263,9 +263,36 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.querySelectorAll<HTMLElement>('main,.bottom-nav').forEach((el)=>{el.inert=false;});
     window.scrollTo(0,modalScroll);modalFocus?.focus?.({preventScroll:true});
   }
+  function restoreRecord<T extends object>(target:T,saved:T|null): void {
+    if(!saved)return;
+    for(const key of Object.keys(target))Reflect.deleteProperty(target,key);
+    Object.assign(target,saved);
+  }
+  let stateActionRunning=false;
+  async function runStateAction(action: ()=>void|Promise<void>): Promise<boolean> {
+    if(stateActionRunning||modalSaving)return false;
+    const before=clone(state),previousProjectId=selectedProjectId,previousGroup=portfolioGroup;
+    const references={projects:[...state.projects],trades:[...state.trades],dividends:[...state.dividends],splits:[...state.splits],cashAdjustments:[...state.cashAdjustments]};
+    const controls=[...document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|HTMLButtonElement>('#modal input,#modal select,#modal textarea,#modal button')],disabled=controls.map(control=>control.disabled);
+    stateActionRunning=true;modalSaving=true;
+    try {
+      // Read form values synchronously before disabling controls: disabled fields are omitted from FormData.
+      const result=action();controls.forEach(control=>control.disabled=true);await result;return true;
+    } catch(error) {
+      function restoreRows<T extends {id:string}>(saved:T[],original:T[]): T[] {
+        const byId=new Map(original.map(row=>[row.id,row]));
+        return saved.map(row=>{const target=byId.get(row.id);if(!target)return row;restoreRecord(target,row);return target;});
+      }
+      state={...before,projects:restoreRows(before.projects,references.projects),trades:restoreRows(before.trades,references.trades),dividends:restoreRows(before.dividends,references.dividends),splits:restoreRows(before.splits,references.splits),cashAdjustments:restoreRows(before.cashAdjustments,references.cashAdjustments)};
+      selectedProjectId=previousProjectId;portfolioGroup=previousGroup;
+      console.error('State action was rolled back',error);toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.');return false;
+    } finally {
+      stateActionRunning=false;modalSaving=false;controls.forEach((control,index)=>control.disabled=disabled[index]);
+    }
+  }
   function confirmAction(title: string,message: string,action: ()=>void|Promise<void>,confirmText: string ='확인'): void {
     openModal(`<h3 class="modal-title">${esc(title)}</h3><p class="modal-desc">${esc(message)}</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn danger" id="modalConfirm">${esc(confirmText)}</button></div>`);
-    document.getElementById('modalConfirm')!.onclick=async()=>{await action();closeModal();};
+    document.getElementById('modalConfirm')!.onclick=async()=>{if(await runStateAction(action))closeModal();};
   }
 
   function openProjectForm(project: Project|null =null) {
@@ -314,7 +341,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const tradeForm=document.querySelector<HTMLFormElement>('#tradeForm')!,typeInput=formControl(tradeForm,'type'),buyTypeInput=formControl(tradeForm,'buyType');
     const syncTradeFields=()=>{const selling=typeInput.value==='sell';tradeForm.querySelector<HTMLElement>('[data-buy-only]')!.hidden=selling;tradeForm.querySelector<HTMLElement>('[data-mixed-only]')!.hidden=selling||buyTypeInput.value!=='mixed';};
     typeInput.onchange=syncTradeFields;buyTypeInput.onchange=syncTradeFields;syncTradeFields();
-    tradeForm.onsubmit=async (event: Event)=>{event.preventDefault();if(modalSaving)return;const form=submittedFormData(event),date=String(form.get('date')),type=form.get('type')==='sell'?'sell' as const:'buy' as const,shares=n(form.get('shares')),price=n(form.get('price')),buyType=type==='sell'?'':(['direct','reinvest','mixed','opening'] as const).find(value=>value===form.get('buyType'))||'direct',reinvestAmountUSD=buyType==='mixed'?n(form.get('reinvestAmountUSD')):0;if(!isDate(date)||shares<=0||price<0){toast('날짜·주수·단가를 확인해 주세요.');return;}if(reinvestAmountUSD>shares*price+.0001){toast('배당 사용액이 총 매수액보다 큽니다.');return;}const row: Trade=record||{id:uid('t'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString(),date,type:'buy',buyType:'direct',shares,price},before=record?clone(record):null;assignFields(row,type==='sell'?{date,type,buyType:'',shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()}:{date,type,buyType:buyType||'direct',shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()});if(!edit)state.trades.push(row);const invalid=computeProject(project).oversells.length;if(invalid){if(edit)Object.assign(row,before);else state.trades=state.trades.filter((item)=>item!==row);toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');return;}const controls=[...tradeForm.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('input,select,button')],disabled=controls.map((el)=>el.disabled);modalSaving=true;controls.forEach((el)=>el.disabled=true);try{await saveState(true);}catch{if(edit)Object.assign(row,before);else state.trades=state.trades.filter((item)=>item!==row);controls.forEach((el,i)=>el.disabled=disabled[i]);modalSaving=false;return;}modalSaving=false;closeModal();renderAll(true);showPage('projects');toast(edit?'거래를 수정했습니다.':'거래를 저장했습니다.');};
+    tradeForm.onsubmit=async (event: Event)=>{event.preventDefault();if(modalSaving)return;const form=submittedFormData(event),date=String(form.get('date')),type=form.get('type')==='sell'?'sell' as const:'buy' as const,shares=n(form.get('shares')),price=n(form.get('price')),buyType=type==='sell'?'':(['direct','reinvest','mixed','opening'] as const).find(value=>value===form.get('buyType'))||'direct',reinvestAmountUSD=buyType==='mixed'?n(form.get('reinvestAmountUSD')):0;if(!isDate(date)||shares<=0||price<0){toast('날짜·주수·단가를 확인해 주세요.');return;}if(reinvestAmountUSD>shares*price+.0001){toast('배당 사용액이 총 매수액보다 큽니다.');return;}const row: Trade=record||{id:uid('t'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString(),date,type:'buy',buyType:'direct',shares,price},before=record?clone(record):null;assignFields(row,type==='sell'?{date,type,buyType:'',shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()}:{date,type,buyType:buyType||'direct',shares,price,reinvestAmountUSD,note:String(form.get('note')).trim()});if(!edit)state.trades.push(row);const invalid=computeProject(project).oversells.length;if(invalid){if(edit)restoreRecord(row,before);else state.trades=state.trades.filter((item)=>item!==row);toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');return;}const controls=[...tradeForm.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('input,select,button')],disabled=controls.map((el)=>el.disabled);modalSaving=true;controls.forEach((el)=>el.disabled=true);try{await saveState(true);}catch{if(edit)restoreRecord(row,before);else state.trades=state.trades.filter((item)=>item!==row);controls.forEach((el,i)=>el.disabled=disabled[i]);modalSaving=false;return;}modalSaving=false;closeModal();renderAll(true);showPage('projects');toast(edit?'거래를 수정했습니다.':'거래를 저장했습니다.');};
   }
 
 
@@ -403,7 +430,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const controls=[...document.getElementById('modal')!.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('input,select,button')],disabled=controls.map((el)=>el.disabled);
       modalSaving=true;dividendForm.setAttribute('aria-busy','true');controls.forEach((el)=>el.disabled=true);preview.textContent='저장 중…';
       try{await saveState(true);}catch (error: unknown){
-        if(edit)Object.assign(row,before);else state.dividends=state.dividends.filter((item)=>item!==row);
+        if(edit)restoreRecord(row,before);else state.dividends=state.dividends.filter((item)=>item!==row);
         controls.forEach((el,i)=>el.disabled=disabled[i]);dividendForm.removeAttribute('aria-busy');modalSaving=false;updatePreview();return;
       }
       modalSaving=false;
@@ -429,7 +456,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function openSplitForm(record: SplitRecord|null =null) {
     const project=projectById(record?.projectId||selectedProjectId),edit=!!record;
     openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균단가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date||todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from)||2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to)||1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">적용</button></div>${edit?`<button class="record-delete-link" type="button" data-delete-from-edit="split:${record.id}">이 분할 기록 삭제</button>`:''}</form>`);
-    document.getElementById('splitForm')!.onsubmit=async (event: Event)=>{event.preventDefault();const form=submittedFormData(event),date=String(form.get('date')),from=n(form.get('from')),to=n(form.get('to'));if(!isDate(date)||from<=0||to<=0){toast('분할 날짜와 비율을 확인해 주세요.');return;}const row: SplitRecord=record||{id:uid('s'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString(),date,from,to},before=record?clone(record):null;assignFields(row,{date,from,to,type:to<from?'reverse':'forward'});if(!edit)state.splits.push(row);if(computeProject(project).oversells.length){if(edit)Object.assign(row,before);else state.splits=state.splits.filter((item)=>item!==row);toast('이 분할을 반영하면 이후 매도 기록이 보유주수를 초과합니다.');return;}await saveState(true);closeModal();renderAll();showPage('projects');toast('분할 비율을 반영했습니다.');};
+    document.getElementById('splitForm')!.onsubmit=async (event: Event)=>{event.preventDefault();const form=submittedFormData(event),date=String(form.get('date')),from=n(form.get('from')),to=n(form.get('to'));if(!isDate(date)||from<=0||to<=0){toast('분할 날짜와 비율을 확인해 주세요.');return;}const row: SplitRecord=record||{id:uid('s'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString(),date,from,to},before=record?clone(record):null;assignFields(row,{date,from,to,type:to<from?'reverse':'forward'});if(!edit)state.splits.push(row);if(computeProject(project).oversells.length){if(edit)restoreRecord(row,before);else state.splits=state.splits.filter((item)=>item!==row);toast('이 분할을 반영하면 이후 매도 기록이 보유주수를 초과합니다.');return;}await saveState(true);closeModal();renderAll();showPage('projects');toast('분할 비율을 반영했습니다.');};
   }
 
   function recordByToken(token: string) {
@@ -561,7 +588,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const engine=createPortfolioEngine(()=>restored,()=>restored.projects[0].id);
       if(engine.totals().rows.some((c)=>c.oversells.length))throw new Error('보유량을 초과하는 매도 기록이 있습니다.');
       openModal(`<h3 class="modal-title">백업 복원 확인</h3><p class="modal-desc">종목 ${restored.projects.length}개 · 거래 ${restored.trades.length}건 · 배당 ${restored.dividends.length}건<br>현재 V4 기록을 교체합니다. 현재 기록은 기기에 안전 복사하며 기존 MSTY 원본은 건드리지 않습니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmRestore">확인 후 복원</button></div>`);
-      document.getElementById('confirmRestore')!.onclick=async()=>{const previousProjectId=selectedProjectId;await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects().some((project)=>project.id===previousProjectId)?previousProjectId:(activeProjects()[0]?.id||'');await saveState(true);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');};
+      document.getElementById('confirmRestore')!.onclick=()=>{void runStateAction(async()=>{const previousProjectId=selectedProjectId;await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects().some((project)=>project.id===previousProjectId)?previousProjectId:(activeProjects()[0]?.id||'');await saveState(true);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');});};
     }catch (error: unknown){toast(errorMessage(error)||'지원되는 DividendOS ZIP이 아닙니다.');}
   }
   async function restoreSafetyCopy(): Promise<void> {
@@ -913,10 +940,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(button.dataset.deleteRecord){deleteRecord(button.dataset.deleteRecord);return;}
     if('projectCheck'in button.dataset){showIssues(selectedProjectId);return;}
     if('allCheck'in button.dataset){showIssues();return;}
-    if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project=projectById(id);if(!project||project.afterGoalMode===mode)return;if(mode!=='cashflow'&&mode!=='reinvest')return;project.afterGoalMode=mode;saveState(true).then(()=>{renderAll();showPage('goal');const cards=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card')];cards.find((card)=>card.querySelector<HTMLElement>('[data-goal-mode]')?.dataset.goalMode?.startsWith(id+':'))?.setAttribute('open','');toast('목표 달성 후 운용 방식을 저장했습니다.');});return;}
+    if(button.dataset.goalMode){const [id,mode]=button.dataset.goalMode.split(':');const project=projectById(id);if(!project||project.afterGoalMode===mode)return;if(mode!=='cashflow'&&mode!=='reinvest')return;void runStateAction(async()=>{project.afterGoalMode=mode;await saveState(true);renderAll();showPage('goal');const cards=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card')];cards.find((card)=>card.querySelector<HTMLElement>('[data-goal-mode]')?.dataset.goalMode?.startsWith(id+':'))?.setAttribute('open','');toast('목표 달성 후 운용 방식을 저장했습니다.');});return;}
     if(button.dataset.lockRecovery){lockRecovery(button.dataset.lockRecovery);return;}
     if(button.dataset.editRecovery){lockRecovery(button.dataset.editRecovery,true);return;}
-    if(button.dataset.restoreProject){const project=projectById(button.dataset.restoreProject);if(project){project.archived=false;selectedProjectId=project.id;saveState(true).then(()=>{renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
+    if(button.dataset.restoreProject){const project=projectById(button.dataset.restoreProject);if(project){void runStateAction(async()=>{project.archived=false;selectedProjectId=project.id;await saveState(true);renderAll();showPage('projects');toast('프로젝트를 복원했습니다.');});}return;}
     if('localMode'in button.dataset){localOnlySession=true;persistLocalMode(true);document.getElementById('authGate')?.classList.add('hidden');setSaveStatus('');return;}
     if('showLogin'in button.dataset){if(currentUser){document.getElementById('authGate')?.classList.add('hidden');showPage('settings');return;}if(demoMode){toast('테스트 모드에서는 클라우드를 연결하지 않습니다.');return;}localOnlySession=false;persistLocalMode(false);const gate=document.getElementById('authGate');gate?.classList.remove('hidden');initAuth().catch(()=>{document.getElementById('authGateStatus')!.textContent='로그인 서비스를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요. 기기 저장은 계속 사용할 수 있습니다.';});requestAnimationFrame(()=>gate?.scrollIntoView({behavior:'smooth',block:'start'}));return;}
     if('backup'in button.dataset){downloadBackup();return;}
@@ -947,7 +974,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('disconnectToss'in button.dataset){confirmAction('토스 화면 연결 해제','가져온 거래·배당과 원본 보존 기록은 유지하고 현재 조회 상태와 미승인 후보만 정리합니다.',async()=>{state.integrations.toss=disconnectedTossState(state.integrations.toss);await saveState(true);renderAll();showPage('settings');toast('토스 조회 화면 연결을 해제했습니다.');},'연결 해제');return;}
     if('migrateV3'in button.dataset){previewLegacyMigration();return;}
     if('logout'in button.dataset){localOnlySession=false;persistLocalMode(false);logoutGoogle();return;}
-    if('reset'in button.dataset){confirmAction('V4 전체 초기화','V4 거래·배당·프로젝트를 초기화합니다. V3.2.1 원본은 유지됩니다.',async()=>{await storageSet(SAFETY_KEY,clone(state));await storageDelete(STATE_KEY);state=blankState();selectedProjectId=state.projects[0].id;await saveState(true);renderAll();showPage('home');toast('V4 데이터를 초기화했습니다.');},'초기화');return;}
+    if('reset'in button.dataset){confirmAction('V4 전체 초기화','V4 거래·배당·프로젝트를 초기화합니다. V3.2.1 원본은 유지됩니다.',async()=>{await storageSet(SAFETY_KEY,clone(state));state=blankState();selectedProjectId=state.projects[0].id;await saveState(true);renderAll();showPage('home');toast('V4 데이터를 초기화했습니다.');},'초기화');return;}
     if('discardModal'in button.dataset){closeModal();return;}
     if('keepModal'in button.dataset){document.querySelector('.modal-unsaved')?.remove();return;}
     if('closeModal'in button.dataset){requestCloseModal();return;}
@@ -960,6 +987,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const form=event.target;if(!(form instanceof HTMLFormElement))return;
       const futureDate=form.id==='dividendScheduleForm'?null:[...form.querySelectorAll<HTMLInputElement>('input[type="date"]')].find((input)=>input.value&&input.value>todayISO());
       if(futureDate){event.preventDefault();event.stopImmediatePropagation();futureDate.setCustomValidity('미래 날짜는 실제 기록으로 저장할 수 없습니다.');futureDate.reportValidity();setTimeout(()=>futureDate.setCustomValidity(''),1200);return;}
+      if(['projectForm','priceForm','cashForm','withdrawalForm','splitForm','recoveryForm','tossReviewForm'].includes(form.id)&&form.onsubmit&&event instanceof SubmitEvent){
+        event.preventDefault();event.stopImmediatePropagation();const handler=form.onsubmit;
+        void runStateAction(()=>handler.call(form,event) as void|Promise<void>);return;
+      }
       if(form.dataset.submitting==='true'){event.preventDefault();event.stopImmediatePropagation();return;}
       form.dataset.submitting='true';
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;},800);
