@@ -618,13 +618,20 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         } if (reinvestAmountUSD > shares * price + .0001) {
             toast('배당 사용액이 총 매수액보다 큽니다.');
             return;
-        } const row = record || { id: uid('t'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString(), date, type: 'buy', buyType: 'direct', shares, price }, before = record ? clone(record) : null; assignFields(row, type === 'sell' ? { date, type, buyType: '', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() } : { date, type, buyType: buyType || 'direct', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() }); if (!edit)
+        } const ledgerBefore = computeProject(project); const row = record || { id: uid('t'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString(), date, type: 'buy', buyType: 'direct', shares, price }, before = record ? clone(record) : null; assignFields(row, type === 'sell' ? { date, type, buyType: '', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() } : { date, type, buyType: buyType || 'direct', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() }); if (!edit)
             state.trades.push(row); const invalid = computeProject(project).oversells.length; if (invalid) {
             if (edit)
                 restoreRecord(row, before);
             else
                 state.trades = state.trades.filter((item) => item !== row);
             toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');
+            return;
+        } if (hasNewDividendDeficit(ledgerBefore, computeProject(project))) {
+            if (edit)
+                restoreRecord(row, before);
+            else
+                state.trades = state.trades.filter(item => item !== row);
+            toast('매수일에 사용할 배당 잔액이 부족합니다. 누락 입금·초기 잔액을 먼저 확인해 주세요.');
             return;
         } const controls = [...tradeForm.querySelectorAll('input,select,button')], disabled = controls.map((el) => el.disabled); modalSaving = true; controls.forEach((el) => el.disabled = true); try {
             await saveState(true);
@@ -881,7 +888,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         const project = projectById(trade.projectId), calc = computeProject(project), gross = tradeCashBreakdown(trade).grossBuyCostUSD;
         const confirmed = trade.dividendFunding?.sourceFingerprint === trade.source.sourceFingerprint;
-        openModal(`<h3 class="modal-title">매수 자금 출처 확인</h3><p class="modal-desc">${esc(project.symbol)} · ${fmtDate(trade.date)} · ${fmtShares(trade.shares)}주 · ${fmtMoney(gross, 2)}. 토스 원본은 유지하며, 이 매수에 쓴 배당금만 별도로 기록합니다. 직접 넣은 돈으로 샀다면 0을 입력하세요.</p><form id="fundingForm" class="form-grid"><label>이 매수에 사용한 배당금 USD<input class="input" name="amountUSD" type="number" min="0" max="${gross}" step="0.01" value="${confirmed ? n(trade.dividendFunding?.amountUSD) : ''}" required></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">확인 저장</button></div></form>`);
+        openModal(`<h3 class="modal-title">매수 자금 출처 확인</h3><p class="modal-desc">${esc(project.symbol)} · ${fmtDate(trade.date)} · ${fmtShares(trade.shares)}주 · ${fmtMoney(gross, 2)}. 토스 원본은 유지하며, 이 매수에 쓴 배당금만 별도로 기록합니다. 직접 넣은 돈으로 샀다면 0을 입력하세요.</p><form id="fundingForm" class="form-grid"><label>이 매수에 사용한 배당금 USD<input class="input" name="amountUSD" type="number" min="0" max="${gross}" step="any" value="${confirmed ? n(trade.dividendFunding?.amountUSD) : ''}" required></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">확인 저장</button></div></form>`);
         document.getElementById('fundingForm').onsubmit = async (event) => { event.preventDefault(); const amount = n(submittedFormData(event).get('amountUSD')); if (amount < 0 || amount > gross + .000001) {
             toast('배당 사용액은 총 매수액 이하여야 합니다.');
             return;
@@ -2266,7 +2273,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 setTimeout(() => futureDate.setCustomValidity(''), 1200);
                 return;
             }
-            if (['projectForm', 'priceForm', 'cashForm', 'withdrawalForm', 'splitForm', 'recoveryForm', 'tossReviewForm'].includes(form.id) && form.onsubmit && event instanceof SubmitEvent) {
+            if (['projectForm', 'priceForm', 'cashForm', 'withdrawalForm', 'fundingForm', 'splitForm', 'recoveryForm', 'tossReviewForm'].includes(form.id) && form.onsubmit && event instanceof SubmitEvent) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 const handler = form.onsubmit;
