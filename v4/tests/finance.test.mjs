@@ -39,3 +39,22 @@ assert.deepEqual(csv.slice(4,8),['10','1','0.5','8.5'],'CSV must match app cash 
 const zeroCsv=buildCsvExports(zeroState).find(row=>row.name==='dividends.csv').data.split('\n')[1].split(',');
 assert.equal(zeroCsv[7],'0');
 console.log('Dividend boundaries PASS: explicit zero, net precedence, ROC zero, and CSV cash parity');
+
+// One render may reuse calculations; later edits and failed renders must never
+// leak a previous result into the before/after mutation checks.
+const batchState=blankState(),batchProject=batchState.projects[0];
+batchState.dividends=[{id:'batch-income',projectId:batchProject.id,date:'2025-01-01',amountUSD:50000}];
+const batchEngine=createPortfolioEngine(()=>batchState,()=>batchProject.id);
+batchEngine.withCalculationBatch(()=>{
+ const first=batchEngine.computeProject(batchProject);
+ assert.strictEqual(batchEngine.computeProject(batchProject.id),first);
+ batchEngine.withCalculationBatch(()=>assert.notStrictEqual(batchEngine.computeProject(batchProject),first));
+ assert.strictEqual(batchEngine.computeProject(batchProject),first);
+});
+batchState.dividends[0].amountUSD=75000;
+assert.equal(batchEngine.computeProject(batchProject).dividendsTotal,75000);
+assert.throws(()=>batchEngine.withCalculationBatch(()=>{batchEngine.computeProject(batchProject);throw Error('render failed');}),/render failed/);
+batchState.dividends[0].amountUSD=100000;
+assert.equal(batchEngine.computeProject(batchProject).dividendsTotal,100000);
+batchEngine.withCalculationBatch(()=>assert.equal(batchEngine.computeProject(batchProject).dividendsTotal,100000));
+console.log('Read-only render cache PASS: reuse, nested scopes, edits and exception cleanup');

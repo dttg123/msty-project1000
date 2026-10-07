@@ -65,7 +65,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         }
         return Math.max(0, Math.abs(shares) < 1e-9 ? 0 : shares);
     }
-    function computeProject(projectOrId) {
+    function computeProjectUncached(projectOrId) {
         const project = typeof projectOrId === 'string' ? projectById(projectOrId) : projectOrId;
         if (!project)
             return null;
@@ -234,6 +234,29 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
             targetReachedDate, targetBasisSuggestion, milestoneDates, oversells, effectiveSells
         };
     }
+    // Cache only inside a synchronous read-only render. Mutation guards always
+    // compute fresh values outside this scope, including edits of existing rows.
+    let renderCache = null;
+    function computeProject(projectOrId) {
+        const project = typeof projectOrId === 'string' ? projectById(projectOrId) : projectOrId;
+        if (!project)
+            return null;
+        if (renderCache?.has(project.id))
+            return renderCache.get(project.id);
+        const result = computeProjectUncached(project);
+        renderCache?.set(project.id, result);
+        return result;
+    }
+    function withCalculationBatch(read) {
+        const previous = renderCache;
+        renderCache = new Map();
+        try {
+            return read();
+        }
+        finally {
+            renderCache = previous;
+        }
+    }
     function recoveryStats(calc) {
         const recovery = calc.project.recovery || blankRecovery();
         const reachedDate = recovery.targetReachedDate || calc.targetReachedDate || '';
@@ -267,5 +290,5 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
             missingPriceCount: rows.filter((row) => !row.priceAvailable).length, staleEstimateCount: rows.filter((row) => row.estimateStale && row.dividends.length).length
         };
     }
-    return { activeProjects, projectById, projectRows, sortedEvents, sharesAtDate, computeProject, recoveryStats, totals };
+    return { activeProjects, projectById, projectRows, sortedEvents, sharesAtDate, computeProject, withCalculationBatch, recoveryStats, totals };
 }

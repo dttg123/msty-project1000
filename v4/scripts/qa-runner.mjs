@@ -20,7 +20,7 @@ const suites={
     'interaction-contract.test.mjs','replacement.test.mjs','golden-contract.test.mjs'
   ],
   full:['corporate-actions.test.mjs','generator-contract.test.mjs','access-control-contract.test.mjs','pwa-contract.test.mjs','stress-10y.test.mjs'],
-  release:['lifetime-30y.test.mjs','hardening.test.mjs']
+  release:['lifetime-30y.test.mjs','lifetime-high-9.test.mjs','hardening.test.mjs']
 };
 
 const selected=profiles.slice(0,profiles.indexOf(profile)+1).flatMap(name=>suites[name]);

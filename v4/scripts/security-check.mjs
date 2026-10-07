@@ -13,6 +13,7 @@ async function walk(directory){
     const path=resolve(directory,entry.name);
     const relativePath=relative(root,path).replaceAll('\\','/');
     if(entry.isDirectory()){
+      if(path===resolve(import.meta.dirname,'../test-results'))continue; // Git-ignored browser traces contain copies of the runtime.
       if(relativePath==='v4/android/app/src/main/assets/public')continue;
       await walk(path);continue;
     }
