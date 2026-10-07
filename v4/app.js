@@ -2285,6 +2285,22 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 event.stopImmediatePropagation();
                 return;
             }
+            if (form.id === 'tradeForm' && form.onsubmit && event instanceof SubmitEvent) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                const handler = form.onsubmit;
+                form.dataset.submitting = 'true';
+                void (async () => { try {
+                    await handler.call(form, event);
+                }
+                catch (error) {
+                    console.error('Trade submission failed', error);
+                }
+                finally {
+                    delete form.dataset.submitting;
+                } })();
+                return;
+            }
             form.dataset.submitting = 'true';
             setTimeout(() => { if (!form.isConnected)
                 return; delete form.dataset.submitting; }, 800);
