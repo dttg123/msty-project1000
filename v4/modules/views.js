@@ -1,3 +1,4 @@
+import { dividendPlanStatus, projectRecovery } from './dividend-plan.js';
 import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
 import { reportingDividends, isPostedDividend } from './finance.js';
 import { APP_VERSION } from '../backup.js';
@@ -41,14 +42,25 @@ export function createViews(context) {
             return `<div class="analysis-divider"><strong>주당배당 성장</strong><span>완료 연도 기준</span></div>${annualDpsHTML(calc)}<details class="metric-guide"><summary>계산 기준 보기</summary><p>분할을 보정한 실제 주당배당만 사용하며 진행 중인 연도는 성장률에서 제외합니다.</p></details>`;
         return `<div class="analysis-divider"><strong>배당 변화</strong><span>같은 기간 비교</span></div><div class="strategy-metrics two"><div><span>입력 기록 기준 배당률</span><strong>${calc.analytics.trailingYoc === null ? '기록 부족' : fmtPct(calc.analytics.trailingYoc)}</strong></div><div><span>전년 같은 기간 대비</span><strong class="${calc.analytics.ytdChange === null ? '' : signClass(calc.analytics.ytdChange)}">${finitePct(calc.analytics.ytdChange)}</strong></div></div><details class="metric-guide"><summary>지표 뜻 보기</summary><p>최근 1년 실제 세후 배당을 내 매입금과 비교하고, 올해 받은 배당을 지난해 같은 기간과 비교합니다.</p></details>`;
     }
+    function dividendManagementHTML(calc) {
+        const p = calc.project, status = dividendPlanStatus(calc), rec = projectRecovery(calc), reached = !!calc.targetReachedDate || rec.locked;
+        const destination = { isa: 'ISA', otherDividend: '다른 배당주', living: '생활비', other: '기타' };
+        return `<div class="detail-title"><strong>${reached ? '원금회수 현황' : '배당 사용 · 원금회수'}</strong><span class="phase-pill">${status.mode === 'reinvest' ? p.symbol + ' 재투자' : '외부 활용'}</span></div>
+      ${status.suggested ? `<div class="dividend-plan-notice"><p>배당 제외 평가손익이 ${status.suggested === 'outside' ? '플러스' : '마이너스'}예요. ${status.suggested === 'outside' ? 'ISA·다른 배당주 활용' : '재투자 재개'}로 바꿀까요?</p><button class="btn primary small" data-dividend-mode="${esc(p.id)}:${status.suggested}">${status.suggested === 'outside' ? '외부 활용으로 변경' : '재투자로 변경'}</button></div>` : ''}
+      <div class="recovery-hero"><span>${reached ? '남은 회수 원금' : '지금까지 외부 활용으로 회수'}</span><strong>${fmtMoney(reached ? rec.remaining : rec.total, 2)}</strong><small>${rec.basis > 0 ? fmtPct(rec.pct) + ' 회수' : '직접 투자금 기록 필요'} · ${rec.locked ? '기존 확정 기준 유지' : '직접 넣은 돈 기준'}${calc.unconfirmedFundingCount ? ' · 자금 출처 ' + calc.unconfirmedFundingCount + '건 미확인' : ''}</small></div>
+      ${reached ? progress(rec.pct) : ''}
+      <div class="lifecycle-actions"><button class="btn primary small" data-add-withdrawal="${esc(p.id)}">배당 사용 기록</button><button class="btn soft small" data-dividend-mode="${esc(p.id)}:${status.mode === 'reinvest' ? 'outside' : 'reinvest'}">${status.mode === 'reinvest' ? '외부 활용으로 변경' : '재투자로 변경'}</button></div>
+      <details class="dividend-use-details"><summary>사용 내역 · 계산 기준</summary><div class="goal-info-rows"><div><span>${rec.locked ? '확정 회수 기준' : '직접 투자금 누계'}</span><strong>${fmtMoney(rec.basis, 2)}</strong></div><div><span>누적 세후배당 (USD 원본)</span><strong>${fmtMoney(calc.usdDividendsTotal, 2)}</strong></div><div><span>${esc(p.symbol)} 재투자 사용</span><strong>${fmtMoney(calc.reinvestAmount, 2)}</strong></div><div><span>외부 활용으로 회수</span><strong>${fmtMoney(rec.total, 2)}</strong></div><div><span>미사용 배당 잔액</span><strong>${fmtMoney(calc.dividendAvailable, 2)}</strong></div><div><span>남은 회수 원금</span><strong>${fmtMoney(rec.remaining, 2)}</strong></div>${rec.profit > 0 ? `<div><span>기준원금 초과 회수</span><strong>${fmtMoney(rec.profit, 2)}</strong></div>` : ''}<div><span>전환 판단용 평가손익</span><strong>${calc.priceAvailable ? fmtSignedMoney(status.pnl) : '현재가 필요'}</strong></div></div>
+      <p class="detail-note">배당·ROC 조정 전 매입원가와 달러 시세로 판단합니다. 손익이 0이면 방향을 유지합니다. ${status.fresh ? '' : '시세가 없거나 7일 이상 지나 전환 안내를 보류합니다.'} 방향 변경은 실제 거래나 과거 기록을 바꾸지 않습니다.</p>
+      <p class="detail-note">${esc(p.symbol)} 밖에서 사용한 배당만 회수에 포함합니다. ISA·다른 종목·생활비 사용을 기록하며 전체 계좌의 출금액을 뜻하지 않습니다. 재투자는 회수가 아닙니다. ${rec.locked ? '기존 확정 원금·시작일을 유지합니다.' : '새로 넣은 돈은 직접 투자금에 더해집니다. 매도대금은 이 배당 회수율에서 제외합니다.'} 잔액 보정은 회수로 계산하지 않습니다.</p>
+      ${calc.hasKRWDividends ? '<p class="detail-note">원화 배당은 달러 사용 잔액에서 제외됩니다. 실제 달러 금액을 확인한 뒤 기록하세요.</p>' : ''}
+      ${calc.unconfirmedFundingCount ? `<p class="detail-note funding-pending">토스 매수 ${calc.unconfirmedFundingCount}건의 자금 출처 미확인 · 직접 투자금은 잠정값입니다.</p><button class="btn soft small" data-review-funding="${esc(p.id)}">매수 자금 출처 확인</button>` : ''}
+      ${rec.uses.length ? `<div class="list">${[...rec.uses].reverse().slice(0, 5).map(row => `<button class="list-row record-row-button" data-view-record="cash:${esc(row.id)}"><div><div class="row-title">${row.destination ? destination[row.destination] : '기존 배당 인출'}</div><div class="row-sub">${fmtDate(row.date)}</div></div><strong>${fmtMoney(-row.amountUSD, 2)}</strong></button>`).join('')}</div>` : ''}
+      ${rec.locked ? `<button class="btn soft small" data-edit-recovery="${esc(p.id)}">기존 회수 기준 확인 · 수정</button>` : ''}
+      ${p.dividendPlan?.history.length ? `<p class="detail-note">최근 방향 변경: ${p.dividendPlan.history.slice(-3).map(row => `${esc(row.confirmedAt.slice(0, 10))} ${row.mode === 'reinvest' ? '재투자' : '외부 활용'}`).join(' · ')}</p>` : ''}</details>`;
+    }
     function lifecycleContent(calc) {
-        const rec = recoveryStats(calc), project = calc.project;
-        if (project.category !== 'highYield' || rec.stage === 'accumulating')
-            return '';
-        if (rec.stage === 'setup')
-            return `<div class="lifecycle-head"><span class="phase-pill achieved">주수 목표 달성</span><strong>${fmtShares(calc.currentTarget)}주 달성</strong><small>${fmtDate(rec.reachedDate)}부터 원금회수 단계로 전환할 수 있습니다.</small></div><button class="btn primary lifecycle-action" data-lock-recovery="${project.id}">원금회수 기준 확정</button><p class="detail-note">기준 확정 뒤 실제로 밖으로 인출한 배당금만 원금회수에 포함합니다.</p>`;
-        const completed = rec.stage === 'profit';
-        return `<div class="lifecycle-head"><span class="phase-pill ${completed ? 'profit' : 'recovery'}">${completed ? '순수익 단계' : '원금 회수 중'}</span><strong>${completed ? `회수 후 순수익 ${fmtMoney(rec.profit, 2)}` : `남은 원금 ${fmtMoney(rec.remaining, 2)}`}</strong><small>목표 ${fmtShares(calc.currentTarget)}주 달성 · ${fmtDate(rec.reachedDate)}</small></div>${progress(rec.pct)}<div class="lifecycle-metrics"><div><span>회수 기준원금</span><strong>${fmtMoney(project.recovery.basis, 2)}</strong></div><div><span>실제 인출 회수</span><strong>${fmtMoney(rec.total, 2)}</strong></div><div><span>${completed ? '회수 이후 순수익' : '원금 회수율'}</span><strong>${completed ? fmtMoney(rec.profit, 2) : fmtPct(rec.pct)}</strong></div></div><div class="lifecycle-actions"><button class="btn primary small" data-add-withdrawal="${project.id}">배당 인출 기록</button><button class="btn soft small" data-edit-recovery="${project.id}">회수 기준</button></div><p class="detail-note">배당 입금만으로는 회수되지 않습니다. 실제 인출 기록만 계산합니다.</p>`;
+        return calc.project.category === 'highYield' ? dividendManagementHTML(calc) : '';
     }
     function periodKey(dateString, mode) {
         const date = new Date(`${dateString}T12:00:00`);
@@ -182,7 +194,7 @@ export function createViews(context) {
         let title = '', sub = '', value = '', cls = '';
         const future = String(row.date) > todayISO();
         if (row.kind === 'trade') {
-            title = row.type === 'sell' ? '매도' : row.buyType === 'reinvest' ? '배당재투자' : row.buyType === 'mixed' ? '혼합매수' : row.buyType === 'opening' ? '초기보유' : '직접매수';
+            title = row.type === 'buy' && row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? (row.dividendFunding.amountUSD > 0 ? '매수 · 배당 사용 ' + fmtMoney(row.dividendFunding.amountUSD, 2) : '매수 · 직접 투자') : row.type === 'sell' ? '매도' : row.buyType === 'reinvest' ? '배당재투자' : row.buyType === 'mixed' ? '혼합매수' : row.buyType === 'opening' ? '초기보유' : '직접매수';
             sub = `${fmtDate(row.date)} · ${fmtShares(row.shares)}주 · 단가 ${fmtMoney(row.price)}${row.source?.provider === 'toss' ? ' · 토스 승인' : ''}`;
             value = `${row.type === 'sell' ? '+' : '-'}${fmtMoney(n(row.shares) * n(row.price))}`;
             cls = row.type === 'sell' ? 'positive' : '';
@@ -200,8 +212,8 @@ export function createViews(context) {
             value = '비율 반영';
         }
         if (row.kind === 'cash') {
-            const withdrawal = row.purpose === 'recoveryWithdrawal';
-            title = withdrawal ? '배당금 인출' : esc(row.label || '배당 잔액 보정');
+            const withdrawal = row.purpose === 'recoveryWithdrawal' || row.purpose === 'dividendUse';
+            title = withdrawal ? esc(row.label || '배당금 인출') : esc(row.label || '배당 잔액 보정');
             sub = `${fmtDate(row.date)}${withdrawal ? ' · 원금회수 반영' : ''}`;
             value = withdrawal ? `-${fmtMoney(Math.abs(n(row.amountUSD)))}` : fmtSignedMoney(row.amountUSD);
             cls = withdrawal ? '' : n(row.amountUSD) >= 0 ? 'positive' : 'negative';
@@ -249,6 +261,7 @@ export function createViews(context) {
           <div class="cashflow-secondary"><div><span>누적 세후배당</span><strong>${fmtMoney(calc.dividendsTotal, 2)}</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet, 2)}</strong></div>${calc.hasKRWDividends ? '<div><span>달러 배당 잔액</span><strong>달러 금액 미확인</strong></div>' : Math.abs(calc.dividendAvailable - calc.dividendsTotal) > .01 ? `<div><span>남은 배당금</span><strong>${fmtMoney(calc.dividendAvailable, 2)}</strong></div>` : calc.reinvestAmount > 0 ? `<div><span>재투자 사용</span><strong>${fmtMoney(calc.reinvestAmount, 2)}</strong></div>` : ''}</div>
           <p class="detail-note">입력된 기록 ${calc.postedDividends.length}건${calc.postedDividends.length ? ` · ${esc(calc.postedDividends[0].date)}부터` : ""} · 누락 여부 미확인${calc.hasKRWDividends ? " · 원화 원본 보존, 달러 표시는 현재 환율 참고값" : ""}</p><details class="analysis-details"><summary>배당률 · 지급 추세 자세히 보기</summary>${strategyInsightHTML(calc)}</details>
         </article>
+        ${p.category === 'highYield' ? `<article class="card dividend-management">${dividendManagementHTML(calc)}</article>` : ''}
         <button class="card-link" data-goal-detail="${p.id}"><span>${rec.stage !== 'accumulating' ? '달성 · 원금회수 관리' : '다음 목표 ' + fmtShares(milestone.shares) + '주'}</span><b>›</b></button>
         <article class="card compact"><div class="detail-title"><strong>공시 배당 일정</strong><button class="text-link" data-dividend-schedule="${p.id}">직접 기록</button></div>${officialScheduleHTML(p)}</article>
         <article class="card portfolio-section portfolio-flow-card"><div class="detail-title"><strong>실제 입금 흐름</strong><div class="chart-period">${[['week', '주'], ['month', '월'], ['year', '년'], ['monthWeeks', '주차']].map(([mode, label]) => `<button type="button" data-chart-mode="${mode}" class="${getChartMode() === mode ? 'active' : ''}">${label}</button>`).join('')}</div></div><div class="portfolio-chart-stage">${chartContextHTML(calc)}<div id="projectChart">${chartHTML(p.id)}</div>${chartSelectionHTML(p.id)}</div></article>
@@ -271,10 +284,10 @@ export function createViews(context) {
         const rows = totals().rows;
         document.getElementById('page-goal').innerHTML = `${sectionTitle('다음 목표', '가장 가까운 단계만')}
       <div class="stack">${rows.map((calc) => {
-            const p = calc.project, colors = projectColors(p), milestone = nextMilestone(calc), rec = recoveryStats(calc), lifecycle = p.category === 'highYield' && rec.stage !== 'accumulating', goalPct = milestone.reached ? 100 : (calc.shares / Math.max(1, milestone.shares)) * 100, buyCost = calc.priceAvailable ? milestone.remaining * calc.currentPrice : 0, phaseLabel = rec.stage === 'setup' ? '목표 달성' : rec.stage === 'recovery' ? '원금 회수 중' : rec.stage === 'profit' ? '순수익 단계' : '';
+            const p = calc.project, colors = projectColors(p), milestone = nextMilestone(calc), rec = p.category === 'highYield' && !p.recovery.locked && calc.targetReachedDate ? { ...recoveryStats(calc), ...projectRecovery(calc), stage: projectRecovery(calc).basis > 0 && projectRecovery(calc).pct >= 100 ? 'profit' : 'recovery' } : recoveryStats(calc), lifecycle = p.category === 'highYield' && rec.stage !== 'accumulating', goalPct = milestone.reached ? 100 : (calc.shares / Math.max(1, milestone.shares)) * 100, buyCost = calc.priceAvailable ? milestone.remaining * calc.currentPrice : 0, phaseLabel = rec.stage === 'setup' ? '목표 달성' : rec.stage === 'recovery' ? '원금 회수 중' : rec.stage === 'profit' ? '순수익 단계' : '';
             return `<details class="card goal-step-card ${lifecycle ? 'lifecycle-goal' : ''}" data-goal-project="${esc(p.id)}" style="--project-a:${colors[0]};--project-b:${colors[1]}">
         <summary><div><div class="goal-symbol-row"><span class="goal-symbol">${esc(p.symbol)}</span>${lifecycle ? `<em class="goal-achieved-badge">✓ ${fmtShares(calc.currentTarget)}주 달성</em>` : ''}</div><strong>${lifecycle ? phaseLabel : `${fmtShares(milestone.shares)}주 목표`}</strong><small>${lifecycle ? `현재 ${fmtShares(calc.shares)}주 · 달성일 ${fmtDate(rec.reachedDate)}` : `현재 ${fmtShares(calc.shares)}주${milestone.reached ? ' · 목표 달성' : ` · ${fmtShares(milestone.remaining)}주 남음`}`}</small></div><div class="goal-summary-status"><span>${lifecycle ? (rec.stage === 'setup' ? '주수 목표' : rec.stage === 'profit' ? '회수 후' : '원금 회수') : '달성률'}</span><b>${lifecycle ? (rec.stage === 'setup' ? '100%' : rec.stage === 'profit' ? '완료' : fmtPct(rec.pct)) : (milestone.reached ? '완료' : fmtPct(goalPct))}</b></div></summary>
-        ${lifecycle ? `${rec.stage === 'setup' ? progress(100, `linear-gradient(90deg,${colors[0]},${colors[1]})`) : progress(rec.pct, `linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body">${lifecycleContent(calc)}</div>` : `${progress(goalPct, `linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body"><div class="goal-info-rows"><div><span>현재 보유</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet, 2)}</strong></div><div><span>필요 매수금</span><strong>${calc.priceAvailable ? fmtMoney(buyCost, 2) : '현재가 필요'}</strong></div><div><span>계획상 달성 시점</span><strong>${estimatedDate(calc, milestone.shares)}</strong></div></div><button class="btn soft small" data-settings-project="${esc(p.id)}">목표 · 월 매수계획 설정</button><p class="detail-note">달성 시점은 저장한 월 매수계획만 반영하며 배당금은 예측하지 않습니다.</p></div>`}
+        ${lifecycle ? `${rec.stage === 'setup' ? progress(100, `linear-gradient(90deg,${colors[0]},${colors[1]})`) : progress(rec.pct, `linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body">${lifecycleContent(calc)}</div>` : `${progress(goalPct, `linear-gradient(90deg,${colors[0]},${colors[1]})`)}<div class="goal-detail-body"><div class="goal-info-rows"><div><span>현재 보유</span><strong>${fmtShares(calc.shares)}주</strong></div><div><span>최근 12개월 실제</span><strong>${fmtMoney(calc.analytics.trailingNet, 2)}</strong></div><div><span>필요 매수금</span><strong>${calc.priceAvailable ? fmtMoney(buyCost, 2) : '현재가 필요'}</strong></div><div><span>계획상 달성 시점</span><strong>${estimatedDate(calc, milestone.shares)}</strong></div></div><button class="btn soft small" data-settings-project="${esc(p.id)}">목표 · 월 매수계획 설정</button><p class="detail-note">달성 시점은 저장한 월 매수계획만 반영하며 배당금은 예측하지 않습니다.</p>${p.category === 'highYield' ? `<div class="goal-recovery-preview">${dividendManagementHTML(calc)}</div>` : ''}</div>`}
       </details>`;
         }).join('') || '<article class="card empty">종목을 추가하면 설정한 다음 목표를 보여줍니다.</article>'}</div>`;
     }

@@ -29,6 +29,11 @@ export function validateLedger(raw) {
             errors.push('종목 티커를 확인해 주세요.');
         if (!finite(p.targetUnits, .000001) || !finite(p.currentPrice) || !finite(p.monthlyPlanShares) || !finite(p.initialDividendBalance))
             errors.push('종목 목표·가격·초기 잔액을 확인해 주세요.');
+        if (p.dividendPlan !== undefined) {
+            const plan = object(p.dividendPlan);
+            if (!['reinvest', 'outside'].includes(String(plan.mode)) || !Array.isArray(plan.history) || plan.history.some(value => { const row = object(value); return !['reinvest', 'outside'].includes(String(row.mode)) || typeof row.confirmedAt !== 'string' || !Number.isFinite(Date.parse(row.confirmedAt)); }))
+                errors.push('배당 사용 방향 이력을 확인해 주세요.');
+        }
         if (object(p.recovery).locked && (!finite(object(p.recovery).basis, .000001) || !isDate(object(p.recovery).startDate)))
             errors.push('원금회수 기준을 확인해 주세요.');
         if (!['active', 'inactive', 'liquidated'].includes(String(p.status)))
@@ -67,6 +72,13 @@ export function validateLedger(raw) {
                 errors.push('거래 수수료·세금을 확인해 주세요.');
             if (key === 'trades' && row.type === 'buy' && (!['direct', 'opening', 'reinvest', 'mixed'].includes(String(row.buyType)) || row.buyType === 'mixed' && (!valid('reinvestAmountUSD') || Number(row.reinvestAmountUSD) > Number(row.shares) * Number(row.price))))
                 errors.push('매수 유형·재투자액을 확인해 주세요.');
+            if (key === 'trades' && row.dividendFunding !== undefined) {
+                const funding = object(row.dividendFunding);
+                if (row.type !== 'buy' || object(row.source).provider !== 'toss' || typeof funding.sourceFingerprint !== 'string' || !funding.sourceFingerprint || !finite(funding.amountUSD) || funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.amountUSD) > Number(row.shares) * Number(row.price) + Number(row.feeUSD || 0) + Number(row.taxUSD || 0))
+                    errors.push('매수 자금 출처를 확인해 주세요.');
+            }
+            if (key === 'cashAdjustments' && row.purpose === 'dividendUse' && (Number(row.amountUSD) >= 0 || !['isa', 'otherDividend', 'living', 'other'].includes(String(row.destination))))
+                errors.push('배당 사용액과 사용처를 확인해 주세요.');
             if (key === 'dividends' && (row.currency === 'KRW' ? (!Number.isSafeInteger(row.amountKRW) || Number(row.amountKRW) <= 0 || Number(row.amountKRW) > 1e12 || Number(row.amountUSD) !== 0) : !valid('amountUSD', .00000001)))
                 errors.push('배당 금액이 올바르지 않습니다.');
             if (key === 'dividends' && row.currency !== undefined && !['USD', 'KRW'].includes(String(row.currency)))

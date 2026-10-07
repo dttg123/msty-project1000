@@ -393,3 +393,5 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .analysis-details>summary,.toss-details>summary{cursor:pointer;color:var(--muted);font-size:13px;padding:12px 0}
 .analysis-details[open]>summary,.toss-details[open]>summary{color:var(--text)}
 .analysis-details .analysis-divider{margin-top:10px}
+
+.dividend-management .detail-title{gap:12px;flex-wrap:wrap}.recovery-hero{display:grid;gap:6px;margin:18px 0}.recovery-hero>span,.recovery-hero>small{color:var(--muted)}.recovery-hero>strong{font-size:28px}.dividend-plan-notice{padding:14px;border:1px solid #8377fa55;border-radius:14px;margin-top:14px}.dividend-plan-notice p{margin:0 0 12px;line-height:1.6}.dividend-use-details{margin-top:16px}.dividend-use-details>summary{cursor:pointer;padding:10px 0;font-weight:600}.dividend-use-details .detail-note{line-height:1.7}.goal-recovery-preview{margin-top:20px;padding-top:20px;border-top:1px solid #ffffff18}.dividend-management .lifecycle-actions{flex-wrap:wrap}.funding-pending{color:#d9b56b!important}

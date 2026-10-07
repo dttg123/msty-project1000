@@ -356,7 +356,7 @@ export function rebuildProjectFromTossSource({project,sourceLedger,currentTrades
   };
   const orders=unique(sourceLedger?.orders,normalizeTossOrder);
   if(!orders.length)return {ok:false,reason:'empty-orders'};
-  const rebuiltTrades=orders.map((row)=>tossCandidateToTrade(row,{projectId:project.id,id:makeId('t'),createdAt})).filter(present);
+  const rebuiltTrades=orders.map((row)=>{const trade=tossCandidateToTrade(row,{projectId:project.id,id:makeId('t'),createdAt});if(trade?.type==='buy'){const previous=currentTrades.filter(item=>item.projectId===project.id&&item.type==='buy'&&item.source?.externalId===trade.source?.externalId&&item.source?.accountId===trade.source?.accountId&&item.dividendFunding?.sourceFingerprint===trade.source?.sourceFingerprint);if(previous.length===1)trade.dividendFunding=previous[0].dividendFunding;}return trade;}).filter(present);
   const projectTrades=currentTrades.filter((row)=>row.projectId===project.id);
   const keepTrades=currentTrades.filter((row)=>row.projectId!==project.id);
   const dividendSourceSupported=capabilities?.dividends===true;

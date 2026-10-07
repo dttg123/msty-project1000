@@ -1,5 +1,5 @@
 import { isRecord } from './modules/utils.js';
-export const APP_VERSION = '0.12.32';
+export const APP_VERSION = '0.12.33';
 export const DATA_SCHEMA_VERSION = 4;
 import { dividendCashBreakdown } from './modules/finance.js';
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
@@ -8,7 +8,7 @@ const APP_FILES = [
     'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js', 'toss-native.js',
     'backup.js', 'sw.js', 'hot-update.js',
     'modules/activity.js', 'modules/constants.js', 'modules/utils.js', 'modules/state.js', 'modules/state-decoder.js',
-    'modules/income.js', 'modules/dividend-analytics.js', 'modules/finance.js', 'modules/corporate-actions.js', 'modules/cloud-api.js', 'modules/cloud-contract.js', 'modules/backup-history.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
+    'modules/income.js', 'modules/dividend-plan.js', 'modules/dividend-analytics.js', 'modules/finance.js', 'modules/corporate-actions.js', 'modules/cloud-api.js', 'modules/cloud-contract.js', 'modules/backup-history.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
 ];
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8');
@@ -141,12 +141,13 @@ function csvCell(value) { const text = String(value ?? ''); return /[",\n]/.test
 function csv(name, headers, rows) { return { name, data: '\ufeff' + [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\n') }; }
 export function buildCsvExports(state = {}) {
     const projects = Array.isArray(state.projects) ? state.projects : [], byId = new Map(projects.map((project) => [project.id, project]));
-    const source = (row) => [row.importSource || row.source?.provider || 'manual', row.sourceId || row.source?.sourceId || '', row.currency || 'USD'];
+    const source = (row) => [row.importSource || row.source?.provider || 'manual', row.sourceId || row.source?.sourceId || row.source?.externalId || '', row.currency || 'USD'];
     return [
         csv('securities.csv', ['securityId', 'ticker', 'name', 'category', 'currency', 'archived'], projects.map((project) => [project.id, project.symbol, project.name, project.category, project.currency || 'USD', !!project.archived])),
-        csv('trades.csv', ['id', 'securityId', 'ticker', 'date', 'type', 'buyType', 'shares', 'priceUSD', 'feeUSD', 'taxUSD', 'currency', 'provider', 'sourceId', 'note'], (state.trades || []).map((row) => { const project = byId.get(row.projectId); const [provider, sourceId, currency] = source(row); return [row.id, row.projectId, project?.symbol || row.symbol || '', row.date, row.type, row.buyType || '', row.shares, row.price, row.feeUSD || 0, row.taxUSD || 0, currency, provider, sourceId, row.note || '']; })),
+        csv('trades.csv', ['id', 'securityId', 'ticker', 'date', 'type', 'buyType', 'shares', 'priceUSD', 'feeUSD', 'taxUSD', 'currency', 'provider', 'sourceId', 'note', 'reinvestAmountUSD', 'dividendFundingUSD', 'fundingStatus', 'fundingSourceFingerprint'], (state.trades || []).map((row) => { const project = byId.get(row.projectId); const [provider, sourceId, currency] = source(row); return [row.id, row.projectId, project?.symbol || row.symbol || '', row.date, row.type, row.buyType || '', row.shares, row.price, row.feeUSD || 0, row.taxUSD || 0, currency, provider, sourceId, row.note || '', row.reinvestAmountUSD ?? '', row.dividendFunding?.amountUSD ?? '', row.type === 'buy' && row.source?.provider === 'toss' ? (row.dividendFunding ? (row.dividendFunding.sourceFingerprint === row.source.sourceFingerprint ? 'confirmed' : 'stale') : 'unconfirmed') : '', row.dividendFunding?.sourceFingerprint || '']; })),
         csv('dividends.csv', ['id', 'securityId', 'ticker', 'date', 'grossUSD', 'taxUSD', 'feeUSD', 'netUSD', 'status', 'currency', 'provider', 'sourceId', 'note', 'amountKRW'], (state.dividends || []).map((row) => { const project = byId.get(row.projectId); const [provider, sourceId, currency] = source(row); const cash = dividendCashBreakdown(row); return [row.id, row.projectId, project?.symbol || row.symbol || '', row.date, cash.grossUSD, cash.withholdingTaxUSD, cash.feeUSD, cash.netUSD, row.status || 'actual', row.currency || currency, provider, sourceId, row.note || '', row.amountKRW ?? '']; })),
-        csv('goals.csv', ['securityId', 'ticker', 'targetUnits', 'monthlyPlanShares', 'projectStart', 'afterGoalMode', 'recoveryLocked', 'recoveryBasis', 'recoveryStartDate'], projects.map((project) => [project.id, project.symbol, project.targetUnits, project.monthlyPlanShares, project.projectStart, project.afterGoalMode, !!project.recovery?.locked, project.recovery?.basis || 0, project.recovery?.startDate || '']))
+        csv('goals.csv', ['securityId', 'ticker', 'targetUnits', 'monthlyPlanShares', 'projectStart', 'afterGoalMode', 'recoveryLocked', 'recoveryBasis', 'recoveryStartDate', 'dividendUseMode'], projects.map((project) => [project.id, project.symbol, project.targetUnits, project.monthlyPlanShares, project.projectStart, project.afterGoalMode, !!project.recovery?.locked, project.recovery?.basis || 0, project.recovery?.startDate || '', project.dividendPlan?.mode || ''])),
+        csv('cash-adjustments.csv', ['id', 'securityId', 'ticker', 'date', 'amountUSD', 'purpose', 'destination', 'label', 'note'], (state.cashAdjustments || []).map(row => [row.id, row.projectId, byId.get(row.projectId)?.symbol || row.symbol || '', row.date, row.amountUSD, row.purpose || 'balanceAdjustment', row.destination || '', row.label || '', row.note || '']))
     ];
 }
 export function buildCsvExportZip(state) { return createStoreZip(buildCsvExports(state)); }

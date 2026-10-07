@@ -110,7 +110,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.32/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 0\.12\.33/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 배포 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
@@ -156,8 +156,10 @@ assert.match(elements.get('page-settings').innerHTML,/data-restore-project="p-co
 cony.archived=false;
 state.trades.push({id:'goal',projectId:'p-msty',date:'2026-02-01',type:'buy',buyType:'direct',shares:980,price:10});
 views.renderGoals();
-assert.match(elements.get('page-goal').innerHTML,/원금회수 기준 확정/);
-assert.match(elements.get('page-goal').innerHTML,/주수 목표 달성/);
+assert.match(elements.get('page-goal').innerHTML,/남은 회수 원금/);
+assert.match(elements.get('page-goal').innerHTML,/배당 사용 기록/);
+assert.doesNotMatch(elements.get('page-goal').innerHTML,/data-lock-recovery/, 'new goal completion retains early tracking without resetting the basis');
+assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/data-goal-mode=/);
 state.projects[0].recovery={locked:true,basis:10000,startDate:'2026-02-01',targetReachedDate:'2026-02-01',method:'withdrawnOnly'};
 state.cashAdjustments.push({id:'w1',projectId:'p-msty',date:'2026-02-02',amountUSD:-2500,purpose:'recoveryWithdrawal',label:'배당금 인출'});
@@ -170,7 +172,7 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v0.12.32 view QA: PASS');
+console.log('DividendOS v0.12.33 view QA: PASS');
 
 state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioGroup='highYield';
 state.dividends=[{id:'known',projectId:'p-msty',date:'2026-01-02',amountUSD:2,sharesAtPayment:10},{id:'unknown',projectId:'p-msty',date:'2026-01-09',amountUSD:4,sharesAtPayment:0}];
