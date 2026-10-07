@@ -4,7 +4,7 @@ import {createPortfolioEngine} from '../modules/portfolio.js';
 import {dividendPlanStatus,projectRecovery,hasNewDividendDeficit} from '../modules/dividend-plan.js';
 import {decodeAppState} from '../modules/state-decoder.js';
 import {rebuildProjectFromTossSource,tossCandidateToTrade} from '../modules/toss.js';
-import {createStoreZip,readStateFromBackupFile} from '../backup.js';
+import {buildCsvExports,createStoreZip,readStateFromBackupFile} from '../backup.js';
 const state=blankState(),p=state.projects[0];p.currentPrice=9;p.priceUpdatedAt=new Date().toISOString();p.targetUnits=1000;
 state.trades=[{id:'first',projectId:p.id,date:'2025-01-01',type:'buy',buyType:'direct',shares:100,price:10}];
 state.dividends=[{id:'income',projectId:p.id,date:'2025-01-02',amountUSD:100}];
@@ -43,4 +43,9 @@ order.price=11;assert.equal(rebuild().trades[0].dividendFunding,undefined,'chang
 const zip=createStoreZip([{name:'data/state.json',data:JSON.stringify(state)}]);const file=Object.assign(zip,{name:'plan.zip'});
 const restored=await readStateFromBackupFile(file);assert.equal(restored.projects[0].dividendPlan.mode,'outside');assert.equal(restored.cashAdjustments[0].destination,'isa');
 const invalid=structuredClone(state);invalid.projects[0].dividendPlan.history[0].confirmedAt='bad';assert.throws(()=>decodeAppState(invalid));
+const exportState=structuredClone(state);exportState.trades.push(imported);
+const exports=buildCsvExports(exportState),usesCSV=exports.find(row=>row.name==='cash-adjustments.csv').data;
+assert.match(usesCSV,/dividendUse,isa/);assert.match(usesCSV,/-30/);
+const buysCSV=exports.find(row=>row.name==='trades.csv').data;assert.match(buysCSV,/dividendFundingUSD,fundingStatus/);assert.match(buysCSV,/,10,confirmed,/);
+assert.match(exports.find(row=>row.name==='goals.csv').data,/dividendUseMode/);assert.match(exports.find(row=>row.name==='goals.csv').data,/,outside/);
 console.log('Dividend plan QA PASS: cash conservation, ROC, stale/zero prices, early/locked recovery, goal continuity, Toss funding preservation, ZIP restore');

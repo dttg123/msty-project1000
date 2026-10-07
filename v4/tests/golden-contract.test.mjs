@@ -32,7 +32,7 @@ await assert.rejects(readStateFromBackupFile({name:'duplicate.zip',arrayBuffer:(
 const legacyV4=structuredClone(state);delete legacyV4.schemaVersion;
 for(const project of legacyV4.projects){delete project.securityId;delete project.status;delete project.corporateActions;}
 assert.deepEqual(validateLedger(migrate(legacyV4)),[],'pre-schema V4 backups must gain stable identity and corporate-action defaults before validation');
-const csv=buildCsvExports(state);assert.deepEqual(csv.map(item=>item.name),['securities.csv','trades.csv','dividends.csv','goals.csv']);assert.match(csv[1].data,/feeUSD,taxUSD,currency,provider,sourceId/);assert.match(csv[2].data,/grossUSD,taxUSD,feeUSD,netUSD,status,currency,provider,sourceId/);
+const csv=buildCsvExports(state);assert.deepEqual(csv.map(item=>item.name),['securities.csv','trades.csv','dividends.csv','goals.csv','cash-adjustments.csv']);assert.match(csv[1].data,/feeUSD,taxUSD,currency,provider,sourceId/);assert.match(csv[2].data,/grossUSD,taxUSD,feeUSD,netUSD,status,currency,provider,sourceId/);
 assert.equal(csv[0].data.split('\n').length,state.projects.length+1);assert.equal(csv[1].data.split('\n').length,state.trades.length+1);assert.equal(csv[2].data.split('\n').length,state.dividends.length+1);assert.equal(csv[3].data.split('\n').length,state.projects.length+1);
 const info={counts:stateCounts(state),integrity:{algorithm:'SHA-256',hash:await sha256Hex(canonicalStringify(state))}};
 const verified=createStoreZip([{name:'backup-info.json',data:JSON.stringify(info)},{name:'data/state.json',data:canonicalStringify(state)}]);
