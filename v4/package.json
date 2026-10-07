@@ -26,7 +26,8 @@
     "verify": "npm run qa:core",
     "verify:release": "npm run qa:release",
     "qa:e2e:hard": "QA_HARD_UI=1 playwright test hard-multi-project.spec.mjs",
-    "qa:e2e:lifetime:high": "QA_HIGH_LIFETIME_UI=1 playwright test lifetime-high-ui.spec.mjs --project=mobile-chromium --workers=1"
+    "qa:e2e:lifetime:high": "QA_HIGH_LIFETIME_UI=1 playwright test lifetime-high-ui.spec.mjs --project=mobile-chromium --workers=1",
+    "qa:e2e:lifetime:switching": "QA_SWITCHING_LIFETIME_UI=1 playwright test lifetime-switching-ui.spec.mjs --project=mobile-chromium --workers=1"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
