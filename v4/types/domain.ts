@@ -24,6 +24,7 @@ export interface SourceRef {
 }
 
 export interface LedgerRow {
+  dividendFunding?: { amountUSD: number; sourceFingerprint: string };
   source?: SourceRef;
   symbol?: string;
   note?: string;
@@ -91,6 +92,7 @@ export interface Project {
   initialDividendBalance: number;
   initialDividendBalanceDate: string;
   afterGoalMode: 'cashflow' | 'reinvest';
+  dividendPlan?: { mode: 'reinvest' | 'outside'; history: Array<{ mode: 'reinvest' | 'outside'; confirmedAt: string }> };
   recovery: RecoveryPlan;
   brokerLinks: Array<{provider:'toss';assetKey:string;market?:string;securityId?:string}>;
   status: SecurityStatus;
@@ -169,7 +171,8 @@ export interface CashAdjustment extends LedgerRow {
   symbol?: string;
   date: string;
   amountUSD: number;
-  purpose?: 'recoveryWithdrawal' | 'balanceAdjustment';
+  purpose?: 'recoveryWithdrawal' | 'balanceAdjustment' | 'dividendUse';
+  destination?: 'isa' | 'otherDividend' | 'living' | 'other';
   label?: string;
   note?: string;
   createdAt?: string;

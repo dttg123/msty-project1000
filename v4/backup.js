@@ -1,5 +1,5 @@
 import { isRecord } from './modules/utils.js';
-export const APP_VERSION = '0.12.32';
+export const APP_VERSION = '0.12.33';
 export const DATA_SCHEMA_VERSION = 4;
 import { dividendCashBreakdown } from './modules/finance.js';
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
@@ -8,7 +8,7 @@ const APP_FILES = [
     'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js', 'toss-native.js',
     'backup.js', 'sw.js', 'hot-update.js',
     'modules/activity.js', 'modules/constants.js', 'modules/utils.js', 'modules/state.js', 'modules/state-decoder.js',
-    'modules/income.js', 'modules/dividend-analytics.js', 'modules/finance.js', 'modules/corporate-actions.js', 'modules/cloud-api.js', 'modules/cloud-contract.js', 'modules/backup-history.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
+    'modules/income.js', 'modules/dividend-plan.js', 'modules/dividend-analytics.js', 'modules/finance.js', 'modules/corporate-actions.js', 'modules/cloud-api.js', 'modules/cloud-contract.js', 'modules/backup-history.js', 'modules/validation.js', 'modules/demo.js', 'modules/portfolio.js', 'modules/format.js', 'modules/views.js', 'modules/home-metrics.js', 'modules/migration.js', 'modules/toss.js'
 ];
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8');

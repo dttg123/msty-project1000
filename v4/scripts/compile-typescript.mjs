@@ -9,7 +9,7 @@ if(result.status!==0)process.exit(result.status??1);
 const runtimeSources=[
   'app','auth','backup','cloud','firebase','hot-update','runtime-config','storage','sw','toss-client','toss-native',
   'modules/activity','modules/backup-history','modules/cloud-api','modules/cloud-contract','modules/constants','modules/demo',
-  'modules/dividend-analytics','modules/finance','modules/format','modules/home-metrics','modules/income','modules/migration',
+  'modules/dividend-plan','modules/dividend-analytics','modules/finance','modules/format','modules/home-metrics','modules/income','modules/migration',
   'modules/portfolio','modules/state','modules/state-decoder','modules/toss','modules/utils','modules/validation','modules/views','modules/corporate-actions'
 ];
 const outputs=runtimeSources.map(path=>[`${path}.js`,`${path}.js`]);
