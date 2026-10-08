@@ -58,7 +58,7 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
     return Math.max(0,Math.abs(shares)<1e-9?0:shares);
   }
 
-  function computeProject(projectOrId: Project | string | undefined) {
+  function computeProjectUncached(projectOrId: Project | string | undefined) {
     const project = typeof projectOrId === 'string' ? projectById(projectOrId) : projectOrId;
     if (!project) return null;
     const asOf=todayISO(),trades=projectRows('trades',project.id),dividends=projectRows('dividends',project.id),adjustments=projectRows('cashAdjustments',project.id);
@@ -172,6 +172,22 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
     };
   }
 
+  // Cache only inside a synchronous read-only render. Mutation guards always
+  // compute fresh values outside this scope, including edits of existing rows.
+  let renderCache: Map<string,ReturnType<typeof computeProjectUncached>> | null=null;
+  function computeProject(projectOrId: Project | string | undefined) {
+    const project=typeof projectOrId==='string'?projectById(projectOrId):projectOrId;
+    if(!project)return null;
+    if(renderCache?.has(project.id))return renderCache.get(project.id)!;
+    const result=computeProjectUncached(project);
+    renderCache?.set(project.id,result);
+    return result;
+  }
+  function withCalculationBatch<T>(read:()=>T):T {
+    const previous=renderCache;renderCache=new Map();
+    try{return read();}finally{renderCache=previous;}
+  }
+
   function recoveryStats(calc: NonNullable<ReturnType<typeof computeProject>>) {
     const recovery=calc.project.recovery || blankRecovery();
     const reachedDate=recovery.targetReachedDate||calc.targetReachedDate||'';
@@ -200,7 +216,7 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
     };
   }
 
-  return { activeProjects, projectById, projectRows, sortedEvents, sharesAtDate, computeProject, recoveryStats, totals };
+  return { activeProjects, projectById, projectRows, sortedEvents, sharesAtDate, computeProject, withCalculationBatch, recoveryStats, totals };
 }
 
 export type PortfolioEngine = ReturnType<typeof createPortfolioEngine>;

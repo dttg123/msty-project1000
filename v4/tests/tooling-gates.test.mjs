@@ -10,8 +10,8 @@ const fakeGitHubToken=['ghp_','123456789012345678901234567890'].join('');
 assert.deepEqual(scanContent(`const token='${fakeGitHubToken}';`),['github-token']);
 assert.deepEqual(scanContent("const secret=process.env.TOSS_CLIENT_SECRET;"),[]);
 const securityCheck=readFileSync(resolve('scripts/security-check.mjs'),'utf8');
-assert.ok(securityCheck.includes("'qa-candidate/firebase.js'"),'the generated QA preview may contain only the same public Firebase identifier exception as the canonical runtime');
-assert.ok(!securityCheck.includes("'qa-candidate'"),'the full QA preview directory must remain covered by secret scanning');
+assert.ok(!securityCheck.includes("qa-candidate"),'retired preview copies must not retain security exceptions');
+
 
 const directory=await mkdtemp(resolve(tmpdir(),'dividend-os-type-gate-'));
 try{

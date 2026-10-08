@@ -1,7 +1,7 @@
 {
   "name": "dividend-os",
   "private": true,
-  "version": "0.12.33",
+  "version": "1.0.0",
   "type": "module",
   "engines": {
     "node": "24.x"
@@ -24,19 +24,25 @@
     "qa:release:evidence-template": "node scripts/release-evidence.mjs --template",
     "qa:release:evidence": "node scripts/release-evidence.mjs --check-env",
     "verify": "npm run qa:core",
-    "verify:release": "npm run qa:release"
+    "verify:release": "npm run qa:release",
+    "qa:e2e:hard": "QA_HARD_UI=1 playwright test hard-multi-project.spec.mjs",
+    "qa:e2e:lifetime:high": "QA_HIGH_LIFETIME_UI=1 playwright test lifetime-high-ui.spec.mjs --project=mobile-chromium --workers=1",
+    "qa:e2e:lifetime:switching": "QA_SWITCHING_LIFETIME_UI=1 playwright test lifetime-switching-ui.spec.mjs --project=mobile-chromium --workers=1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.2",
+    "@capacitor/cli": "8.5.3",
     "@playwright/test": "^1.63.0",
     "firebase": "12.16.0",
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.2",
-    "@capacitor/core": "^8.5.2"
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3"
   },
   "overrides": {
-    "@grpc/grpc-js": "1.14.5"
+    "@grpc/grpc-js": "1.14.5",
+    "xcode": {
+      "uuid": "11.1.1"
+    }
   }
 }
