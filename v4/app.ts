@@ -1042,12 +1042,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('openTossIp'in button.dataset){copyTossIp().finally(()=>openTossIpManagement());return;}
     if('confirmTossIp'in button.dataset){const ip=pendingTossIp;modalDirty=false;closeModal();refreshTossAndRate({ipConfirmed:!!ip});return;}
     if('clearTossCredentials'in button.dataset){confirmAction('저장한 토스 키 삭제','이 기기에 암호화 저장한 Client ID와 Secret만 삭제합니다. 가져온 장부 기록은 유지됩니다.',async()=>{await clearNativeTossCredentials();nativeTossStatus={...nativeTossStatus,configured:false,publicIp:'',lastPublicIp:''};renderSettings();showPage('settings');toast('이 기기의 토스 키를 삭제했습니다.');},'키 삭제');return;}
-    if('syncToss'in button.dataset||'syncAll'in button.dataset){refreshTossAndRate();return;}
+    if('syncAll'in button.dataset){refreshTossAndRate();return;}
     if('rebuildMstyToss'in button.dataset){confirmAction('MSTY 기록 다시 만들기','기존 MSTY 거래만 지우고 보존된 토스 전체 체결 원본으로 다시 만듭니다. 분할 기록과 다른 종목은 유지하며, 토스 배당 조회가 지원되지 않으면 기존 배당도 유지합니다.',rebuildMstyFromToss,'다시 만들기');return;}
     if('installHotUpdate'in button.dataset){applyAppUpdate();return;}
     if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{showPage('settings');toast(appUpdateStatus.error|| (appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':appUpdateStatus.latestVersion!==appUpdateStatus.currentVersion?'설치 버전이 배포 버전보다 최신입니다.':'현재 최신 버전입니다.'));});return;}
     if('refreshOfficialDistributions'in button.dataset){refreshOfficialDistributions(true);return;}
-    if('refreshExchangeRate'in button.dataset){refreshExchangeRate(true);return;}
     if('deleteTossExceptions'in button.dataset){openTossExceptionDeletion();return;}
     if('reviewToss'in button.dataset){reviewTossCandidates();return;}
     if('clearTossCorrections'in button.dataset){confirmAction('원본 변경 알림 확인','토스 원본 변경 알림만 정리합니다. 기존 원장과 원본 보존 기록은 바꾸지 않습니다.',async()=>{state.integrations.toss.correctionCandidates=[];state.integrations.toss.dividendCorrectionCandidates=[];await saveState(true);renderSettings();showPage('settings');toast('원본 변경 알림을 확인 처리했습니다.');},'확인 처리');return;}

@@ -3,7 +3,7 @@ import { isRecord } from './modules/utils.js';
 export interface ZipEntry {name:string;data:unknown;}
 export interface BackupFile {name:string;arrayBuffer():Promise<ArrayBuffer>;}
 interface ZipRecord {name:Uint8Array<ArrayBuffer>;data:Uint8Array<ArrayBuffer>;crc:number;local:Uint8Array<ArrayBuffer>;offset:number;}
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.1.1';
 export const DATA_SCHEMA_VERSION = 4;
 
 import { dividendCashBreakdown } from './modules/finance.js';
