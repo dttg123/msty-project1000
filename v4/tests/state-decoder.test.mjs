@@ -43,3 +43,5 @@ for(const dir of [root,resolve(root,'modules'),resolve(root,'types')])for(const 
   const file=resolve(dir,name);assert.doesNotMatch(readFileSync(file,'utf8'),/\bany\b/,`${name} contains an any token`);
 }
 console.log('Checked state decoding PASS: legacy numeric strings, zero/null, source identity, corrupted payload rejection, explicit-any gate');
+
+const alerts=structuredClone(historical.state);alerts.settings.dividendAlertEnabled=false;assert.equal(decodeAppState(alerts).settings.dividendAlertEnabled,false);alerts.settings.dividendAlertEnabled='false';assert.throws(()=>decodeAppState(alerts),/선택/);

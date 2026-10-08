@@ -110,7 +110,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.0\.0/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.1\.0/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 배포 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
@@ -172,7 +172,7 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v1.0.0 view QA: PASS');
+console.log('DividendOS v1.1.0 view QA: PASS');
 
 state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioGroup='highYield';
 state.dividends=[{id:'known',projectId:'p-msty',date:'2026-01-02',amountUSD:2,sharesAtPayment:10},{id:'unknown',projectId:'p-msty',date:'2026-01-09',amountUSD:4,sharesAtPayment:0}];
@@ -180,3 +180,9 @@ views.renderProjects();const mixedHTML=elements.get('page-projects').innerHTML;
 assert.match(mixedHTML,/직전 지급 대비<\/span><strong class="positive">\+100\.0%/,'mixed share availability must compare whole cash payments on both sides');
 assert.match(mixedHTML,/<b>\$2<\/b>/);assert.match(mixedHTML,/<b>\$4<\/b>/);
 assert.doesNotMatch(mixedHTML,/직전 지급 대비<\/span><strong class="positive">\+1,900/);
+
+state.trades=[{id:'pnl-buy',projectId:'p-msty',date:'2026-01-01',type:'buy',buyType:'direct',shares:10,price:10}];state.cashAdjustments=[];state.dividends=[];state.projects[0].currentPrice=8;state.projects[0].priceUpdatedAt='2026-10-01T10:00:00Z';state.dividends.push({id:'roc-pnl',projectId:'p-msty',date:'2026-02-01',amountUSD:100,rocAmountUSD:100});selectedProjectId='p-msty';portfolioGroup='highYield';views.renderProjects();
+const pnlEngine=portfolio.computeProject(state.projects[0]);assert.ok(pnlEngine.priceUnrealized<0&&pnlEngine.totalReturn>0,'fixture separates current loss and dividend-inclusive gain');
+assert.match(elements.get('page-projects').innerHTML,/data-current-pnl/);assert.match(elements.get('page-projects').innerHTML,/현재 평가손익 · 배당 제외/);assert.match(elements.get('page-projects').innerHTML,/ROC 조정 전 매입원가/);assert.match(elements.get('page-projects').innerHTML,/토스·환율 갱신/);
+views.renderHome();assert.match(elements.get('page-home').innerHTML,/매달 받고 싶은 세후 배당/);assert.match(elements.get('page-home').innerHTML,/연간 배당 알림/);
+state.settings.dividendAlertEnabled=false;views.renderHome();assert.doesNotMatch(elements.get('page-home').innerHTML,/class="dividend-alert/);

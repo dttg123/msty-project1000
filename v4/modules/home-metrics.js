@@ -53,3 +53,9 @@ export function buildHomeMetrics(calcs, dividendRows, now = new Date()) {
         months, years, projectMonth, nextDividend: null, forecast: [], missingEstimateCount: 0, nextGoal: (ownedGoals.length ? ownedGoals : goals)[0] || null
     };
 }
+// Inputs are actual posted receipts, converted for display at the saved reference rate.
+export function dividendGoalStatus(settings, monthUSD, yearUSD) {
+    const target = Math.max(0, n(settings.targetMonthlyDividend)), rate = Math.max(0, n(settings.exchangeRate));
+    const annual = Math.round(Math.max(0, n(yearUSD)) * rate), limit = Math.max(1, n(settings.thresholdKRW)), early = Math.min(limit, Math.max(0, n(settings.warningKRW)));
+    return { target, monthActual: Math.max(0, n(monthUSD)), monthPct: target > 0 ? Math.max(0, n(monthUSD)) / target * 100 : null, monthRemaining: Math.max(0, target - n(monthUSD)), annual, limit, early, annualRemaining: Math.max(0, limit - annual), alert: settings.dividendAlertEnabled === false ? 'off' : annual >= limit ? 'reached' : early > 0 && annual >= early ? 'early' : 'normal' };
+}

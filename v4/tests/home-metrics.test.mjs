@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { blankProject, blankState } from '../modules/state.js';
 import { createPortfolioEngine } from '../modules/portfolio.js';
-import { buildHomeMetrics, nextMilestone } from '../modules/home-metrics.js';
+import { buildHomeMetrics, nextMilestone, dividendGoalStatus } from '../modules/home-metrics.js';
 
 const state=blankState(),project=state.projects[0];
 project.id='p-msty'; project.targetUnits=1000; project.distributionFrequency='weekly';
@@ -31,3 +31,13 @@ assert.equal(metrics.projectMonth[0].actual,100);
 assert.equal(metrics.pace.monthly,400/3,'recent three-month average must use actual deposits only');
 assert.equal(metrics.pace.annualized,1600);
 console.log('DividendOS v0.11.3 home metrics QA: PASS');
+
+const settings={...state.settings,exchangeRate:1300,targetMonthlyDividend:500,warningKRW:18000000,thresholdKRW:20000000};
+assert.equal(dividendGoalStatus(settings,250,0).monthPct,50);
+assert.equal(dividendGoalStatus(settings,750,0).monthRemaining,0);
+assert.equal(dividendGoalStatus({...settings,targetMonthlyDividend:0},0,0).monthPct,null);
+assert.equal(dividendGoalStatus(settings,0,18000000/1300).alert,'early');
+assert.equal(dividendGoalStatus(settings,0,20000000/1300).alert,'reached');
+assert.equal(dividendGoalStatus({...settings,dividendAlertEnabled:false},0,99999).alert,'off');
+assert.equal(dividendGoalStatus({...settings,warningKRW:0},0,0).alert,'normal');
+assert.equal(dividendGoalStatus({...settings,warningKRW:25000000},0,19000000/1300).alert,'normal');

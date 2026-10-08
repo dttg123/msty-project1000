@@ -395,3 +395,19 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .analysis-details .analysis-divider{margin-top:10px}
 
 .dividend-management .detail-title{gap:12px;flex-wrap:wrap}.recovery-hero{display:grid;gap:6px;margin:18px 0}.recovery-hero>span,.recovery-hero>small{color:var(--muted)}.recovery-hero>strong{font-size:28px}.dividend-plan-notice{padding:14px;border:1px solid #8377fa55;border-radius:14px;margin-top:14px}.dividend-plan-notice p{margin:0 0 12px;line-height:1.6}.dividend-use-details{margin-top:16px}.dividend-use-details>summary{cursor:pointer;padding:10px 0;font-weight:600}.dividend-use-details .detail-note{line-height:1.7}.goal-recovery-preview{margin-top:20px;padding-top:20px;border-top:1px solid #ffffff18}.dividend-management .lifecycle-actions{flex-wrap:wrap}.funding-pending{color:#d9b56b!important}
+
+/* Receipt goals and independent refresh results remain compact on phones. */
+.refresh-panel{display:flex;align-items:center;gap:12px;margin:0 0 14px;flex-wrap:wrap}
+.refresh-panel p{flex:1;min-width:170px;margin:0;line-height:1.65;overflow-wrap:anywhere}
+.refresh-panel button{flex-shrink:0}
+.monthly-dividend-goal{display:grid;gap:8px;margin-top:14px;color:var(--muted);font-size:12px}
+.monthly-dividend-goal strong{color:var(--text);font-size:13px}
+.monthly-dividend-goal small{font-size:11px}
+.dividend-alert{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:14px;margin-top:14px;font-size:12px}
+.dividend-alert small{color:var(--muted)}
+.dividend-alert.early strong{color:#e6ac47}.dividend-alert.reached strong{color:#ef727b}
+.current-pnl{display:grid;gap:5px;margin:14px 0 10px;font-size:12px}
+.current-pnl strong{font-size:20px;line-height:1.3;overflow-wrap:anywhere}
+.current-pnl small{color:var(--muted);font-size:11px}
+.annual-alert-settings{display:grid;gap:10px}.annual-alert-settings summary{padding:12px 0;cursor:pointer;font-weight:700}
+.annual-alert-settings[open]>div{margin-top:10px}

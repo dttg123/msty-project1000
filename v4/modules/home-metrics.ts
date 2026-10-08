@@ -1,4 +1,4 @@
-import type { DividendRecord } from '../types/domain.js';
+import type { AppSettings, DividendRecord } from '../types/domain.js';
 import type { ProjectCalculation } from './portfolio.js';
 import { isDate, n } from './utils.js';
 import { dividendCashBreakdown } from './finance.js';
@@ -55,4 +55,11 @@ export function buildHomeMetrics(calcs: ProjectCalculation[], dividendRows: Divi
     pace:{monthly:recent3,annualized:recent3*12,change:previous3>0?(recent3/previous3-1)*100:null,available:actual.length>0},
     months,years,projectMonth,nextDividend:null,forecast:[],missingEstimateCount:0,nextGoal:(ownedGoals.length?ownedGoals:goals)[0]||null
   };
+}
+
+// Inputs are actual posted receipts, converted for display at the saved reference rate.
+export function dividendGoalStatus(settings:AppSettings,monthUSD:number,yearUSD:number){
+  const target=Math.max(0,n(settings.targetMonthlyDividend)),rate=Math.max(0,n(settings.exchangeRate));
+  const annual=Math.round(Math.max(0,n(yearUSD))*rate),limit=Math.max(1,n(settings.thresholdKRW)),early=Math.min(limit,Math.max(0,n(settings.warningKRW)));
+  return {target,monthActual:Math.max(0,n(monthUSD)),monthPct:target>0?Math.max(0,n(monthUSD))/target*100:null,monthRemaining:Math.max(0,target-n(monthUSD)),annual,limit,early,annualRemaining:Math.max(0,limit-annual),alert:settings.dividendAlertEnabled===false?'off':annual>=limit?'reached':early>0&&annual>=early?'early':'normal'};
 }

@@ -91,6 +91,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   let tossSyncRunning = false;
   let nativeTossStatus={available:isNativeTossAvailable(),configured:false,publicIp:'',lastPublicIp:'',checking:false};
   let appUpdateStatus={available:isHotUpdateAvailable(),checking:false,currentVersion:APP_VERSION,latestVersion:'',updateAvailable:false,nativeUpdateRequired:false,error:''};
+  let combinedRefreshBusy=false,combinedRefreshSummary='';
   let exchangeRateBusy=false,exchangeRateError='',lastExchangeRateAttempt=0;
   let officialFeed: OfficialDistributionFeed | null=null,officialBusy=false,officialError='',officialAttempt=0;
   async function refreshOfficialDistributions(manual=false):Promise<void>{
@@ -134,7 +135,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const el=document.getElementById('toast');if(!el)return; clearTimeout(toastTimer); el.textContent=message; el.classList.add('show');
     if(haptic)try{navigator.vibrate?.(18)}catch (_: unknown){} toastTimer=setTimeout(()=>el.classList.remove('show'),2300);
   }
-  async function refreshExchangeRate(manual=false): Promise<void> {
+  async function refreshExchangeRate(manual=false,{preserveMode=false}={}): Promise<void> {
     if(exchangeRateBusy||demoMode)return;
     if(!manual&&(state.settings.exchangeRateMode!=='auto'||Date.now()-Date.parse(state.settings.exchangeRateUpdatedAt||'')<6*3600000||Date.now()-lastExchangeRateAttempt<60000))return;
     const opened=new Set([...document.querySelectorAll<HTMLDetailsElement>('#page-settings details.settings-section[open]')].map((section)=>section.querySelector('.card-title')?.textContent));
@@ -143,7 +144,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     exchangeRateBusy=true;exchangeRateError='';lastExchangeRateAttempt=Date.now();renderRateSettings();
     try{
       const value=await fetchReferenceExchangeRate();
-      if(!manual&&state.settings.exchangeRateMode!=='auto')return;
+      if((!manual||preserveMode)&&state.settings.exchangeRateMode!=='auto')return;
       const before=clone(state.settings);
       assignFields(state.settings,{exchangeRate:value.rate,exchangeRateMode:'auto',exchangeRateDate:value.date,exchangeRateUpdatedAt:new Date().toISOString(),exchangeRateSource:'Frankfurter'});
       try{await saveState(true);}catch(error){state.settings=before;throw error;}
@@ -196,7 +197,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   const views = createViews({
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value) => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
+    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getCombinedRefreshStatus:()=>({busy:combinedRefreshBusy,summary:combinedRefreshSummary}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -872,6 +873,38 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     return runTossImport(()=>fetchTossSnapshot({from:nextTossSyncFrom(state.integrations.toss),symbols:activeProjects().map((project)=>project.symbol)}),'Toss read-only sync error');
   }
 
+  async function refreshTossAndRate({ipConfirmed=false}={}):Promise<void>{
+    if(combinedRefreshBusy||tossSyncRunning||exchangeRateBusy)return;
+    combinedRefreshBusy=true;combinedRefreshSummary='토스 확인 중…';const originalPage=currentPage;
+    let tossResult='토스 확인 실패',rateResult='환율 수동값 유지',needsSetup=false;
+    renderAll();
+    try{
+      try{
+        await refreshNativeTossStatus();
+        if(nativeTossStatus.available){
+          if(!nativeTossStatus.configured){needsSetup=true;tossResult='토스 최초 설정 필요';openNativeTossSetup();}
+          else{
+            const sequence=n(state.integrations.toss.syncSequence);
+            await syncNativeTossReadOnly({ipConfirmed});
+            tossResult=pendingTossIp?'토스 IP 등록 필요':n(state.integrations.toss.syncSequence)>sequence?(state.integrations.toss.status==='partial'?'토스 일부 성공':'토스 성공'):'토스 확인 실패';
+          }
+        }else if(isTossBridgeConfigured()&&currentUser){
+          const sequence=n(state.integrations.toss.syncSequence);await syncTossReadOnly();
+          tossResult=n(state.integrations.toss.syncSequence)>sequence?(state.integrations.toss.status==='partial'?'토스 일부 성공':'토스 성공'):'토스 확인 실패';
+        }else{needsSetup=true;tossResult='토스 조회 연결 필요';}
+      }catch{tossResult='토스 확인 실패';}
+      // Keep independent results; serialize saves so one service cannot overwrite the other.
+      combinedRefreshSummary=tossResult+' · 환율 확인 중…';renderAll();
+      if(state.settings.exchangeRateMode==='auto'){
+        if(demoMode)rateResult='환율 데모값 유지';
+        else{await refreshExchangeRate(true,{preserveMode:true});rateResult=state.settings.exchangeRateMode!=='auto'?'환율 수동값 유지':exchangeRateError?'환율 실패 · 저장값 유지':'환율 성공';}
+      }
+    }finally{
+      combinedRefreshBusy=false;combinedRefreshSummary=tossResult+' · '+rateResult;renderAll();
+      showPage(needsSetup||pendingTossIp?'settings':originalPage);toast(combinedRefreshSummary);
+    }
+  }
+
   async function importTossSnapshotFile(file: File): Promise<void> {
     return runTossImport(()=>readTossSnapshotFile(file),'Toss snapshot import error');
   }
@@ -1007,9 +1040,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('configureToss'in button.dataset){openNativeTossSetup();return;}
     if('tossCopyIp'in button.dataset){copyTossIp();return;}
     if('openTossIp'in button.dataset){copyTossIp().finally(()=>openTossIpManagement());return;}
-    if('confirmTossIp'in button.dataset){const ip=pendingTossIp;modalDirty=false;closeModal();syncNativeTossReadOnly({ipConfirmed:!!ip});return;}
+    if('confirmTossIp'in button.dataset){const ip=pendingTossIp;modalDirty=false;closeModal();refreshTossAndRate({ipConfirmed:!!ip});return;}
     if('clearTossCredentials'in button.dataset){confirmAction('저장한 토스 키 삭제','이 기기에 암호화 저장한 Client ID와 Secret만 삭제합니다. 가져온 장부 기록은 유지됩니다.',async()=>{await clearNativeTossCredentials();nativeTossStatus={...nativeTossStatus,configured:false,publicIp:'',lastPublicIp:''};renderSettings();showPage('settings');toast('이 기기의 토스 키를 삭제했습니다.');},'키 삭제');return;}
-    if('syncToss'in button.dataset){syncTossReadOnly();return;}
+    if('syncToss'in button.dataset||'syncAll'in button.dataset){refreshTossAndRate();return;}
     if('rebuildMstyToss'in button.dataset){confirmAction('MSTY 기록 다시 만들기','기존 MSTY 거래만 지우고 보존된 토스 전체 체결 원본으로 다시 만듭니다. 분할 기록과 다른 종목은 유지하며, 토스 배당 조회가 지원되지 않으면 기존 배당도 유지합니다.',rebuildMstyFromToss,'다시 만들기');return;}
     if('installHotUpdate'in button.dataset){applyAppUpdate();return;}
     if('checkHotUpdate'in button.dataset){refreshAppUpdateStatus().then(()=>{showPage('settings');toast(appUpdateStatus.error|| (appUpdateStatus.updateAvailable?'새 업데이트가 있습니다.':appUpdateStatus.latestVersion!==appUpdateStatus.currentVersion?'설치 버전이 배포 버전보다 최신입니다.':'현재 최신 버전입니다.'));});return;}
@@ -1073,7 +1106,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('dividendReplacementInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
     document.getElementById('restoreInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
-    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=submittedFormData(event);let next: Partial<AppSettings>={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:form.get('appearance')==='dark'?'dark':form.get('appearance')==='light'?'light':'system'};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW};message='배당 기준을 저장했습니다.';}if(Object.entries(next).every(([key,value])=>Object.entries(state.settings).some(([setting,current])=>setting===key&&current===value))){toast('바뀐 설정이 없습니다.');return;}const beforeSettings=clone(state.settings);Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();}).catch(()=>{state.settings=beforeSettings;applyTheme(state.settings.appearance);renderAll();showPage('settings');});});
+    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=submittedFormData(event);let next: Partial<AppSettings>={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:form.get('appearance')==='dark'?'dark':form.get('appearance')==='light'?'light':'system'};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW,dividendAlertEnabled:form.get('dividendAlertEnabled')!=='off'};message='배당 기준을 저장했습니다.';}if(Object.entries(next).every(([key,value])=>Object.entries(state.settings).some(([setting,current])=>setting===key&&current===value))){toast('바뀐 설정이 없습니다.');return;}const beforeSettings=clone(state.settings);Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();}).catch(()=>{state.settings=beforeSettings;applyTheme(state.settings.appearance);renderAll();showPage('settings');});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
   }
