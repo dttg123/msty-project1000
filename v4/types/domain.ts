@@ -256,6 +256,7 @@ export interface AppSettings {
   targetMonthlyDividend: number;
   warningKRW: number;
   thresholdKRW: number;
+  dividendAlertEnabled?: boolean;
   appearance: 'system' | 'light' | 'dark';
   exchangeRateDate?: string;
   exchangeRateUpdatedAt?: string;

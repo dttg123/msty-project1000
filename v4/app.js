@@ -99,6 +99,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     let tossSyncRunning = false;
     let nativeTossStatus = { available: isNativeTossAvailable(), configured: false, publicIp: '', lastPublicIp: '', checking: false };
     let appUpdateStatus = { available: isHotUpdateAvailable(), checking: false, currentVersion: APP_VERSION, latestVersion: '', updateAvailable: false, nativeUpdateRequired: false, error: '' };
+    let combinedRefreshBusy = false, combinedRefreshSummary = '';
     let exchangeRateBusy = false, exchangeRateError = '', lastExchangeRateAttempt = 0;
     let officialFeed = null, officialBusy = false, officialError = '', officialAttempt = 0;
     async function refreshOfficialDistributions(manual = false) {
@@ -194,7 +195,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             catch (_) { }
         toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
     }
-    async function refreshExchangeRate(manual = false) {
+    async function refreshExchangeRate(manual = false, { preserveMode = false } = {}) {
         if (exchangeRateBusy || demoMode)
             return;
         if (!manual && (state.settings.exchangeRateMode !== 'auto' || Date.now() - Date.parse(state.settings.exchangeRateUpdatedAt || '') < 6 * 3600000 || Date.now() - lastExchangeRateAttempt < 60000))
@@ -215,7 +216,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         renderRateSettings();
         try {
             const value = await fetchReferenceExchangeRate();
-            if (!manual && state.settings.exchangeRateMode !== 'auto')
+            if ((!manual || preserveMode) && state.settings.exchangeRateMode !== 'auto')
                 return;
             const before = clone(state.settings);
             assignFields(state.settings, { exchangeRate: value.rate, exchangeRateMode: 'auto', exchangeRateDate: value.date, exchangeRateUpdatedAt: new Date().toISOString(), exchangeRateSource: 'Frankfurter' });
@@ -361,7 +362,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     const views = createViews({
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getSaveSummary, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getCombinedRefreshStatus: () => ({ busy: combinedRefreshBusy, summary: combinedRefreshSummary }), getSaveSummary, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
         displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
@@ -1702,6 +1703,62 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return syncNativeTossReadOnly();
         return runTossImport(() => fetchTossSnapshot({ from: nextTossSyncFrom(state.integrations.toss), symbols: activeProjects().map((project) => project.symbol) }), 'Toss read-only sync error');
     }
+    async function refreshTossAndRate({ ipConfirmed = false } = {}) {
+        if (combinedRefreshBusy || tossSyncRunning || exchangeRateBusy)
+            return;
+        combinedRefreshBusy = true;
+        combinedRefreshSummary = '토스 확인 중…';
+        const originalPage = currentPage;
+        let tossResult = '토스 확인 실패', rateResult = '환율 수동값 유지', needsSetup = false;
+        renderAll();
+        try {
+            try {
+                await refreshNativeTossStatus();
+                if (nativeTossStatus.available) {
+                    if (!nativeTossStatus.configured) {
+                        needsSetup = true;
+                        tossResult = '토스 최초 설정 필요';
+                        openNativeTossSetup();
+                    }
+                    else {
+                        const sequence = n(state.integrations.toss.syncSequence);
+                        await syncNativeTossReadOnly({ ipConfirmed });
+                        tossResult = pendingTossIp ? '토스 IP 등록 필요' : n(state.integrations.toss.syncSequence) > sequence ? (state.integrations.toss.status === 'partial' ? '토스 일부 성공' : '토스 성공') : '토스 확인 실패';
+                    }
+                }
+                else if (isTossBridgeConfigured() && currentUser) {
+                    const sequence = n(state.integrations.toss.syncSequence);
+                    await syncTossReadOnly();
+                    tossResult = n(state.integrations.toss.syncSequence) > sequence ? (state.integrations.toss.status === 'partial' ? '토스 일부 성공' : '토스 성공') : '토스 확인 실패';
+                }
+                else {
+                    needsSetup = true;
+                    tossResult = '토스 조회 연결 필요';
+                }
+            }
+            catch {
+                tossResult = '토스 확인 실패';
+            }
+            // Keep independent results; serialize saves so one service cannot overwrite the other.
+            combinedRefreshSummary = tossResult + ' · 환율 확인 중…';
+            renderAll();
+            if (state.settings.exchangeRateMode === 'auto') {
+                if (demoMode)
+                    rateResult = '환율 데모값 유지';
+                else {
+                    await refreshExchangeRate(true, { preserveMode: true });
+                    rateResult = state.settings.exchangeRateMode !== 'auto' ? '환율 수동값 유지' : exchangeRateError ? '환율 실패 · 저장값 유지' : '환율 성공';
+                }
+            }
+        }
+        finally {
+            combinedRefreshBusy = false;
+            combinedRefreshSummary = tossResult + ' · ' + rateResult;
+            renderAll();
+            showPage(needsSetup || pendingTossIp ? 'settings' : originalPage);
+            toast(combinedRefreshSummary);
+        }
+    }
     async function importTossSnapshotFile(file) {
         return runTossImport(() => readTossSnapshotFile(file), 'Toss snapshot import error');
     }
@@ -2182,15 +2239,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const ip = pendingTossIp;
             modalDirty = false;
             closeModal();
-            syncNativeTossReadOnly({ ipConfirmed: !!ip });
+            refreshTossAndRate({ ipConfirmed: !!ip });
             return;
         }
         if ('clearTossCredentials' in button.dataset) {
             confirmAction('저장한 토스 키 삭제', '이 기기에 암호화 저장한 Client ID와 Secret만 삭제합니다. 가져온 장부 기록은 유지됩니다.', async () => { await clearNativeTossCredentials(); nativeTossStatus = { ...nativeTossStatus, configured: false, publicIp: '', lastPublicIp: '' }; renderSettings(); showPage('settings'); toast('이 기기의 토스 키를 삭제했습니다.'); }, '키 삭제');
             return;
         }
-        if ('syncToss' in button.dataset) {
-            syncTossReadOnly();
+        if ('syncToss' in button.dataset || 'syncAll' in button.dataset) {
+            refreshTossAndRate();
             return;
         }
         if ('rebuildMstyToss' in button.dataset) {
@@ -2374,7 +2431,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         else {
             const thresholdKRW = Math.max(1, n(form.get('thresholdKRW'))), warningKRW = Math.min(thresholdKRW, Math.max(0, n(form.get('warningKRW'))));
-            next = { targetMonthlyDividend: Math.max(0, n(form.get('targetMonthlyDividend'))), warningKRW, thresholdKRW };
+            next = { targetMonthlyDividend: Math.max(0, n(form.get('targetMonthlyDividend'))), warningKRW, thresholdKRW, dividendAlertEnabled: form.get('dividendAlertEnabled') !== 'off' };
             message = '배당 기준을 저장했습니다.';
         } if (Object.entries(next).every(([key, value]) => Object.entries(state.settings).some(([setting, current]) => setting === key && current === value))) {
             toast('바뀐 설정이 없습니다.');
