@@ -17,6 +17,14 @@ async function setup(page,{mode='auto',nativeAvailable=true}={}){
  const fx={calls:0,fail:false};await page.route('https://api.frankfurter.dev/v2/rate/USD/KRW',r=>{fx.calls++;return r.fulfill({status:fx.fail?503:200,contentType:'application/json',body:JSON.stringify({base:'USD',quote:'KRW',rate:1400,date:fixture().settings.exchangeRateDate})});});
  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('state',s);},fixture(mode));await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();fx.calls=0;return fx;
 }
+async function openDividendSettings(page){
+ await page.locator('[data-page="settings"]').first().click();
+ const section=page.locator('details.settings-section').filter({has:page.locator('#dividendSettingsForm')});
+ if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
+ const annual=page.locator('.annual-alert-settings');
+ if(await annual.getAttribute('open')===null)await annual.locator(':scope > summary').click();
+ await expect(page.locator('#dividendSettingsForm [name="dividendAlertEnabled"]')).toBeVisible();
+}
 async function refresh(page){await page.locator('#page-home [data-sync-all]').click();await expect(page.locator('#page-home [data-sync-all]')).toBeEnabled();}
 
 for(const failure of ['none','toss','fx','partial'])test(`통합 갱신은 ${failure} 결과를 분리하고 장부와 환율을 함께 보존한다`,async({page})=>{
@@ -37,9 +45,9 @@ test('현재 주가 손실·배당 포함 이익과 실제 입금 목표를 모�
  await setup(page,{mode:'manual'});await expect(page.locator('#page-home .monthly-dividend-goal')).toContainText('50.0%');await expect(page.locator('#page-home .dividend-alert')).toContainText('미리 알림');
  await page.locator('[data-page="projects"]').first().click();await expect(page.locator('#page-projects [data-sync-all]')).toBeVisible();await expect(page.locator('[data-current-pnl]')).toContainText('-$16');await expect(page.locator('.value-line')).toContainText('배당 포함 총손익 +$24');await expect(page.locator('[data-current-pnl]')).toContainText('ROC 조정 전');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await page.screenshot({path:info.outputPath('1.1-current-pnl.png'),fullPage:true});
- await page.locator('[data-page="settings"]').first().click();await expect(page.locator('#page-settings [data-sync-all]')).toBeVisible();await page.locator('details.settings-section').filter({has:page.locator('#dividendSettingsForm')}).locator('summary').first().click();await page.locator('.annual-alert-settings > summary').click();await page.locator('#dividendSettingsForm [name="thresholdKRW"]').fill('50000');await page.locator('#dividendSettingsForm button[type="submit"]').click();await expect.poll(async()=>(await read(page)).settings.thresholdKRW).toBe(50000);
+ await openDividendSettings(page);await expect(page.locator('#page-settings [data-sync-all]')).toBeVisible();await page.locator('#dividendSettingsForm [name="thresholdKRW"]').fill('50000');await page.locator('#dividendSettingsForm button[type="submit"]').click();await expect.poll(async()=>(await read(page)).settings.thresholdKRW).toBe(50000);
  await page.locator('[data-page="home"]').first().click();await expect(page.locator('#page-home .dividend-alert')).toContainText('기준 도달');
- await page.locator('[data-page="settings"]').first().click();await page.locator('details.settings-section').filter({has:page.locator('#dividendSettingsForm')}).locator('summary').first().click();await page.locator('.annual-alert-settings > summary').click();await page.locator('#dividendSettingsForm [name="dividendAlertEnabled"]').selectOption('off');await page.locator('#dividendSettingsForm button[type="submit"]').click();await expect.poll(async()=>(await read(page)).settings.dividendAlertEnabled).toBe(false);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#page-home .dividend-alert')).toHaveCount(0);
+ await openDividendSettings(page);await page.locator('#dividendSettingsForm [name="dividendAlertEnabled"]').selectOption('off');await page.locator('#dividendSettingsForm button[type="submit"]').click();await expect.poll(async()=>(await read(page)).settings.dividendAlertEnabled).toBe(false);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#page-home .dividend-alert')).toHaveCount(0);
 });
 test('토스 미연결 상태도 환율 갱신 결과와 연결 필요를 함께 표시한다',async({page})=>{
  const fx=await setup(page,{nativeAvailable:false});await page.locator('#page-home [data-sync-all]').click();await expect(page.locator('#page-settings .refresh-panel')).toContainText('토스 조회 연결 필요 · 환율 성공');expect(fx.calls).toBe(1);expect((await read(page)).settings.exchangeRate).toBe(1400);
