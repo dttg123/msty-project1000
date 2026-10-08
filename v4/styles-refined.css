@@ -411,3 +411,7 @@ html[data-theme="light"] .cashflow-selection,html[data-theme="light"] .chart-sel
 .current-pnl small{color:var(--muted);font-size:11px}
 .annual-alert-settings{display:grid;gap:10px}.annual-alert-settings summary{padding:12px 0;cursor:pointer;font-weight:700}
 .annual-alert-settings[open]>div{margin-top:10px}
+
+.refresh-info{flex-basis:100%;font-size:12px;color:var(--muted)}
+.refresh-info summary{cursor:pointer}.refresh-info p{margin-top:8px;line-height:1.6}
+.value-caption>span{white-space:nowrap;flex-shrink:0}.value-caption>small{min-width:0}

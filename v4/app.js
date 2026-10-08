@@ -2246,7 +2246,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             confirmAction('저장한 토스 키 삭제', '이 기기에 암호화 저장한 Client ID와 Secret만 삭제합니다. 가져온 장부 기록은 유지됩니다.', async () => { await clearNativeTossCredentials(); nativeTossStatus = { ...nativeTossStatus, configured: false, publicIp: '', lastPublicIp: '' }; renderSettings(); showPage('settings'); toast('이 기기의 토스 키를 삭제했습니다.'); }, '키 삭제');
             return;
         }
-        if ('syncToss' in button.dataset || 'syncAll' in button.dataset) {
+        if ('syncAll' in button.dataset) {
             refreshTossAndRate();
             return;
         }
@@ -2264,10 +2264,6 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         if ('refreshOfficialDistributions' in button.dataset) {
             refreshOfficialDistributions(true);
-            return;
-        }
-        if ('refreshExchangeRate' in button.dataset) {
-            refreshExchangeRate(true);
             return;
         }
         if ('deleteTossExceptions' in button.dataset) {

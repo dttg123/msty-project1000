@@ -112,12 +112,13 @@ test('환율 갱신 성공과 실패를 구분하며 실패 시 저장 환율을
   await setup(page,247);
   let fail=false;
   await page.route('https://api.frankfurter.dev/**',route=>fail?route.fulfill({status:503,body:'Unavailable'}):route.fulfill({contentType:'application/json',body:JSON.stringify({base:'USD',quote:'KRW',rate:1450.25,date:new Date().toISOString().slice(0,10)})}));
-  const display=page.locator('details.settings-section').filter({has:page.locator('#displaySettingsForm')});await display.locator(':scope > summary').click();
-  await page.locator('[data-refresh-exchange-rate]').click();
+  await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const state=await storageGet('state');state.settings.exchangeRateMode='auto';state.settings.exchangeRateUpdatedAt=new Date().toISOString();await storageSet('state',state);});
+  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="settings"]').first().click();
+  await page.locator('[data-sync-all]').click();
   await expect.poll(async()=>(await readLedger(page)).settings.exchangeRate).toBe(1450.25);
-  await expect(page.locator('[data-refresh-exchange-rate]')).toBeEnabled();
-  fail=true;await page.locator('[data-refresh-exchange-rate]').click();
-  await expect(display).toContainText('환율 조회 실패 · 마지막 저장 환율 유지');
+  await expect(page.locator('[data-sync-all]')).toBeEnabled();
+  fail=true;await page.locator('[data-sync-all]').click();
+  await expect(page.locator('.refresh-panel')).toContainText('환율 실패 · 저장값 유지');
   expect((await readLedger(page)).settings.exchangeRate).toBe(1450.25);
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
   expect((await readLedger(page)).settings.exchangeRate).toBe(1450.25);
