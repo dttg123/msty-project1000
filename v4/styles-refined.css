@@ -475,3 +475,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(max-width:360px){.portfolio-summary,.portfolio-month-summary{padding:15px}.portfolio-status-strip{font-size:11px;padding:10px}.portfolio-summary .current-pnl>strong{font-size:18px}}
 .project-symbol-link{display:flex;align-items:center;gap:12px;border:0;padding:0;min-height:32px;background:transparent;color:var(--text);font-weight:800;text-align:left;cursor:pointer}
 .project-symbol-link>span{font-size:20px;font-weight:500;color:var(--muted)}
+.portfolio-overview{gap:10px}
+.portfolio-overview .portfolio-summary{padding:16px}
+.portfolio-overview .portfolio-heading>div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.portfolio-overview .project-name,.portfolio-overview .strategy-tag{display:none}
+.portfolio-overview .project-tags{display:inline-flex}
+.portfolio-overview .sync-tag{margin-top:0}
+.portfolio-overview .holding-row>div{display:flex;align-items:baseline;gap:8px;padding-top:0;padding-bottom:0}
+.portfolio-overview .holding-row span{font-size:11px}
+.portfolio-overview .holding-row strong{font-size:17px;margin-top:0}
