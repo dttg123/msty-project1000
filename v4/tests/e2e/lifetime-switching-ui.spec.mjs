@@ -61,7 +61,7 @@ test('9개 플러스 전환 경로를 30년 개별 입력: 250·500·452·무작
    }
    const calc=await calculation(page,p.id);assertCalc(calc,e);
    if(e.firstPlus===prefix+'20')console.log(p.symbol,'첫 플러스',e.shares,'주','회수액',e.use/100,'USD PASS');
-   if(e.reached){await expect(page.locator('#page-projects .recovery-hero')).toContainText('남은 회수 원금');const goal=page.locator(`#page-goal [data-goal-project="${p.id}"] > summary`);await expect(goal).toContainText(e.use>=200000?'순수익 단계':'원금 회수 중');}
+   if(e.reached){await expect(page.locator('#page-projects .recovery-hero')).toContainText('회수할 원금');const goal=page.locator(`#page-goal [data-goal-project="${p.id}"] > summary`);await expect(goal).toContainText(e.use>=200000?'순수익 단계':'원금 회수 중');}
   }
   maxMonthMs=Math.max(maxMonthMs,Date.now()-began);
   if(month===12){const snapshot=await read(page);for(const p of projects){const e=models.get(p.id),ds=snapshot.dividends.filter(d=>d.projectId===p.id),ts=snapshot.trades.filter(t=>t.projectId===p.id),cs=snapshot.cashAdjustments.filter(c=>c.projectId===p.id);expect(ds).toHaveLength(e.payments);expect(ds.reduce((a,d)=>a+Math.round(d.amountUSD*100),0)).toBe(e.income);expect(ts).toHaveLength(e.buys);expect(cs).toHaveLength(e.uses);expect(ts.filter(t=>t.buyType==='direct')).toHaveLength(1);}

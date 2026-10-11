@@ -73,7 +73,7 @@ test('토스 원본 재구축은 238주를 247주로 대조하고 배당과 안�
   expect((await readLedger(page)).trades).toEqual(rebuilt.trades);
 });
 
-test('토스 보유주수와 체결 합계가 다르면 재구축을 거절하고 기존 기록을 유지한다',async({page})=>{
+test('토스 보유 수량와 체결 합계가 다르면 재구축을 거절하고 기존 기록을 유지한다',async({page})=>{
   await setup(page,246);
   const before=await readLedger(page);
   await page.locator('details.toss-details').filter({has:page.locator('[data-rebuild-msty-toss]')}).locator(':scope > summary').click();
@@ -166,7 +166,7 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-02-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:251}],orders:[{id:'old-manual-match',symbol:'MSTY',currency:'USD',date:'2025-12-01',type:'buy',shares:247,price:18.01},{id:'new-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16.25}]};
   const load=()=>page.locator('#tossImportInput').setInputFiles({name:'incremental.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-01T00:00:00Z',snapshot}))});
   await page.locator('#tossImportInput').setInputFiles({name:'holdings-only.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-01T00:00:00Z',snapshot:{...snapshot,orders:[]}}))});
-  await expect(page.locator('.toast')).toContainText('체결 합계와 보유주수 불일치');
+  await expect(page.locator('.toast')).toContainText('체결 합계와 보유 수량 불일치');
   expect((await readLedger(page)).trades).toEqual(before.trades);
   await load();await expect(page.locator('.toast')).toContainText('매수 1건');
   const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
@@ -184,11 +184,11 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   await expect(page.locator('.toss-sync-warning')).toHaveCount(0);
   snapshot.holdings[0].shares=253;
   snapshot.orders.push({id:'missing-counterpart',symbol:'MSTY',currency:'USD',date:'2026-02-02',type:'buy',shares:1,price:16.25});
-  await load();await expect(page.locator('.toast')).toContainText('체결 합계와 보유주수 불일치');
+  await load();await expect(page.locator('.toast')).toContainText('체결 합계와 보유 수량 불일치');
   expect((await readLedger(page)).trades).toEqual(saved.trades);
   if(await section.getAttribute('open')===null)await section.locator(':scope > summary').click();
   if(await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).getAttribute('open')===null)await page.locator('details.settings-connection').filter({has:page.locator('[data-import-toss]')}).locator(':scope > summary').click();
-  await expect(page.locator('.toss-sync-warning')).toBeVisible();await expect(page.locator('.toss-sync-warning')).toContainText('보유주수');
+  await expect(page.locator('.toss-sync-warning')).toBeVisible();await expect(page.locator('.toss-sync-warning')).toContainText('보유 수량');
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(saved.trades);
   const after=await readLedger(page);expect(after.dividends).toEqual(before.dividends);
   const {createStoreZip,readStateFromBackupFile}=await import('../../backup.js');const zip=createStoreZip([{name:'data/state.json',data:JSON.stringify(after)}]);
@@ -261,7 +261,7 @@ for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed'
     await load();await expect.poll(async()=>(await readLedger(page)).integrations.toss.syncSequence).toBeGreaterThan(saved.integrations.toss.syncSequence);
     expect((await readLedger(page)).trades).toEqual(saved.trades);
   }else{
-    await expect(page.locator('.toast')).toContainText(scenario==='mismatch'?'체결 합계와 보유주수 불일치':'중간 보유주수 초과 매도');
+    await expect(page.locator('.toast')).toContainText(scenario==='mismatch'?'체결 합계와 보유 수량 불일치':'중간 보유 수량 초과 매도');
     expect((await readLedger(page)).trades).toEqual(before.trades);
   }
   const after=await readLedger(page);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await readLedger(page)).trades).toEqual(after.trades);

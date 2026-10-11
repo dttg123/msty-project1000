@@ -1,3 +1,4 @@
+@font-face{font-family:Dividend Sans;src:url('./fonts/PretendardVariable.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
 /* Focused mobile presentation; keep the original stylesheet as the component base. */
 body{background:var(--bg);background-image:none}
 .demo-banner{text-align:center;padding:8px;background:#755300;color:#fff;font-size:12px}
@@ -484,3 +485,39 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .portfolio-overview .holding-row>div{display:flex;align-items:baseline;gap:8px;padding-top:0;padding-bottom:0}
 .portfolio-overview .holding-row span{font-size:11px}
 .portfolio-overview .holding-row strong{font-size:17px;margin-top:0}
+
+/* 1.3: one type scale for titles, values, labels and supporting text. */
+:root{--type-caption:.8125rem;--type-body:.9375rem;--type-title:1.125rem;--type-page:1.375rem;--type-amount:1.875rem;--muted:#626b7b;--green:#087f5b;--red:#c63248}
+html[data-theme="dark"]{--muted:#b0b9cc}
+body{font-family:'Dividend Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;font-size:var(--type-body);line-height:1.5;letter-spacing:-.015em;font-synthesis:none}
+button,input,select,textarea{letter-spacing:inherit}
+h1,h2,h3,strong,b{font-weight:650}
+.brand{font-weight:750;letter-spacing:-.035em;line-height:1.25}
+.section-title,.project-detail-heading .section-title{font-size:var(--type-page);font-weight:700;line-height:1.4}
+.card-title,.detail-title>strong,.overview-heading h3,.outlook-row h3,.portfolio-month-summary .overview-heading h3{font-size:var(--type-title);font-weight:650;line-height:1.45}
+.btn,.project-tab,.project-detail-tabs button,.portfolio-group-tabs button,.nav-btn{font-weight:600;line-height:1.4}
+.input,.modal .input,.settings-section-body .input{font-size:1rem;line-height:1.5}
+.input-label,.project-select-label,.row-title{font-size:var(--type-body);font-weight:550;line-height:1.5}
+.detail-note,.tiny,.row-sub,.sub-number,.section-note,.chart-instruction,.empty-inline,.single-symbol-note,.settings-group-label,.history-filter label,.goal-info-rows span,.portfolio-summary .value-caption,.portfolio-summary .current-pnl>span,.portfolio-summary .value-line>small,.portfolio-summary .holding-row span,.portfolio-income-hero span,.portfolio-month-summary .overview-heading>span,.portfolio-month-summary .portfolio-income-hero span,.month-parts span,.hero-label,.monthly-dividend-goal,.monthly-dividend-goal small,.cashflow-year-summary span,.cashflow-pace-summary span,.cashflow-pace-summary small,.cashflow-selection small,.composition-legend,.recovery-hero>small,.refresh-info,.analysis-divider>span,.annual-chart-heading>span{font-size:var(--type-caption);line-height:1.5;font-weight:400;letter-spacing:-.01em}
+.settings-group>.settings-section>summary .sub-number,.settings-connection>summary .sub-number{font-size:var(--type-caption);line-height:1.5}
+.hero-amount,.home-primary-amount,.portfolio-summary .value-line>strong,.portfolio-month-summary .portfolio-income-hero strong{font-size:var(--type-amount);line-height:1.2;font-weight:700;letter-spacing:-.025em;font-variant-numeric:lining-nums tabular-nums}
+.portfolio-summary .current-pnl>strong{font-size:1.375rem;font-weight:650;line-height:1.3;letter-spacing:-.02em}
+.portfolio-summary .value-caption small{font-size:.75rem;line-height:1.5;font-weight:400}
+.portfolio-summary .project-symbol,.project-symbol-link{font-size:1.5rem;font-weight:700;line-height:1.25}
+.portfolio-summary .strategy-tag,.portfolio-summary .sync-tag{font-size:.6875rem;line-height:1.3;font-weight:550}
+.portfolio-overview .holding-row{flex-wrap:wrap;row-gap:8px}
+.portfolio-overview .holding-row>div{flex:1;min-width:0;flex-wrap:wrap;gap:4px 8px}
+.portfolio-overview .holding-row strong{font-size:1.0625rem;font-weight:650}
+.portfolio-status-strip,.portfolio-detail-link{font-size:.875rem;line-height:1.4;font-weight:550}
+.summary-month-chart>button{font-size:.75rem;line-height:1.5}
+.portfolio-summary .value-line{margin-top:10px;padding-top:10px}
+.portfolio-summary .current-pnl{margin:10px 0 6px;gap:3px}
+.portfolio-month-summary .portfolio-income-hero{margin-top:8px}
+.summary-month-chart{margin-top:12px}
+.summary-bar-track{height:64px;margin-bottom:6px}
+.portfolio-month-summary{padding:16px}
+.record-row-button{align-items:flex-start}
+.record-row-button>div:first-child{min-width:0}
+.row-sub,.detail-note,.input-label{overflow-wrap:anywhere;word-break:keep-all}
+.performance-rows strong,.row-value,.recovery-hero>strong,.goal-info-rows strong,.metric-value{font-variant-numeric:lining-nums tabular-nums}
+@media(max-width:360px){.portfolio-summary .current-pnl>strong{font-size:1.25rem}.portfolio-status-strip{flex-wrap:wrap}.portfolio-status-strip>span:last-child{flex:1}.portfolio-overview .holding-row>div+div{padding-left:10px}}
