@@ -1,3 +1,4 @@
+import {openPortfolioDetail} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 
 async function openDemo(page){
@@ -22,9 +23,9 @@ test('핵심 화면을 모바일과 데스크톱에서 안전하게 탐색한다
 
 test('거래 입력이 원장과 보유주수에 즉시 반영된다',async({page})=>{
   const errors=await openDemo(page);
-  await page.locator('[data-page="projects"]').first().click();
+  await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
   const before=await page.locator('.holding-row strong').first().textContent();
-  await page.locator('.record-center > summary').click();
+  await openPortfolioDetail(page,'records');await openPortfolioDetail(page,'records');await page.locator('.record-center > summary').click();
   await page.locator('.manual-tools > summary').click();
   await page.locator('[data-add-trade]').click();
   await page.locator('#tradeForm [name="date"]').fill('2026-09-01');
@@ -40,8 +41,8 @@ test('배당 입력은 실제 입금액만 저장하고 예상값으로 부풀�
   const errors=await openDemo(page);
   await page.locator('#usdBtn').click();
   await expect(page.locator('#usdBtn')).toHaveAttribute('aria-pressed','true');
-  await page.locator('[data-page="projects"]').first().click();
-  await page.locator('.record-center > summary').click();
+  await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
+  await openPortfolioDetail(page,'records');await openPortfolioDetail(page,'records');await page.locator('.record-center > summary').click();
   await page.locator('.manual-tools > summary').click();
   await page.locator('[data-add-dividend]').click();
   await page.locator('#dividendForm [name="date"]').fill('2026-09-02');

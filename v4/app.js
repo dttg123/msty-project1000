@@ -52,6 +52,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     let historyLimit = 10, modalDirty = false, modalSaving = false, modalFocus = null, modalScroll = 0;
     let cashflowMonthKey = '';
     let portfolioGroup = 'highYield';
+    let portfolioDetail = false, portfolioDetailTab = 'dividend', portfolioOverviewScroll = 0;
     const viewKey = `dividend-os-view-v2:${demoMode ? 'demo' : 'local'}`;
     function rememberView() { try {
         localStorage.setItem(viewKey, JSON.stringify({ page: currentPage === 'settings' ? 'home' : currentPage, selectedProjectId, portfolioGroup, chartMode, chartMonth, chartYear, homeCashflowMode, homeYearRange }));
@@ -361,6 +362,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             saveTimer = setTimeout(() => run().catch(console.error), 120);
     }
     const views = createViews({
+        getPortfolioDetail: () => portfolioDetail, getPortfolioDetailTab: () => portfolioDetailTab,
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
         getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getCombinedRefreshStatus: () => ({ busy: combinedRefreshBusy, summary: combinedRefreshSummary }), getSaveSummary, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
@@ -1943,7 +1945,37 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         if (!button)
             return;
         if (button.dataset.page) {
+            if (button.dataset.page === 'projects' && portfolioDetail) {
+                portfolioDetail = false;
+                renderProjects();
+            }
             showPage(button.dataset.page);
+            return;
+        }
+        if (button.dataset.projectDetail) {
+            portfolioOverviewScroll = window.scrollY;
+            selectedProjectId = button.dataset.projectDetail;
+            portfolioDetail = true;
+            portfolioDetailTab = 'dividend';
+            renderProjects();
+            ensureUiHistory();
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            rememberView();
+            return;
+        }
+        if ('portfolioOverview' in button.dataset) {
+            portfolioDetail = false;
+            renderProjects();
+            window.scrollTo({ top: portfolioOverviewScroll, behavior: 'instant' });
+            rememberView();
+            return;
+        }
+        if (button.dataset.projectDetailTab) {
+            if (!['dividend', 'recovery', 'records'].includes(button.dataset.projectDetailTab))
+                return;
+            portfolioDetailTab = button.dataset.projectDetailTab;
+            renderProjects();
+            document.querySelector(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({ preventScroll: true });
             return;
         }
         if (button.dataset.currency) {
@@ -2009,6 +2041,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         if (button.dataset.portfolioGroup) {
+            portfolioDetail = false;
             historyFilter = {};
             historyLimit = 10;
             portfolioGroup = button.dataset.portfolioGroup === 'dividend' ? 'dividend' : 'highYield';
@@ -2035,6 +2068,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         if (button.dataset.openProject) {
+            portfolioDetail = false;
             selectedProjectId = button.dataset.openProject;
             renderProjects();
             showPage('projects');
@@ -2320,6 +2354,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                     ensureUiHistory();
                 requestCloseModal();
             }
+            else if (currentPage === 'projects' && portfolioDetail) {
+                portfolioDetail = false;
+                renderProjects();
+                window.scrollTo({ top: portfolioOverviewScroll, behavior: 'instant' });
+            }
             else if (currentPage === 'settings') {
                 const opened = [...document.querySelectorAll('#page-settings details[open]')];
                 if (opened.length) {
@@ -2328,7 +2367,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 else
                     showPage('home');
             }
-            if (currentPage === 'settings' || document.getElementById('modalBackdrop')?.classList.contains('show'))
+            if (currentPage === 'settings' || currentPage === 'projects' && portfolioDetail || document.getElementById('modalBackdrop')?.classList.contains('show'))
                 ensureUiHistory();
         });
         document.getElementById('page-settings').addEventListener('toggle', () => { if (currentPage === 'settings')
@@ -2404,7 +2443,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         document.getElementById('modalBackdrop').addEventListener('click', (event) => { if (event.target instanceof Element && event.target.id === 'modalBackdrop')
             requestCloseModal(); });
         document.addEventListener('keydown', (event) => { if (!(event.target instanceof Element))
-            return; const card = event.target.closest('[data-open-project],[data-goal-detail]'); if (card && (event.key === 'Enter' || event.key === ' ')) {
+            return; const tab = event.target.closest('[data-project-detail-tab]'); if (tab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            const tabs = ['dividend', 'recovery', 'records'], index = tabs.indexOf(portfolioDetailTab), next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (index + (event.key === 'ArrowRight' ? 1 : 2)) % 3;
+            document.querySelector(`[data-project-detail-tab="${tabs[next]}"]`)?.click();
+            return;
+        } const card = event.target.closest('[data-open-project],[data-goal-detail]'); if (card && (event.key === 'Enter' || event.key === ' ')) {
             event.preventDefault();
             card.click();
             return;

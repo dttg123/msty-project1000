@@ -76,6 +76,7 @@ const elements=new Map(['page-home','page-projects','page-goal','page-settings']
 globalThis.document={getElementById:id=>elements.get(id)||null};
 const formatters=createFormatters(()=>restored);
 const views=createViews({
+  getPortfolioDetail:()=>true,
   getState:()=>restored,getSelectedProjectId:()=>selectedProjectId,setSelectedProjectId:value=>{selectedProjectId=value;},
   getChartMode:()=> 'month',getChartSelection:()=> '',getHomeCashflowMode:()=> 'month',getCashflowMonthKey:()=> '',getPortfolioGroup:()=> 'highYield',setPortfolioGroup:()=>{},
   getCurrentUser:()=> null,isTossBridgeConfigured:()=> false,...engine,...formatters

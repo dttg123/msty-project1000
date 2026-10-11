@@ -1,3 +1,4 @@
+import {openPortfolioDetail} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 
 // Opt-in release QA. Every record goes through the visible form and Save button.
@@ -16,8 +17,8 @@ async function ledger(page){
 }
 
 async function openManual(page,action){
-  await page.locator('[data-page="projects"]').first().click();
-  for(const selector of ['.record-center','.manual-tools']){
+  await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
+  await openPortfolioDetail(page,'records');for(const selector of ['.record-center','.manual-tools']){
     if(await page.locator(selector).getAttribute('open')===null){
       await page.locator(`${selector} > summary`).click();
     }
