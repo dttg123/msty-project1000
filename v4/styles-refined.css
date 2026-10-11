@@ -521,3 +521,59 @@ h1,h2,h3,strong,b{font-weight:650}
 .row-sub,.detail-note,.input-label{overflow-wrap:anywhere;word-break:keep-all}
 .performance-rows strong,.row-value,.recovery-hero>strong,.goal-info-rows strong,.metric-value{font-variant-numeric:lining-nums tabular-nums}
 @media(max-width:360px){.portfolio-summary .current-pnl>strong{font-size:1.25rem}.portfolio-status-strip{flex-wrap:wrap}.portfolio-status-strip>span:last-child{flex:1}.portfolio-overview .holding-row>div+div{padding-left:10px}}
+
+/* Complete the 1.3 type scale in detail charts and compact states. */
+.column-value,.column-label,.fit-chart .column-value,.fit-chart .column-label,.month-chart .column-label{font-size:.75rem!important;line-height:1.4}
+.month-chart{overflow-x:auto!important;gap:6px!important;padding-bottom:4px}
+.month-chart .column-item{min-width:36px;flex:1 0 36px}
+.payment-spark{height:142px;gap:8px}
+.payment-spark button{flex:1 0 66px;min-width:66px}
+.payment-spark b,.payment-spark small,.annual-dps-chart small,.annual-dps-chart span,.growth-rate-row b{font-size:.75rem;line-height:1.4}
+.annual-dps-chart{overflow-x:auto;height:160px}
+.annual-dps-chart>div{flex:1 0 68px;min-width:68px}
+.annual-dps-chart small{max-width:none}
+.strategy-metrics span,.lifecycle-metrics span,.payment-trend-summary span,.goal-summary-status span,.portfolio-next-goal span,.portfolio-next-goal small,.outlook-row small,.portfolio-pace small,.metric-guide p,.metric-explain p,.growth-rate-heading{font-size:var(--type-caption);line-height:1.5}
+.trend-badge{font-size:var(--type-caption)!important}
+.portfolio-summary .current-pnl>strong{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;overflow-wrap:normal}
+.pnl-rate{font-size:.9375rem;font-weight:550;white-space:nowrap}
+.summary-chart-period{font-size:.75rem;color:var(--muted);margin-top:12px;line-height:1.5}
+.summary-month-chart{margin-top:8px}
+@media(max-width:600px){
+ .topbar{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ .brand{font-size:clamp(17px,4.8vw,22px)}
+ .topbar-actions{width:132px;grid-template-columns:minmax(0,1fr) 40px;gap:6px}
+ .topbar .save-pill{grid-column:1/-1;grid-row:2;height:40px;min-height:40px;font-size:.75rem;padding:2px 4px}
+ .topbar-actions .top-icon-btn{width:40px;height:44px}
+ .currency-picker button{min-width:34px;padding:6px}
+ .currency-picker{padding:3px}
+ .topbar{margin-bottom:18px}
+}
+@media(max-width:360px){.topbar{grid-template-columns:1fr}.topbar-actions{justify-self:end}.lifecycle-metrics{grid-template-columns:1fr}.growth-rate-row{flex-wrap:wrap}.growth-rate-row span{min-width:80px}}
+
+.portfolio-summary .value-line,.portfolio-summary .current-pnl,.portfolio-summary .holding-row>div{container-type:inline-size}
+.portfolio-summary .value-line>strong.fit-market{font-size:min(var(--type-amount),var(--money-fit));white-space:nowrap;overflow-wrap:normal}
+.portfolio-summary .pnl-amount{font-size:min(1.375rem,var(--money-fit));white-space:nowrap;overflow-wrap:normal;font-variant-numeric:tabular-nums}
+.portfolio-summary .holding-row .fit-holding{font-size:min(1.0625rem,var(--money-fit));white-space:nowrap;overflow-wrap:normal}
+.portfolio-summary .holding-row>div{min-width:0}
+.portfolio-overview .holding-row.holdings-wide>div{display:block}
+.portfolio-overview .holding-row.holdings-wide strong{display:block;margin-top:3px}
+
+.summary-bar-track{height:52px}
+
+.portfolio-summary .current-pnl>strong>span{color:inherit}
+@media(max-width:600px){
+ .topbar{position:relative;padding-bottom:28px;align-items:center}
+ .topbar-actions{grid-template-rows:44px}
+ .topbar .save-pill{position:absolute;left:0;bottom:0;width:100%;height:24px;min-height:24px;grid-row:auto;grid-column:auto;padding:1px 4px}
+}
+
+/* Keep selected income readable without splitting the numeric value. */
+.portfolio-income-hero{container-type:inline-size}
+.portfolio-month-summary .portfolio-income-hero>.fit-income{font-size:min(var(--type-amount),var(--money-fit));white-space:nowrap;overflow-wrap:normal}
+.summary-month-chart>button[aria-pressed="true"]{color:var(--text);font-weight:650}
+.summary-month-chart>button[aria-pressed="true"] .summary-bar-track{border-bottom:2px solid var(--project-a,var(--accent))}
+.summary-income-records{display:block;min-height:44px;margin-top:4px;font-size:var(--type-caption)}
+.detail-attention,.goal-achieved-badge,.milestone-grid span,.milestone-grid strong,.project-tags span,.five-year-summary span,.goal-summary-status small,.strategy-warning,.agenda-action,.trend-comparison span,.recovery-facts span{font-size:var(--type-caption);line-height:1.5}
+.performance-rows>div,.goal-info-rows>div{flex-wrap:wrap;padding-block:8px}
+.performance-rows strong,.goal-info-rows strong{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.portfolio-summary .value-line>small{overflow-wrap:anywhere}

@@ -11,25 +11,25 @@ async function setup(page,{appearance='dark',many=false,empty=false,date='2026-1
  if(many)for(let i=0;i<6;i++){const x=blankProject('QASTOCK'+i);x.id='stock'+i;x.category=i<4?'highYield':'growth';x.colorIndex=i;s.projects.push(x);}
  await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('state',s);},s);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();return {errors,state:s};
 }
-for(const appearance of ['dark','light'])test(`1.3 ${appearance}: short overview, detail tabs and original ledger`,async({page},info)=>{
+for(const appearance of ['dark','light'])test(`1.4 ${appearance}: short overview, detail tabs and original ledger`,async({page},info)=>{
  const {errors}=await setup(page,{appearance}),before=await read(page);await expect(page.locator('.portfolio-overview')).toBeVisible();await expect(page.locator('#page-projects .card')).toHaveCount(2);await expect(page.locator('.summary-month-chart button')).toHaveCount(6);await expect(page.locator('.dividend-management,.record-center,[data-refresh-official-distributions]')).toHaveCount(0);
  await expect(page.locator('[data-current-pnl]')).toContainText('-$561.00');await expect(page.locator('.portfolio-status-strip')).toContainText('다음 목표 500주');
  const actual=await page.locator('.portfolio-income-hero').textContent();expect(actual).toContain('$120.00');
  const tint=await page.locator('.summary-bar-track i').last().evaluate(el=>getComputedStyle(el).backgroundImage);expect(tint).not.toContain('none');
  if(info.project.name==='mobile-chromium')expect(await page.locator('.portfolio-overview').evaluate(el=>el.getBoundingClientRect().height)).toBeLessThan(680);
- await page.screenshot({path:info.outputPath(`1.3-${appearance}-overview.png`),fullPage:true});
+ await page.screenshot({path:info.outputPath(`1.4-${appearance}-overview.png`),fullPage:true});
  await page.locator('.project-symbol-link').click();await expect(page.locator('[data-project-detail-tab="dividend"]')).toHaveAttribute('aria-selected','true');await expect(page.locator('#detail-panel-dividend')).toBeVisible();await expect(page.locator('#detail-panel-recovery')).toBeHidden();
  await openPortfolioDetail(page,'recovery');await expect(page.locator('#page-projects .dividend-management')).toBeVisible();await expect(page.locator('#detail-panel-dividend')).toBeHidden();await page.screenshot({path:info.outputPath(`1.2-${appearance}-recovery.png`),fullPage:true});
  await openPortfolioDetail(page,'records');await page.locator('.record-center > summary').click();await expect(page.locator('.records-list')).toBeVisible();await page.locator('[data-project-detail-tab="records"]').press('ArrowLeft');await expect(page.locator('[data-project-detail-tab="recovery"]')).toHaveAttribute('aria-selected','true');
  await page.locator('[data-portfolio-overview]').click();await expect(page.locator('.portfolio-overview')).toBeVisible();await page.locator('[data-project-detail]').last().click();await page.goBack();await expect(page.locator('.portfolio-overview')).toBeVisible();
- const after=await read(page);expect(after.trades).toEqual(before.trades);expect(after.dividends).toEqual(before.dividends);expect(after.projects).toEqual(before.projects);await page.locator('[data-page="settings"]').first().click();await expect(page.locator('.app-version')).toHaveText('DividendOS 1.3');expect(errors).toEqual([]);
+ const after=await read(page);expect(after.trades).toEqual(before.trades);expect(after.dividends).toEqual(before.dividends);expect(after.projects).toEqual(before.projects);await page.locator('[data-page="settings"]').first().click();await expect(page.locator('.app-version')).toHaveText('DividendOS 1.4');expect(errors).toEqual([]);
 });
 test('7 stocks: changing group and stock selects only that stock, no horizontal overflow',async({page})=>{
  const {errors}=await setup(page,{many:true});await expect(page.locator('[data-project-select]')).toBeVisible();await page.locator('[data-project-select]').selectOption('stock2');await expect(page.locator('.project-symbol')).toContainText('QASTOCK2');await openPortfolioDetail(page,'records');await page.locator('[data-page="projects"]').first().click();await expect(page.locator('.portfolio-overview')).toBeVisible();await page.locator('[data-portfolio-group="dividend"]').click();await page.locator('[data-select-project="stock5"]').click();await expect(page.locator('.project-symbol')).toContainText('QASTOCK5');
  for(const width of [320,360,412,600,1440]){await page.setViewportSize({width,height:915});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}expect(errors).toEqual([]);
 });
 test('new year overview has six dated real months, zero balance works',async({page})=>{
- await setup(page,{empty:true,date:'2027-01-11T09:00:00Z'});await expect(page.locator('.summary-month-chart button')).toHaveCount(6);await expect(page.locator('.summary-month-chart button').first()).toHaveAttribute('data-income-month','2026-08');await expect(page.locator('.summary-month-chart button').last()).toHaveAttribute('data-income-month','2027-01');await expect(page.locator('.portfolio-income-hero')).toContainText('$0.00');await page.locator('.summary-month-chart button').last().click();await expect(page.locator('.month-navigation strong')).toHaveText('2027년 01월');
+ await setup(page,{empty:true,date:'2027-01-11T09:00:00Z'});await expect(page.locator('.summary-month-chart button')).toHaveCount(6);await expect(page.locator('.summary-month-chart button').first()).toHaveAttribute('data-income-month','2026-08');await expect(page.locator('.summary-month-chart button').last()).toHaveAttribute('data-income-month','2027-01');await expect(page.locator('.portfolio-income-hero')).toContainText('$0.00');await page.locator('.summary-month-chart button').last().click();await page.locator('.summary-income-records').click();await expect(page.locator('.month-navigation strong')).toHaveText('2027년 01월');
 });
 
 test('saved theme and stock colors survive edit, reload and summary/detail navigation',async({page})=>{
@@ -37,7 +37,7 @@ test('saved theme and stock colors survive edit, reload and summary/detail navig
  await page.locator('[data-page="settings"]').first().click();await page.locator('details.settings-section').filter({has:page.locator('#displaySettingsForm')}).locator(':scope > summary').click();await page.locator('#displaySettingsForm [name="appearance"]').selectOption('light');await page.locator('#displaySettingsForm button[type="submit"]').click();await expect(page.locator('html')).toHaveAttribute('data-theme','light');await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();expect(await page.locator('.portfolio-overview').evaluate(el=>getComputedStyle(el).getPropertyValue('--project-a'))).toBe(color);expect(await page.locator('.portfolio-summary').evaluate(el=>getComputedStyle(el).borderRadius)).toBe('24px');await openPortfolioDetail(page);expect((await read(page)).projects[0].colorIndex).toBe(4);expect((await read(page)).settings.appearance).toBe('light');
 });
 
-for(const appearance of ['dark','light'])test(`1.3 typography ${appearance}: local font, readable captions and enlarged text`,async({page},info)=>{
+for(const appearance of ['dark','light'])test(`1.4 typography ${appearance}: local font, readable captions and enlarged text`,async({page},info)=>{
  await setup(page,{appearance});await page.evaluate(()=>document.fonts.load('650 15px "Dividend Sans"','배당 123'));
  expect(await page.evaluate(()=>[...document.fonts].some(f=>f.family==='Dividend Sans'&&f.status==='loaded'))).toBe(true);
  for(const selector of ['.portfolio-summary .current-pnl>span','.portfolio-summary .holding-row span','.portfolio-income-hero span']){
@@ -49,7 +49,16 @@ for(const appearance of ['dark','light'])test(`1.3 typography ${appearance}: loc
   const bg=luminance(document.documentElement.dataset.theme==='dark'?'#1d2536':'#ffffff');
   return ['--muted','--green','--red'].map(token=>{const fg=luminance(root.getPropertyValue(token).trim());return (Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05);});
  });for(const ratio of contrast)expect(ratio).toBeGreaterThanOrEqual(4.5);
- await page.screenshot({path:info.outputPath(`1.3-${appearance}-type.png`),fullPage:true});
+ await page.screenshot({path:info.outputPath(`1.4-${appearance}-type.png`),fullPage:true});
  await page.setViewportSize({width:320,height:915});await page.evaluate(()=>document.documentElement.style.fontSize='20px');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);await expect(page.locator('.project-symbol-link')).toBeVisible();await page.locator('.project-symbol-link').click();await expect(page.locator('[data-project-detail-tab="records"]')).toBeVisible();await page.locator('[data-page="settings"]').first().click();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+});
+
+test('selected month shows its own amount above the chart and opens only its records',async({page})=>{
+ await setup(page);const before=await read(page);await page.locator('[data-portfolio-income-month="2026-05"]').click();
+ await expect(page.locator('.portfolio-month-summary h3')).toHaveText('2026년 05월 받은 배당');await expect(page.locator('.portfolio-income-hero strong')).toHaveText('$70.00');
+ await expect(page.locator('[data-portfolio-income-month="2026-05"]')).toHaveAttribute('aria-pressed','true');await expect(page.locator('#modalBackdrop')).toBeHidden();
+ await page.locator('.summary-income-records').click();await expect(page.locator('.month-navigation strong')).toHaveText('2026년 05월');
+ await page.locator('[data-close-modal]').first().click();await page.locator('.project-symbol-link').click();await page.locator('[data-portfolio-overview]').click();await expect(page.locator('.portfolio-income-hero strong')).toHaveText('$70.00');
+ const after=await read(page);expect(after.trades).toEqual(before.trades);expect(after.dividends).toEqual(before.dividends);
 });
