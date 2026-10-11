@@ -577,3 +577,7 @@ h1,h2,h3,strong,b{font-weight:650}
 .performance-rows>div,.goal-info-rows>div{flex-wrap:wrap;padding-block:8px}
 .performance-rows strong,.goal-info-rows strong{min-width:0;max-width:100%;overflow-wrap:anywhere}
 .portfolio-summary .value-line>small{overflow-wrap:anywhere}
+
+/* Keep the records action beside income rather than adding another row. */
+.portfolio-month-summary .portfolio-income-hero{position:relative;padding-right:90px}
+.portfolio-month-summary .summary-income-records{position:absolute;right:0;top:0;width:82px;margin:0;text-align:right}
