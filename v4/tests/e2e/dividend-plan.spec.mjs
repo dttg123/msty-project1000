@@ -1,3 +1,4 @@
+import {openPortfolioDetail} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 import {blankState} from '../../modules/state.js';
 import {tossCandidateToTrade} from '../../modules/toss.js';
@@ -13,21 +14,21 @@ async function setup(page,broker=false){
  await page.route(/\/storage\.js$/,r=>r.fulfill({contentType:'application/javascript',body:`export * from './storage.js?plan-original=1';import {storageSet as original} from './storage.js?plan-original=1';export async function storageSet(key,value){if(key==='state'&&window.__failPlan)throw new DOMException('Synthetic full disk','QuotaExceededError');return original(key,value);}`}));
  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
  await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('state',s);},fixture(broker));
- await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();return errors;
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'recovery');return errors;
 }
 async function useForm(page,amount='30',date='2025-01-04'){
- await page.locator('#page-projects [data-add-withdrawal]').click();await page.locator('#withdrawalForm [name="date"]').fill(date);await page.locator('#withdrawalForm [name="amountUSD"]').fill(amount);
+ await openPortfolioDetail(page,'recovery');await page.locator('#page-projects [data-add-withdrawal]').click();await page.locator('#withdrawalForm [name="date"]').fill(date);await page.locator('#withdrawalForm [name="amountUSD"]').fill(amount);
 }
-async function details(page){const d=page.locator('#page-projects .dividend-use-details');if(await d.getAttribute('open')===null)await d.locator(':scope > summary').click();return d;}
-async function manual(page,action){for(const name of ['record-center','manual-tools'])if(await page.locator('.'+name).getAttribute('open')===null)await page.locator('.'+name+' > summary').click();await page.locator(`[data-${action}]`).click();}
+async function details(page){await openPortfolioDetail(page,'recovery');const d=page.locator('#page-projects .dividend-use-details');if(await d.getAttribute('open')===null)await d.locator(':scope > summary').click();return d;}
+async function manual(page,action){await openPortfolioDetail(page,'records');for(const name of ['record-center','manual-tools'])if(await page.locator('.'+name).getAttribute('open')===null)await page.locator('.'+name+' > summary').click();await page.locator(`[data-${action}]`).click();}
 
 test('플러스 전환 → ISA 사용 → 마이너스 재개 → 목표 달성은 과거 사용액을 유지한다',async({page})=>{
  test.setTimeout(90000);const errors=await setup(page),before=await read(page);
- await expect(page.locator('#page-projects .dividend-plan-notice')).toContainText('플러스');await page.locator('#page-projects .dividend-plan-notice [data-dividend-mode]').click();await page.locator('#modalConfirm').click();await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
+ await openPortfolioDetail(page,'recovery');await expect(page.locator('#page-projects .dividend-plan-notice')).toContainText('플러스');await page.locator('#page-projects .dividend-plan-notice [data-dividend-mode]').click();await page.locator('#modalConfirm').click();await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
  await useForm(page);await page.locator('#withdrawalForm [name="destination"]').selectOption('isa');await page.locator('#withdrawalForm button[type="submit"]').click();await expect(page.locator('#withdrawalForm')).toBeHidden();
  const d=await details(page);await expect(d).toContainText('$20');expect((await read(page)).trades).toEqual(before.trades);
  await manual(page,'edit-price');await page.locator('#priceForm [name="price"]').fill('9');await page.locator('#priceForm button[type="submit"]').click();await expect(page.locator('#priceForm')).toBeHidden();
- await expect(page.locator('#page-projects .dividend-plan-notice')).toContainText('마이너스');await page.locator('#page-projects .dividend-plan-notice [data-dividend-mode]').click();await page.locator('#modalConfirm').click();
+ await openPortfolioDetail(page,'recovery');await expect(page.locator('#page-projects .dividend-plan-notice')).toContainText('마이너스');await page.locator('#page-projects .dividend-plan-notice [data-dividend-mode]').click();await page.locator('#modalConfirm').click();
  expect((await read(page)).cashAdjustments[0].amountUSD).toBe(-30);expect((await read(page)).projects[0].dividendPlan.history).toHaveLength(2);
  await manual(page,'add-trade');await page.locator('#tradeForm [name="date"]').fill('2025-01-05');await page.locator('#tradeForm [name="shares"]').fill('990');await page.locator('#tradeForm [name="price"]').fill('10');await page.locator('#tradeForm button[type="submit"]').click();await expect(page.locator('#tradeForm')).toBeHidden();
  await expect(page.locator('.dividend-management .recovery-hero')).toContainText('남은 회수 원금');await expect(page.locator('.dividend-management .recovery-hero')).toContainText('$9,970');

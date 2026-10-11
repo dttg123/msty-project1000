@@ -59,6 +59,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   let historyLimit=10, modalDirty=false, modalSaving=false, modalFocus: HTMLElement|null=null, modalScroll=0;
   let cashflowMonthKey = '';
   let portfolioGroup = 'highYield';
+  let portfolioDetail=false,portfolioDetailTab='dividend',portfolioOverviewScroll=0;
   const viewKey=`dividend-os-view-v2:${demoMode?'demo':'local'}`;
   function rememberView(): void{try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioGroup,chartMode,chartMonth,chartYear,homeCashflowMode,homeYearRange}));}catch (_: unknown){}}
   function restoreView(): void{
@@ -196,6 +197,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   const views = createViews({
+    getPortfolioDetail:()=>portfolioDetail,getPortfolioDetailTab:()=>portfolioDetailTab,
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value) => { selectedProjectId=value; },
     getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getCombinedRefreshStatus:()=>({busy:combinedRefreshBusy,summary:combinedRefreshSummary}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
@@ -986,7 +988,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function handleClick(event: Event): void {
     if(!(event.target instanceof Element))return;
     const button=event.target.closest<HTMLElement>('button,[data-open-project],[data-goal-detail]');if(!button)return;
-    if(button.dataset.page){showPage(button.dataset.page);return;}
+    if(button.dataset.page){if(button.dataset.page==='projects'&&portfolioDetail){portfolioDetail=false;renderProjects();}showPage(button.dataset.page);return;}
+    if(button.dataset.projectDetail){portfolioOverviewScroll=window.scrollY;selectedProjectId=button.dataset.projectDetail;portfolioDetail=true;portfolioDetailTab='dividend';renderProjects();ensureUiHistory();window.scrollTo({top:0,behavior:'instant'});rememberView();return;}
+    if('portfolioOverview'in button.dataset){portfolioDetail=false;renderProjects();window.scrollTo({top:portfolioOverviewScroll,behavior:'instant'});rememberView();return;}
+    if(button.dataset.projectDetailTab){if(!['dividend','recovery','records'].includes(button.dataset.projectDetailTab))return;portfolioDetailTab=button.dataset.projectDetailTab;renderProjects();document.querySelector<HTMLElement>(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({preventScroll:true});return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency==='USD'?'USD':'KRW';saveState();renderAll(true);return;}
     if(button.dataset.chartKey){chartSelection=button.dataset.chartKey;renderProjects();return;}
     if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'',button.dataset.incomeSymbol||'');return;}
@@ -997,10 +1002,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(button.dataset.homeCashflowMode){homeCashflowMode=button.dataset.homeCashflowMode;cashflowMonthKey='';rememberView();renderHome();return;}
     if(button.dataset.homeYearRange){homeYearRange=button.dataset.homeYearRange;cashflowMonthKey='';rememberView();renderHome();return;}
     if(button.dataset.cashflowPeriod){cashflowMonthKey=button.dataset.cashflowPeriod;renderHome();return;}
-    if(button.dataset.portfolioGroup){historyFilter={};historyLimit=10;portfolioGroup=button.dataset.portfolioGroup==='dividend'?'dividend':'highYield';const first=activeProjects().find((project)=>(project.category==='highYield'?'highYield':'dividend')===portfolioGroup);if(first)selectedProjectId=first.id;renderProjects();return;}
+    if(button.dataset.portfolioGroup){portfolioDetail=false;historyFilter={};historyLimit=10;portfolioGroup=button.dataset.portfolioGroup==='dividend'?'dividend':'highYield';const first=activeProjects().find((project)=>(project.category==='highYield'?'highYield':'dividend')===portfolioGroup);if(first)selectedProjectId=first.id;renderProjects();return;}
     if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');const card=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card')].find(el=>el.dataset.goalProject===selectedProjectId);if(card){card.open=true;card.scrollIntoView({block:'nearest'});}return;}
     if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
-    if(button.dataset.openProject){selectedProjectId=button.dataset.openProject;renderProjects();showPage('projects');return;}
+    if(button.dataset.openProject){portfolioDetail=false;selectedProjectId=button.dataset.openProject;renderProjects();showPage('projects');return;}
     if(button.dataset.selectProject){historyFilter={};historyLimit=10;selectedProjectId=button.dataset.selectProject;renderProjects();return;}
     if('addProject'in button.dataset){openProjectForm();return;}
     if('projectSettings'in button.dataset){openProjectForm(projectById());return;}
@@ -1067,12 +1072,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(document.getElementById('modalBackdrop')?.classList.contains('show')){
         if(modalDirty||modalSaving)ensureUiHistory();
         requestCloseModal();
+      }else if(currentPage==='projects'&&portfolioDetail){
+        portfolioDetail=false;renderProjects();window.scrollTo({top:portfolioOverviewScroll,behavior:'instant'});
       }else if(currentPage==='settings'){
         const opened=[...document.querySelectorAll<HTMLDetailsElement>('#page-settings details[open]')];
         if(opened.length){opened[opened.length-1].open=false;}
         else showPage('home');
       }
-      if(currentPage==='settings'||document.getElementById('modalBackdrop')?.classList.contains('show'))ensureUiHistory();
+      if(currentPage==='settings'||currentPage==='projects'&&portfolioDetail||document.getElementById('modalBackdrop')?.classList.contains('show'))ensureUiHistory();
     });
     document.getElementById('page-settings')!.addEventListener('toggle',()=>{if(currentPage==='settings')ensureUiHistory();},true);
 
@@ -1101,7 +1108,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('modal')!.addEventListener('input',()=>{modalDirty=true;});
     document.getElementById('modal')!.addEventListener('change',()=>{modalDirty=true;});
     document.getElementById('modalBackdrop')!.addEventListener('click',(event: Event)=>{if(event.target instanceof Element&&event.target.id==='modalBackdrop')requestCloseModal();});
-    document.addEventListener('keydown',(event: KeyboardEvent)=>{if(!(event.target instanceof Element))return;const card=event.target.closest<HTMLElement>('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
+    document.addEventListener('keydown',(event: KeyboardEvent)=>{if(!(event.target instanceof Element))return;const tab=event.target.closest<HTMLElement>('[data-project-detail-tab]');if(tab&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const tabs=['dividend','recovery','records'],index=tabs.indexOf(portfolioDetailTab),next=event.key==='Home'?0:event.key==='End'?2:(index+(event.key==='ArrowRight'?1:2))%3;document.querySelector<HTMLElement>(`[data-project-detail-tab="${tabs[next]}"]`)?.click();return;}const card=event.target.closest<HTMLElement>('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('dividendReplacementInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
     document.getElementById('restoreInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});

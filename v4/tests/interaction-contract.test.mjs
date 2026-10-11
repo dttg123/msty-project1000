@@ -12,6 +12,7 @@ const state=demoState(new Date('2026-09-23T12:00:00Z'));
 let selectedProjectId='demo-msty',portfolioGroup='highYield',chartMode='month',chartSelection='',homeMode='month',homeYearRange='6',cashflowMonthKey='';
 const portfolio=createPortfolioEngine(()=>state,()=>selectedProjectId),formatters=createFormatters(()=>state);
 const views=createViews({
+  getPortfolioDetail:()=>true,
   getState:()=>state,getSelectedProjectId:()=>selectedProjectId,setSelectedProjectId:value=>selectedProjectId=value,
   getChartMode:()=>chartMode,getChartSelection:()=>chartSelection,getHomeCashflowMode:()=>homeMode,getHomeYearRange:()=>homeYearRange,
   getHistoryLimit:()=>10,getHistoryFilter:()=>({}),getChartMonth:()=>'2026-09',getChartYear:()=>'',getCashflowMonthKey:()=>cashflowMonthKey,
@@ -27,9 +28,6 @@ assert.match(elements.get('page-home').innerHTML,/2022년/);
 assert.match(elements.get('page-home').innerHTML,/data-home-year-range="all"/);
 
 views.renderProjects();
-assert.match(elements.get('page-projects').innerHTML,/data-portfolio-group="highYield" class="active"/);
-assert.match(elements.get('page-projects').innerHTML,/고배당주<\/span><b>4/);
-assert.match(elements.get('page-projects').innerHTML,/배당주<\/span><b>2/);
 for(const symbol of ['MSTY','CONY','NVDY','YMAX'])assert.match(elements.get('page-projects').innerHTML,new RegExp(`data-select-project="demo-${symbol.toLowerCase()}"`));
 portfolioGroup='dividend';
 for(const symbol of ['SCHD','KO']){
@@ -37,7 +35,6 @@ for(const symbol of ['SCHD','KO']){
   const html=elements.get('page-projects').innerHTML;
   assert.match(html,new RegExp(symbol));
   assert.doesNotMatch(html,/data-project-select/);
-  assert.match(html,/data-portfolio-group="dividend" class="active"/);
 }
 selectedProjectId='demo-schd';views.renderProjects();
 assert.match(elements.get('page-projects').innerHTML,/연도별 주당 세후 배당금/);
@@ -61,7 +58,7 @@ assert.match(elements.get('page-goal').innerHTML,/목표 · 월 매수계획 설
 assert.match(elements.get('page-settings').innerHTML,/토스증권 읽기 전용/);
 
 const app=readFileSync(resolve(import.meta.dirname,'../app.ts'),'utf8');
-const routed=['page','currency','chartKey','incomeMonth','historyReset','historyMore','chartYearShift','chartMode','homeCashflowMode','homeYearRange','cashflowPeriod','portfolioGroup','goalDetail','settingsProject','openProject','selectProject','addProject','projectSettings','editPrice','addTrade','addDividend','addCash','addWithdrawal','addSplit','viewRecord','editRecord','deleteFromEdit','projectCheck','allCheck','goalMode','lockRecovery','editRecovery','restoreProject','backup','backupSave','restore','restoreAuto','csv','importToss','configureToss','tossCopyIp','openTossIp','confirmTossIp','clearTossCredentials','syncAll','installHotUpdate','checkHotUpdate','reviewToss','clearTossCorrections','disconnectToss','closeModal'];
+const routed=['projectDetail','portfolioOverview','projectDetailTab','page','currency','chartKey','incomeMonth','historyReset','historyMore','chartYearShift','chartMode','homeCashflowMode','homeYearRange','cashflowPeriod','portfolioGroup','goalDetail','settingsProject','openProject','selectProject','addProject','projectSettings','editPrice','addTrade','addDividend','addCash','addWithdrawal','addSplit','viewRecord','editRecord','deleteFromEdit','projectCheck','allCheck','goalMode','lockRecovery','editRecovery','restoreProject','backup','backupSave','restore','restoreAuto','csv','importToss','configureToss','tossCopyIp','openTossIp','confirmTossIp','clearTossCredentials','syncAll','installHotUpdate','checkHotUpdate','reviewToss','clearTossCorrections','disconnectToss','closeModal'];
 for(const action of routed)assert.ok(app.includes(`button.dataset.${action}`)||app.includes(`'${action}'in button.dataset`),`${action} must have a click route`);
 
 console.log(`Interaction contract PASS: ${routed.length} click routes, 4/2 portfolio groups, 4 chart modes`);

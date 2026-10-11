@@ -19,12 +19,13 @@ let selectedProjectId='p-msty';
 let chartMode='month';
 let homeMode='month';
 let homeYearRange='6';
-let portfolioGroup='highYield';
+let portfolioGroup='highYield',portfolioDetail=true;
 let nativeTossStatus={available:false,configured:false,publicIp:'',checking:false};
 let appUpdateStatus={available:true,checking:false,currentVersion:'0.12.9',latestVersion:'0.13.0',updateAvailable:true,nativeUpdateRequired:false,error:''};
 const portfolio=createPortfolioEngine(()=>state,()=>selectedProjectId);
 const formatters=createFormatters(()=>state);
 const views=createViews({
+  getPortfolioDetail:()=>portfolioDetail,
   getState:()=>state,
   getSelectedProjectId:()=>selectedProjectId,
   setSelectedProjectId:value=>{selectedProjectId=value;},
@@ -70,8 +71,6 @@ assert.match(elements.get('page-projects').innerHTML,/포트폴리오/);
 assert.match(elements.get('page-projects').innerHTML,/첫 배당/);
 assert.match(elements.get('page-projects').innerHTML,/2건 · 거래·배당·인출·분할/);
 assert.match(elements.get('page-projects').innerHTML,/고배당주/);
-assert.match(elements.get('page-projects').innerHTML,/data-portfolio-group="highYield"/);
-assert.match(elements.get('page-projects').innerHTML,/data-portfolio-group="dividend"/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/운용 성격으로 좁혀보기/);
 assert.match(elements.get('page-projects').innerHTML,/실제 입금액 추세/);
 assert.match(elements.get('page-projects').innerHTML,/입력 기록 기준/);
@@ -110,7 +109,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.1\.1/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.2/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 배포 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
@@ -172,7 +171,7 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v1.1.1 view QA: PASS');
+console.log('DividendOS v1.2 view QA: PASS');
 
 state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioGroup='highYield';
 state.dividends=[{id:'known',projectId:'p-msty',date:'2026-01-02',amountUSD:2,sharesAtPayment:10},{id:'unknown',projectId:'p-msty',date:'2026-01-09',amountUSD:4,sharesAtPayment:0}];
@@ -186,3 +185,13 @@ const pnlEngine=portfolio.computeProject(state.projects[0]);assert.ok(pnlEngine.
 assert.match(elements.get('page-projects').innerHTML,/data-current-pnl/);assert.match(elements.get('page-projects').innerHTML,/현재 평가손익 · 배당 제외/);assert.match(elements.get('page-projects').innerHTML,/ROC 조정 전 매입원가/);assert.doesNotMatch(elements.get('page-projects').innerHTML,/data-sync-all/);assert.doesNotMatch(elements.get('page-home').innerHTML,/data-sync-all/);assert.doesNotMatch(elements.get('page-settings').innerHTML,/data-refresh-exchange-rate|data-sync-toss/);assert.equal((elements.get('page-settings').innerHTML.match(/data-sync-all/g)||[]).length,1);assert.match(elements.get('page-settings').innerHTML,/<details class="refresh-info">/);
 views.renderHome();assert.match(elements.get('page-home').innerHTML,/매달 받고 싶은 세후 배당/);assert.match(elements.get('page-home').innerHTML,/연간 배당 알림/);
 state.settings.dividendAlertEnabled=false;views.renderHome();assert.doesNotMatch(elements.get('page-home').innerHTML,/class="dividend-alert/);
+
+portfolioDetail=false;portfolioGroup='highYield';views.renderProjects();
+const overview=elements.get('page-projects').innerHTML;
+assert.match(overview,/data-project-detail=/);
+assert.match(overview,/data-portfolio-group="highYield"/);
+assert.match(overview,/summary-month-chart/);
+assert.equal((overview.match(/<article class="card/g)||[]).length,2);
+assert.doesNotMatch(overview,/record-center|dividend-management|performance-breakdown|공시 배당 일정/);
+assert.equal((overview.match(/data-income-month=/g)||[]).length,6);
+console.log('Portfolio 1.2 overview/detail contract PASS');
