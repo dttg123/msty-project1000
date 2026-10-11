@@ -5,7 +5,7 @@ import {dirname,resolve} from 'node:path';
 const root=resolve(import.meta.dirname,'..');
 const output=resolve(root,'dist');
 const files=[
-  'index.html','styles.css','styles-refined.css','manifest.webmanifest','icon-192.png','icon-512.png',
+  'fonts/PretendardVariable.woff2','fonts/OFL.txt','index.html','styles.css','styles-refined.css','manifest.webmanifest','icon-192.png','icon-512.png',
   'app.js','firebase.js','auth.js','storage.js','cloud.js','hot-update.js','runtime-config.js','toss-client.js','toss-native.js','backup.js','sw.js',
   'modules/activity.js','modules/constants.js','modules/utils.js','modules/state.js','modules/state-decoder.js','modules/income.js',
   'modules/dividend-plan.js','modules/dividend-analytics.js','modules/finance.js','modules/corporate-actions.js','modules/cloud-api.js','modules/cloud-contract.js','modules/backup-history.js','modules/validation.js','modules/demo.js',

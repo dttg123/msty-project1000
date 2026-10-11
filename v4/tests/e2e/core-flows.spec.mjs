@@ -21,7 +21,7 @@ test('핵심 화면을 모바일과 데스크톱에서 안전하게 탐색한다
   expect(errors).toEqual([]);
 });
 
-test('거래 입력이 원장과 보유주수에 즉시 반영된다',async({page})=>{
+test('거래 입력이 원장과 보유 수량에 즉시 반영된다',async({page})=>{
   const errors=await openDemo(page);
   await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
   const before=await page.locator('.holding-row strong').first().textContent();

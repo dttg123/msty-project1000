@@ -1,10 +1,10 @@
 import { isRecord } from './modules/utils.js';
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 export const DATA_SCHEMA_VERSION = 4;
 import { dividendCashBreakdown } from './modules/finance.js';
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
 const APP_FILES = [
-    'index.html', 'styles.css', 'styles-refined.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+    'fonts/PretendardVariable.woff2', 'fonts/OFL.txt', 'index.html', 'styles.css', 'styles-refined.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
     'app.js', 'firebase.js', 'auth.js', 'storage.js', 'cloud.js', 'runtime-config.js', 'toss-client.js', 'toss-native.js',
     'backup.js', 'sw.js', 'hot-update.js',
     'modules/activity.js', 'modules/constants.js', 'modules/utils.js', 'modules/state.js', 'modules/state-decoder.js',
