@@ -201,7 +201,7 @@ state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioDetail=
 assert.match(elements.get('page-projects').innerHTML,/<span>평균 매수가<\/span><strong[^>]*>\$10\.00<\/strong>/);
 assert.match(elements.get('page-projects').innerHTML,/-\$20\.00/);
 portfolioDetail=true;views.renderProjects();const rocDetails=elements.get('page-projects').innerHTML;
-assert.match(rocDetails,/<span>ROC 조정 평균 원가<\/span><strong>\$0\.00<\/strong>/);
+assert.match(rocDetails,/<span>ROC 조정 평균 원가<\/span><strong[^>]*>\$0\.00<\/strong>/);
 assert.match(rocDetails,/<span>ROC 조정 평가손익<\/span>/);
 const rocCalc=portfolio.computeProject(state.projects[0]);
 assert.ok(Math.abs(rocCalc.priceUnrealized+(rocCalc.totalSellCashIn-(rocCalc.totalBuyCashOut-rocCalc.purchaseBasis))+rocCalc.dividendsTotal-rocCalc.totalReturn)<.000001);

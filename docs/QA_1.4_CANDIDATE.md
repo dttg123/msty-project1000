@@ -12,9 +12,11 @@ Base: main cd2542470e711fdcfa8242a501c369e8a3c35d4e (PR #40, version 1.3).
 - Connection details remain in settings; dividend use and yield labels explain their meaning.
 
 ## Validation and limits
-Local release QA passed all 30 suites, including typecheck, security and reproducible static build, after producing the signed 1.4 web bundle. SHA256: fac135a805f36c84a57e1122b39e296b6332415e7a52b4fb0118982674ef3a10.
+Recovery on 2026-10-12 found seven final local files missing from PR head b80ef085, including the ZIP. The earlier browser launch log had no completion summary; its reported final pass is not counted as recovered evidence. The cause of that interruption is not established by the available logs.
 
-The initial browser run with hard and lifetime checks was interrupted. Its log ends at test 23/178 and the lifetime fixture ends at 120/720 saved records; it is NOT counted as a completed pass. Final ordinary browser run completed: 166 passed, 12 opt-in tests skipped (6.3 minutes). Mobile height failures from the preceding run were fixed by placing the records action beside income; the unchanged height requirement and 20 targeted checks passed. Final release QA again passed 30 suites. ZIP hash, RSA signature against the Android public key, and bundled final views/CSS were independently verified. Opt-in lifetime, high-lifetime and switching checks must not be claimed from skipped tests.
+Fresh local release QA passed all 30 suites, including typecheck, security, 30-year individual ledger entries, 8/9-stock high-value ledgers, hardening and reproducible static build. Final ZIP SHA256: b7f822d28045a663a1ca354922d3d07a698ddb48403c1f09b3ada9676c2d3078. ZIP CRC, every manifest file hash, byte equality against final runtime source, and RSA signature against the committed Android public key passed. All seven uploaded Git blob hashes match their local file bytes.
+
+The ordinary browser rerun is recorded separately. Opt-in lifetime, high-lifetime and switching checks must not be claimed from skipped tests. Recovery commands and interruption handling are documented in QA_RESUME.md.
 
 ## Q3 remains blocked
 Run 38142236835 release evidence describes commit 135a85effc2765c7faf784b8f4ee577b85382925, appVersion 0.12.7 and completedAt 2026-09-28T08:01:12.640Z, rather than the exact 1.3 candidate. It also exceeds the 7-day freshness limit. Its passing fields cannot be reused or relabeled for 1.4.

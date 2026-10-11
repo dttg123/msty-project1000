@@ -510,7 +510,15 @@ h1,h2,h3,strong,b{font-weight:650}
 .portfolio-overview .holding-row strong{font-size:1.0625rem;font-weight:650}
 .portfolio-status-strip,.portfolio-detail-link{font-size:.875rem;line-height:1.4;font-weight:550}
 .summary-month-chart>button{font-size:.75rem;line-height:1.5}
-.portfolio-summary .value-line{margin-top:10px;padding-top:10px}
+.portfolio-summary .value-line{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px 14px;margin-top:10px;padding-top:10px}
+.valuation-primary{min-width:0;container-type:inline-size}
+.valuation-primary>.fit-market{display:block;font-size:min(var(--type-amount),var(--money-fit));white-space:nowrap;overflow-wrap:normal;font-weight:700;line-height:1.25}
+.portfolio-summary .value-line>.current-pnl{margin:0;padding-left:14px;border-left:1px solid var(--line);min-width:0;align-content:start}
+.portfolio-summary .value-line>.current-pnl>strong{flex-direction:column;align-items:flex-start;gap:4px}
+.portfolio-summary .value-line>small{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.total-return-value{flex:1;min-width:0;container-type:inline-size}
+.fit-total{display:block;font-size:min(1.125rem,var(--money-fit));white-space:nowrap;overflow-wrap:normal;color:inherit;line-height:1.4}
+.portfolio-summary .value-line>small span,.portfolio-summary .value-line>small b{color:inherit}
 .portfolio-summary .current-pnl{margin:10px 0 6px;gap:3px}
 .portfolio-month-summary .portfolio-income-hero{margin-top:8px}
 .summary-month-chart{margin-top:12px}
@@ -575,9 +583,16 @@ h1,h2,h3,strong,b{font-weight:650}
 .summary-income-records{display:block;min-height:44px;margin-top:4px;font-size:var(--type-caption)}
 .detail-attention,.goal-achieved-badge,.milestone-grid span,.milestone-grid strong,.project-tags span,.five-year-summary span,.goal-summary-status small,.strategy-warning,.agenda-action,.trend-comparison span,.recovery-facts span{font-size:var(--type-caption);line-height:1.5}
 .performance-rows>div,.goal-info-rows>div{flex-wrap:wrap;padding-block:8px}
+.performance-rows>div{container-type:inline-size;gap:6px 12px}
+.performance-rows strong{font-size:min(1rem,var(--detail-fit,1rem));white-space:nowrap;overflow-wrap:normal}
 .performance-rows strong,.goal-info-rows strong{min-width:0;max-width:100%;overflow-wrap:anywhere}
 .portfolio-summary .value-line>small{overflow-wrap:anywhere}
 
 /* Keep the records action beside income rather than adding another row. */
 .portfolio-month-summary .portfolio-income-hero{position:relative;padding-right:90px}
 .portfolio-month-summary .summary-income-records{position:absolute;right:0;top:0;width:82px;margin:0;text-align:right}
+.currency-picker button.active,.section-title-row .btn[data-add-project]{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff}
+.portfolio-summary .value-line.valuation-wide{grid-template-columns:minmax(0,1fr)}
+.portfolio-summary .valuation-wide>.current-pnl{border-left:0;padding-left:0}
+.portfolio-summary .valuation-wide>.current-pnl>strong{flex-direction:row;align-items:baseline}
+@media(max-width:360px){.portfolio-summary .value-line{grid-template-columns:minmax(0,1fr);gap:10px}.portfolio-summary .value-line>.current-pnl{border-left:0;padding-left:0}.portfolio-summary .value-line>.current-pnl>strong{flex-direction:row;align-items:baseline}.portfolio-summary .value-line>small{grid-column:1}.portfolio-summary .value-line>.current-pnl>span{font-size:var(--type-caption)}}
