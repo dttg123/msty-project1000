@@ -82,7 +82,7 @@ const views=createViews({
   getCurrentUser:()=> null,isTossBridgeConfigured:()=> false,...engine,...formatters
 });
 views.renderHome(); views.renderProjects(); views.renderGoals(); views.renderSettings();
-assert.match(elements.get('page-home').innerHTML,/날짜별 입금 상세/);
+assert.match(elements.get('page-home').innerHTML,/입금 내역 보기/);
 assert.match(elements.get('page-projects').innerHTML,/class="card record-center"/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/class="card record-center" open/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card goal-step-card"[^>]* open/);

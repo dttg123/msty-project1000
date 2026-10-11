@@ -385,7 +385,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         return { candidate, audit };
     }
     function migrationCheckRows(audit) {
-        const labels = { tradeCount: '거래 건수', dividendCount: '배당 건수', splitCount: '분할 건수', shares: '보유주수', costBasis: '남은 취득원가', marketValue: '평가금액', dividendsTotal: '누적배당', reinvestAmount: '재투자 사용액', dividendAvailable: '사용 가능 배당', currentTarget: '현재 목표주수', recoveryBasis: '원금회수 기준' };
+        const labels = { tradeCount: '거래 건수', dividendCount: '배당 건수', splitCount: '분할 건수', shares: '보유 수량', costBasis: '남은 취득원가', marketValue: '평가금액', dividendsTotal: '누적배당', reinvestAmount: '재투자 사용액', dividendAvailable: '사용 가능 배당', currentTarget: '현재 목표주수', recoveryBasis: '원금회수 기준' };
         return audit.checks.filter((check) => labels[check.key]).map((check) => `<div class="list-row"><div><div class="row-title">${labels[check.key]}</div><div class="row-sub">V3 ${typeof check.source === 'number' ? round(check.source, 4) : check.source} → V4 ${typeof check.target === 'number' ? round(check.target, 4) : check.target}</div></div><div class="row-value ${check.passed ? 'positive' : 'negative'}">${check.passed ? '일치' : '불일치'}</div></div>`).join('');
     }
     async function previewLegacyMigration() {
@@ -625,7 +625,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 restoreRecord(row, before);
             else
                 state.trades = state.trades.filter((item) => item !== row);
-            toast('이 거래를 반영하면 해당 날짜의 보유주수보다 많이 매도하게 됩니다.');
+            toast('이 거래를 반영하면 해당 날짜의 보유 수량보다 많이 매도하게 됩니다.');
             return;
         } if (hasNewDividendDeficit(ledgerBefore, computeProject(project))) {
             if (edit)
@@ -684,7 +684,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 toast('이미 같은 배당 기록으로 교체되어 있습니다.');
                 return;
             }
-            openModal(`<h3 class="modal-title">전체 배당 교체 확인</h3><p class="modal-desc">기존 배당 ${state.dividends.length}건을 삭제하고 ${esc(parsed.symbol)} ${parsed.rows.length}건으로 교체합니다. 거래·보유주수·목표·토스 원본은 유지합니다.</p><strong>${parsed.currency === 'KRW' ? parsed.totalKRW.toLocaleString('ko-KR') + '원' : '$' + parsed.totalUSD.toFixed(2)}</strong><div class="list">${parsed.rows.map(row => `<div class="list-row"><span>${esc(row.date)}</span><strong>${replacementMoney(row)}</strong></div>`).join('')}</div><p class="detail-note">${parsed.currency === 'KRW' ? '원화 확인액만 저장합니다. 달러 금액·지급 당시 주수는 미확인이며 달러 재투자 잔액과 총손익에 임의 합산하지 않습니다.' : '확인된 달러 세후 입금액을 저장합니다. 지급 당시 주수는 미확인으로 남깁니다.'} 교체 직전 기록은 안전 사본으로 남깁니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmDividendReplacement">기존 배당 삭제 후 교체</button></div>`);
+            openModal(`<h3 class="modal-title">전체 배당 교체 확인</h3><p class="modal-desc">기존 배당 ${state.dividends.length}건을 삭제하고 ${esc(parsed.symbol)} ${parsed.rows.length}건으로 교체합니다. 거래·보유 수량·목표·토스 원본은 유지합니다.</p><strong>${parsed.currency === 'KRW' ? parsed.totalKRW.toLocaleString('ko-KR') + '원' : '$' + parsed.totalUSD.toFixed(2)}</strong><div class="list">${parsed.rows.map(row => `<div class="list-row"><span>${esc(row.date)}</span><strong>${replacementMoney(row)}</strong></div>`).join('')}</div><p class="detail-note">${parsed.currency === 'KRW' ? '원화 확인액만 저장합니다. 달러 금액·지급 당시 주수는 미확인이며 달러 재투자 잔액과 총손익에 임의 합산하지 않습니다.' : '확인된 달러 세후 입금액을 저장합니다. 지급 당시 주수는 미확인으로 남깁니다.'} 교체 직전 기록은 안전 사본으로 남깁니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmDividendReplacement">기존 배당 삭제 후 교체</button></div>`);
             document.getElementById('confirmDividendReplacement').onclick = async () => {
                 if (modalSaving)
                     return;
@@ -766,7 +766,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         openModal(`<h3 class="modal-title">${project.symbol} ${edit ? '배당 수정' : '배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date || draft?.date || todayISO()}"></div>
       <div><label class="input-label">입금 통화</label><select class="input select" name="currency"><option value="USD" ${record?.currency !== "KRW" ? "selected" : ""}>달러 실입금</option><option value="KRW" ${record?.currency === "KRW" ? "selected" : ""}>원화 확인액 (달러 미확인)</option></select></div><div><label class="input-label">세후 배당 금액</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${record?.currency === 'KRW' ? n(record.amountKRW) : n(record?.amountUSD)}"></div>
-      <details class="dividend-extra"><summary>추가 정보 (선택)</summary><p class="tiny muted">배당을 받은 실제 주수를 확인한 경우에만 입력하세요. 입금일 보유주수만으로 배당 권리를 추정하지 않습니다.</p><div class="form-grid">
+      <details class="dividend-extra"><summary>추가 정보 (선택)</summary><p class="tiny muted">배당을 받은 실제 주수를 확인한 경우에만 입력하세요. 입금일 보유 수량만으로 배당 권리를 추정하지 않습니다.</p><div class="form-grid">
         <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record ? n(record.sharesAtPayment) : 0}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record ? n(record.referencePrice) : n(project.currentPrice)}"></div></div>
         <div class="form-grid two"><div><label class="input-label">ROC 비율 %</label><input class="input" name="rocPercent" type="number" min="0" max="100" step="0.01" value="${record?.rocPercent ?? ''}"></div><div><label class="input-label">ROC 자료</label><select class="input" name="rocStatus"><option value="estimated" ${record?.rocStatus !== 'final' ? 'selected' : ''}>운용사 추정</option><option value="final" ${record?.rocStatus === 'final' ? 'selected' : ''}>확정 자료</option></select></div></div>
         <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note || '')}"></div>
@@ -922,7 +922,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function openSplitForm(record = null) {
         const project = projectById(record?.projectId || selectedProjectId), edit = !!record;
-        openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균단가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from) || 2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to) || 1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">적용</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="split:${record.id}">이 분할 기록 삭제</button>` : ''}</form>`);
+        openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균 매수가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from) || 2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to) || 1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">적용</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="split:${record.id}">이 분할 기록 삭제</button>` : ''}</form>`);
         document.getElementById('splitForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), date = String(form.get('date')), from = n(form.get('from')), to = n(form.get('to')); if (!isDate(date) || from <= 0 || to <= 0) {
             toast('분할 날짜와 비율을 확인해 주세요.');
             return;
@@ -932,7 +932,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 restoreRecord(row, before);
             else
                 state.splits = state.splits.filter((item) => item !== row);
-            toast('이 분할을 반영하면 이후 매도 기록이 보유주수를 초과합니다.');
+            toast('이 분할을 반영하면 이후 매도 기록이 보유 수량을 초과합니다.');
             return;
         } await saveState(true); closeModal(); renderAll(); showPage('projects'); toast('분할 비율을 반영했습니다.'); };
     }
@@ -999,7 +999,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             break;
     } if ((key === 'trades' || key === 'splits') && computeProject(row.projectId).oversells.length) {
         state = previous;
-        toast('이 기록을 삭제하면 이후 매도가 보유주수를 초과하므로 삭제하지 않았습니다.');
+        toast('이 기록을 삭제하면 이후 매도가 보유 수량을 초과하므로 삭제하지 않았습니다.');
         return;
     } if (hasNewDividendDeficit(ledgerBefore, computeProject(row.projectId))) {
         state = previous;
@@ -1668,7 +1668,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         renderAll();
         showPage('settings');
         const found = result.candidates.length + result.dividendCandidates.length, changed = result.correctionCandidates.length + result.dividendCorrectionCandidates.length;
-        toast(automatic.imported ? `자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends ? ` · 배당 ${automatic.dividends}건` : ''}${adoptedDividends ? ` · 기존 배당 ${adoptedDividends}건 연결` : ''}` : adoptedDividends ? `기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.` : result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : automatic.reason === 'current' ? '토스 보유주수와 일치합니다. 새로 저장할 거래는 없습니다.' : automatic.reason && automatic.reason !== 'empty' ? `조회 완료 · 거래 저장 보류: ${({ duplicate: '기존 수동 거래와 중복 가능', correction: '기존 체결 원본 변경', reconciliation: '체결 합계와 보유주수 불일치', oversell: '중간 보유주수 초과 매도', truncated: '체결 조회 누락', partial: '일부 계좌 조회 실패', ledger: '장부 검증 실패', validation: '장부 검증 실패' })[automatic.reason] || '거래 검증 필요'}` : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+        toast(automatic.imported ? `자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends ? ` · 배당 ${automatic.dividends}건` : ''}${adoptedDividends ? ` · 기존 배당 ${adoptedDividends}건 연결` : ''}` : adoptedDividends ? `기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.` : result.syncStatus === 'partial' ? `일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.` : changed ? `신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.` : automatic.reason === 'current' ? '토스 보유 수량과 일치합니다. 새로 저장할 거래는 없습니다.' : automatic.reason && automatic.reason !== 'empty' ? `조회 완료 · 거래 저장 보류: ${({ duplicate: '기존 수동 거래와 중복 가능', correction: '기존 체결 원본 변경', reconciliation: '체결 합계와 보유 수량 불일치', oversell: '중간 보유 수량 초과 매도', truncated: '체결 조회 누락', partial: '일부 계좌 조회 실패', ledger: '장부 검증 실패', validation: '장부 검증 실패' })[automatic.reason] || '거래 검증 필요'}` : '토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
     }
     async function runTossImport(loadSnapshot, errorPrefix) {
         if (tossSyncRunning)
@@ -1795,7 +1795,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         const oversold = computeProject(project.id).oversells.length > 0, comparisons = (toss.comparisons || []).filter((row) => row.symbol === 'MSTY' && row.supported), mismatch = comparisons.length !== 1 || comparisons.some((row) => Math.abs(n(row.difference)) >= .0001);
         if (oversold || mismatch || validateLedger(state).length) {
             state = before;
-            toast(oversold ? '토스 원본에 과매도가 있어 기존 기록을 유지했습니다.' : mismatch ? '토스 보유주수와 재구축 결과를 정확히 대조할 수 없어 기존 기록을 유지했습니다.' : '원장 검증을 통과하지 못해 기존 기록을 유지했습니다.');
+            toast(oversold ? '토스 원본에 과매도가 있어 기존 기록을 유지했습니다.' : mismatch ? '토스 보유 수량과 재구축 결과를 정확히 대조할 수 없어 기존 기록을 유지했습니다.' : '원장 검증을 통과하지 못해 기존 기록을 유지했습니다.');
             return;
         }
         try {
@@ -1830,7 +1830,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 toast('삭제할 예외를 선택해 주세요.');
                 return;
             }
-            confirmAction('예외 삭제 확인', `${selected.length}건을 예외 목록에서 삭제합니다. 이미 저장된 거래·배당과 보유주수는 바뀌지 않습니다.`, async () => {
+            confirmAction('예외 삭제 확인', `${selected.length}건을 예외 목록에서 삭제합니다. 이미 저장된 거래·배당과 보유 수량은 바뀌지 않습니다.`, async () => {
                 const before = clone(state);
                 try {
                     await storageSet(SAFETY_KEY, before);
@@ -2124,7 +2124,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             if (mode !== 'reinvest' && mode !== 'outside')
                 return;
             const project = projectById(id);
-            confirmAction('배당 사용 방향 변경', `${project.symbol} 배당을 ${mode === 'reinvest' ? '재투자' : 'ISA·다른 배당주 등 외부 활용'} 방향으로 관리합니다. 실제 매매·이체는 실행하지 않고 과거 기록과 사용 잔액을 유지합니다.`, async () => { project.dividendPlan = { mode, history: [...(project.dividendPlan?.history || []), { mode, confirmedAt: new Date().toISOString() }] }; await saveState(true); renderAll(); toast('배당 사용 방향을 저장했습니다.'); }, '방향 변경');
+            confirmAction('배당 사용 방향 변경', `${project.symbol} 배당을 ${mode === 'reinvest' ? '재투자' : 'ISA·다른 배당주 등 외부 사용'} 방향으로 관리합니다. 실제 매매·이체는 실행하지 않고 과거 기록과 사용 잔액을 유지합니다.`, async () => { project.dividendPlan = { mode, history: [...(project.dividendPlan?.history || []), { mode, confirmedAt: new Date().toISOString() }] }; await saveState(true); renderAll(); toast('배당 사용 방향을 저장했습니다.'); }, '방향 변경');
             return;
         }
         if (button.dataset.addWithdrawal) {

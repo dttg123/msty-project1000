@@ -83,7 +83,7 @@ assert.match(elements.get('page-projects').innerHTML,/data-view-record="dividend
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/data-delete-record=/,'history rows must not expose delete');
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/class="card record-center" open/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/상세정보 · 기록/);
-assert.match(elements.get('page-projects').innerHTML,/이번 달 실제 배당/);
+assert.match(elements.get('page-projects').innerHTML,/이번 달 받은 배당/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/월 예상 배당/);
 assert.match(elements.get('page-projects').innerHTML,/배당 분석/);
 assert.match(elements.get('page-projects').innerHTML,/portfolio-income-hero/);
@@ -106,10 +106,10 @@ assert.ok(elements.get('page-projects').innerHTML.indexOf('value-line')<elements
 assert.match(elements.get('page-goal').innerHTML,/250주 목표/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/500주 목표/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card goal-step-card" open/);
-assert.match(elements.get('page-goal').innerHTML,/최근 12개월 실제/);
+assert.match(elements.get('page-goal').innerHTML,/최근 1년 받은 배당/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.2/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.3/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 배포 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
@@ -155,7 +155,7 @@ assert.match(elements.get('page-settings').innerHTML,/data-restore-project="p-co
 cony.archived=false;
 state.trades.push({id:'goal',projectId:'p-msty',date:'2026-02-01',type:'buy',buyType:'direct',shares:980,price:10});
 views.renderGoals();
-assert.match(elements.get('page-goal').innerHTML,/남은 회수 원금/);
+assert.match(elements.get('page-goal').innerHTML,/회수할 원금/);
 assert.match(elements.get('page-goal').innerHTML,/배당 사용 기록/);
 assert.doesNotMatch(elements.get('page-goal').innerHTML,/data-lock-recovery/, 'new goal completion retains early tracking without resetting the basis');
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
@@ -171,7 +171,7 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v1.2 view QA: PASS');
+console.log('DividendOS v1.3 view QA: PASS');
 
 state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioGroup='highYield';
 state.dividends=[{id:'known',projectId:'p-msty',date:'2026-01-02',amountUSD:2,sharesAtPayment:10},{id:'unknown',projectId:'p-msty',date:'2026-01-09',amountUSD:4,sharesAtPayment:0}];
@@ -182,8 +182,8 @@ assert.doesNotMatch(mixedHTML,/직전 지급 대비<\/span><strong class="positi
 
 state.trades=[{id:'pnl-buy',projectId:'p-msty',date:'2026-01-01',type:'buy',buyType:'direct',shares:10,price:10}];state.cashAdjustments=[];state.dividends=[];state.projects[0].currentPrice=8;state.projects[0].priceUpdatedAt='2026-10-01T10:00:00Z';state.dividends.push({id:'roc-pnl',projectId:'p-msty',date:'2026-02-01',amountUSD:100,rocAmountUSD:100});selectedProjectId='p-msty';portfolioGroup='highYield';views.renderProjects();
 const pnlEngine=portfolio.computeProject(state.projects[0]);assert.ok(pnlEngine.priceUnrealized<0&&pnlEngine.totalReturn>0,'fixture separates current loss and dividend-inclusive gain');
-assert.match(elements.get('page-projects').innerHTML,/data-current-pnl/);assert.match(elements.get('page-projects').innerHTML,/현재 평가손익 · 배당 제외/);assert.match(elements.get('page-projects').innerHTML,/ROC 조정 전 매입원가/);assert.doesNotMatch(elements.get('page-projects').innerHTML,/data-sync-all/);assert.doesNotMatch(elements.get('page-home').innerHTML,/data-sync-all/);assert.doesNotMatch(elements.get('page-settings').innerHTML,/data-refresh-exchange-rate|data-sync-toss/);assert.equal((elements.get('page-settings').innerHTML.match(/data-sync-all/g)||[]).length,1);assert.match(elements.get('page-settings').innerHTML,/<details class="refresh-info">/);
-views.renderHome();assert.match(elements.get('page-home').innerHTML,/매달 받고 싶은 세후 배당/);assert.match(elements.get('page-home').innerHTML,/연간 배당 알림/);
+assert.match(elements.get('page-projects').innerHTML,/data-current-pnl/);assert.match(elements.get('page-projects').innerHTML,/평가손익 · 배당 제외/);assert.match(elements.get('page-projects').innerHTML,/ROC 조정 전 매입원가/);assert.doesNotMatch(elements.get('page-projects').innerHTML,/data-sync-all/);assert.doesNotMatch(elements.get('page-home').innerHTML,/data-sync-all/);assert.doesNotMatch(elements.get('page-settings').innerHTML,/data-refresh-exchange-rate|data-sync-toss/);assert.equal((elements.get('page-settings').innerHTML.match(/data-sync-all/g)||[]).length,1);assert.match(elements.get('page-settings').innerHTML,/<details class="refresh-info">/);
+views.renderHome();assert.match(elements.get('page-home').innerHTML,/월 배당 목표/);assert.match(elements.get('page-home').innerHTML,/연간 배당 알림/);
 state.settings.dividendAlertEnabled=false;views.renderHome();assert.doesNotMatch(elements.get('page-home').innerHTML,/class="dividend-alert/);
 
 portfolioDetail=false;portfolioGroup='highYield';views.renderProjects();

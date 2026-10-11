@@ -31,7 +31,7 @@ test('플러스 전환 → ISA 사용 → 마이너스 재개 → 목표 달성�
  await openPortfolioDetail(page,'recovery');await expect(page.locator('#page-projects .dividend-plan-notice')).toContainText('마이너스');await page.locator('#page-projects .dividend-plan-notice [data-dividend-mode]').click();await page.locator('#modalConfirm').click();
  expect((await read(page)).cashAdjustments[0].amountUSD).toBe(-30);expect((await read(page)).projects[0].dividendPlan.history).toHaveLength(2);
  await manual(page,'add-trade');await page.locator('#tradeForm [name="date"]').fill('2025-01-05');await page.locator('#tradeForm [name="shares"]').fill('990');await page.locator('#tradeForm [name="price"]').fill('10');await page.locator('#tradeForm button[type="submit"]').click();await expect(page.locator('#tradeForm')).toBeHidden();
- await expect(page.locator('.dividend-management .recovery-hero')).toContainText('남은 회수 원금');await expect(page.locator('.dividend-management .recovery-hero')).toContainText('$9,970');
+ await expect(page.locator('.dividend-management .recovery-hero')).toContainText('회수할 원금');await expect(page.locator('.dividend-management .recovery-hero')).toContainText('$9,970');
  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await read(page)).cashAdjustments[0].amountUSD).toBe(-30);expect((await read(page)).projects[0].dividendPlan.mode).toBe('reinvest');expect(errors).toEqual([]);
 });
 
