@@ -239,7 +239,7 @@ ${detail?`          <details class="performance-breakdown"><summary>배당 포�
 `:''}</article>`;
   }
   function portfolioMonthChartHTML(calc:ProjectCalculation):string {
-    const month=todayISO().slice(0,7),year=Number(month.slice(0,4)),last=Number(month.slice(5)),dividends=reportingDividends(calc.postedDividends,n(state.settings.exchangeRate)),series=Array.from({length:6},(_,index)=>{const date=new Date(Date.UTC(year,last-6+index-1,1)),key=date.toISOString().slice(0,7);return {key,value:dividends.filter(row=>row.date.startsWith(key)).reduce((sum,row)=>sum+n(row.amountUSD),0)};}),max=Math.max(1,...series.map(row=>row.value));
+    const month=todayISO().slice(0,7),year=Number(month.slice(0,4)),last=Number(month.slice(5)),dividends=reportingDividends(calc.postedDividends,n(state.settings.exchangeRate)),series=Array.from({length:6},(_,index)=>{const date=new Date(Date.UTC(year,last-6+index,1)),key=date.toISOString().slice(0,7);return {key,value:dividends.filter(row=>row.date.startsWith(key)).reduce((sum,row)=>sum+n(row.amountUSD),0)};}),max=Math.max(1,...series.map(row=>row.value));
     return `<div class="summary-month-chart" aria-label="최근 월별 실제 세후 배당">${series.map(row=>`<button type="button" data-income-month="${esc(row.key)}" data-income-project="${esc(calc.project.id)}" aria-label="${esc(row.key)} 실제 배당 ${esc(fmtMoney(row.value,2))}"><div class="summary-bar-track"><i style="height:${row.value>0?Math.max(6,row.value/max*100):0}%"></i></div><span>${Number(row.key.slice(5))}월</span></button>`).join('')}</div>`;
   }
 
