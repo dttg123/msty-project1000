@@ -854,7 +854,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       await saveState(true);
     }catch(error: unknown){state=beforeAutomaticChanges;renderAll();throw error;}
     renderAll();showPage('settings');const found=result.candidates.length+result.dividendCandidates.length,changed=result.correctionCandidates.length+result.dividendCorrectionCandidates.length;
-    toast(automatic.imported?`자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends?` · 배당 ${automatic.dividends}건`:''}${adoptedDividends?` · 기존 배당 ${adoptedDividends}건 연결`:''}`:adoptedDividends?`기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.`:result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:automatic.reason==='current'?'토스 보유 수량와 일치합니다. 새로 저장할 거래는 없습니다.':automatic.reason&&automatic.reason!=='empty'?`조회 완료 · 거래 저장 보류: ${({duplicate:'기존 수동 거래와 중복 가능',correction:'기존 체결 원본 변경',reconciliation:'체결 합계와 보유 수량 불일치',oversell:'중간 보유 수량 초과 매도',truncated:'체결 조회 누락',partial:'일부 계좌 조회 실패',ledger:'장부 검증 실패',validation:'장부 검증 실패'})[automatic.reason]||'거래 검증 필요'}`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
+    toast(automatic.imported?`자동 확인 완료 · 매수 ${automatic.buys}건 · 매도 ${automatic.sells}건${automatic.dividends?` · 배당 ${automatic.dividends}건`:''}${adoptedDividends?` · 기존 배당 ${adoptedDividends}건 연결`:''}`:adoptedDividends?`기존 배당 ${adoptedDividends}건을 중복 없이 토스 원본에 연결했습니다.`:result.syncStatus==='partial'?`일부 계좌만 조회됐습니다. 성공한 기록 ${found}건을 보존했습니다.`:changed?`신규 ${found}건 · 원본 변경 ${changed}건을 확인했습니다.`:automatic.reason==='current'?'토스 보유 수량과 일치합니다. 새로 저장할 거래는 없습니다.':automatic.reason&&automatic.reason!=='empty'?`조회 완료 · 거래 저장 보류: ${({duplicate:'기존 수동 거래와 중복 가능',correction:'기존 체결 원본 변경',reconciliation:'체결 합계와 보유 수량 불일치',oversell:'중간 보유 수량 초과 매도',truncated:'체결 조회 누락',partial:'일부 계좌 조회 실패',ledger:'장부 검증 실패',validation:'장부 검증 실패'})[automatic.reason]||'거래 검증 필요'}`:'토스 계좌와 대조했습니다. 신규 기록은 없습니다.');
   }
 
   async function runTossImport(loadSnapshot: ()=>Promise<TossSnapshotPayload>,errorPrefix: string): Promise<void> {
@@ -927,7 +927,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(rebuilt.dividendSourceSupported)toss.dividendCorrectionCandidates=(toss.dividendCorrectionCandidates||[]).filter((row)=>String(row?.symbol||'').toUpperCase()!=='MSTY');
     refreshTossComparisons();
     const oversold=computeProject(project.id).oversells.length>0,comparisons=(toss.comparisons||[]).filter((row)=>row.symbol==='MSTY'&&row.supported),mismatch=comparisons.length!==1||comparisons.some((row)=>Math.abs(n(row.difference))>=.0001);
-    if(oversold||mismatch||validateLedger(state).length){state=before;toast(oversold?'토스 원본에 과매도가 있어 기존 기록을 유지했습니다.':mismatch?'토스 보유 수량와 재구축 결과를 정확히 대조할 수 없어 기존 기록을 유지했습니다.':'원장 검증을 통과하지 못해 기존 기록을 유지했습니다.');return;}
+    if(oversold||mismatch||validateLedger(state).length){state=before;toast(oversold?'토스 원본에 과매도가 있어 기존 기록을 유지했습니다.':mismatch?'토스 보유 수량과 재구축 결과를 정확히 대조할 수 없어 기존 기록을 유지했습니다.':'원장 검증을 통과하지 못해 기존 기록을 유지했습니다.');return;}
     try{await storageSet(SAFETY_KEY,before);state.meta={...state.meta,lastAuthoritativeMstyImportAt:new Date().toISOString()};await saveState(true);}
     catch (error: unknown){state=before;console.error('MSTY rebuild save failed',error);renderAll();toast('재구축 기록을 저장하지 못해 기존 기록을 유지했습니다.');return;}
     renderAll();showPage('settings');
@@ -943,7 +943,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('tossDeleteForm')!.onsubmit=(event: Event)=>{
       event.preventDefault();const selected=submittedFormData(event).getAll('exception').map(Number).map(index=>rows[index]?.key).filter(Boolean) as string[];
       if(!selected.length){toast('삭제할 예외를 선택해 주세요.');return;}
-      confirmAction('예외 삭제 확인',`${selected.length}건을 예외 목록에서 삭제합니다. 이미 저장된 거래·배당과 보유 수량는 바뀌지 않습니다.`,async()=>{
+      confirmAction('예외 삭제 확인',`${selected.length}건을 예외 목록에서 삭제합니다. 이미 저장된 거래·배당과 보유 수량은 바뀌지 않습니다.`,async()=>{
         const before=clone(state);
         try{await storageSet(SAFETY_KEY,before);state.integrations.toss=dismissTossExceptions(state.integrations.toss,selected);if(!TOSS_EXCEPTION_FIELDS.some(field=>state.integrations.toss[field]?.length))state.integrations.toss.lastAutoImportReason='';await saveState(true);closeModal();renderAll();showPage('settings');toast(`${selected.length}건의 예외를 삭제했습니다.`);}
         catch (error: unknown){state=before;renderAll();toast('예외 삭제를 저장하지 못해 기존 목록을 유지했습니다.');}
