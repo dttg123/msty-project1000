@@ -739,6 +739,9 @@ html[data-theme="dark"] .btn.primary,html[data-theme="dark"] .btn.secondary,html
 .manual-tools>summary{min-height:44px;font-size:.9375rem}
 .manual-tools-body .support-actions{gap:8px}
 .settings-group{gap:0;border-radius:20px;background:var(--surface);overflow:hidden}
+/* Keep focused/scrolled controls above the fixed bottom navigation. */
+html{scroll-padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px)}
+.btn,.input{scroll-margin-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px)}
 .settings-group>.card,html[data-theme="dark"] .settings-group>.card{border-radius:0;background:none!important}
 .settings-group>.card+.card{border-top:1px solid var(--line)}
 .settings-section>summary{min-height:72px;padding:19px 21px}

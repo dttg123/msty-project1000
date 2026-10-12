@@ -36,7 +36,13 @@ existing economic total return, separately from ROC accounting adjustments.
 - The standalone review file boots without HTTP requests, records a dividend,
   preserves it across reload, and exports a ZIP that passes the existing backup
   reader and contains that record.
-- Final full browser regression result is recorded after the final run below.
+- Full browser run: 169 passed, 12 opt-in long-entry suites skipped. One
+  desktop settings test exposed a save button partly under the fixed nav.
+  Scroll padding/margins now reserve the nav area, and the settings test also
+  checks that the button is above the nav before clicking. The unchanged
+  scroll-preservation assertion passes after this fix.
+- Final focused recheck covers 36 mobile/desktop navigation, typography, input,
+  settings, and standalone-file cases: all 36 pass after the nav-clearance fix.
 - Physical Galaxy/actual Toss authentication evidence is outside this web review.
 
 ## Standalone review copy
@@ -51,3 +57,5 @@ font and bundle and requires no network dependency for startup or local input.
 Runtime release/version identifiers stay at 1.4 until a separate release cut;
 the review copy is visibly marked as unpublished. Synthetic examples must not
 be treated as the user's production holdings or restored into production.
+
+Final standalone review SHA256: `74050724dbc3e1e9e39752c0be1af971ea394515a359bb9c286e18306025af5d`.
