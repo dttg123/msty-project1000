@@ -24,3 +24,8 @@ Run 38142236835 release evidence describes commit 135a85effc2765c7faf784b8f4ee57
 Downloaded Android backup evidence contains seven passing Android 16 emulator tests; it is not physical Galaxy S25 Ultra evidence. The browser artifact name does not establish completion of the opt-in lifetime tests.
 
 Production merge and deployment require valid evidence for the exact final candidate: physical Galaxy flows, Toss read-only, backup/restore hashes, rollback and PWA data preservation, and zero QA artifacts. No validator or workflow gate has been weakened.
+
+## Deployment preflight on 2026-10-12
+Latest PR CI run 38215290132 failed the mobile and desktop theme-save cases (164 passed, 2 failed, 12 opt-in skipped). The trace shows fixture projectStart 2026-10-12 while the browser clock is pinned to 2026-10-11. The application's existing future-date guard correctly rejected the save. The test now uses the pinned browser's local day for all project starts and explicitly asserts the edited date. No application date guard, test expectation, timeout or deployment gate is weakened. A fresh CI result is required for this test fix.
+
+Local browser installation is unavailable in the renewed environment: Playwright's browser CDN download returned an invalid ZIP. These local launch errors are environment failures, not completed application tests. Use the GitHub runner for the browser validation. Production remains blocked on the separately documented current-candidate Q3 evidence.
