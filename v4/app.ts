@@ -60,6 +60,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   let cashflowMonthKey = '';
   let portfolioGroup = 'highYield';
   let portfolioDetail=false,portfolioDetailTab='dividend',portfolioOverviewScroll=0;
+  let portfolioIncomeSelection={projectId:'',month:''};
   const viewKey=`dividend-os-view-v2:${demoMode?'demo':'local'}`;
   function rememberView(): void{try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioGroup,chartMode,chartMonth,chartYear,homeCashflowMode,homeYearRange}));}catch (_: unknown){}}
   function restoreView(): void{
@@ -198,6 +199,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   const views = createViews({
     getPortfolioDetail:()=>portfolioDetail,getPortfolioDetailTab:()=>portfolioDetailTab,
+    getPortfolioIncomeMonth:(projectId)=>portfolioIncomeSelection.projectId===projectId?portfolioIncomeSelection.month:'',
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value) => { selectedProjectId=value; },
     getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getCombinedRefreshStatus:()=>({busy:combinedRefreshBusy,summary:combinedRefreshSummary}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
@@ -994,6 +996,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(button.dataset.projectDetailTab){if(!['dividend','recovery','records'].includes(button.dataset.projectDetailTab))return;portfolioDetailTab=button.dataset.projectDetailTab;renderProjects();document.querySelector<HTMLElement>(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({preventScroll:true});return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency==='USD'?'USD':'KRW';saveState();renderAll(true);return;}
     if(button.dataset.chartKey){chartSelection=button.dataset.chartKey;renderProjects();return;}
+    if(button.dataset.portfolioIncomeMonth){
+      const month=button.dataset.portfolioIncomeMonth,projectId=button.dataset.incomeProject||'';
+      if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||!activeProjects().some(p=>p.id===projectId))return;
+      portfolioIncomeSelection={projectId,month};renderProjects();
+      document.querySelector<HTMLElement>(`[data-portfolio-income-month="${month}"]`)?.focus({preventScroll:true});return;
+    }
     if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'',button.dataset.incomeSymbol||'');return;}
     if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;return;}
     if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;return;}
