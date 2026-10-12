@@ -59,7 +59,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   let historyLimit=10, modalDirty=false, modalSaving=false, modalFocus: HTMLElement|null=null, modalScroll=0;
   let cashflowMonthKey = '';
   let portfolioGroup = 'highYield';
-  let portfolioDetail=false,portfolioDetailTab='dividend',portfolioOverviewScroll=0;
+  let portfolioDetail=false,portfolioDetailTab='summary',portfolioOverviewScroll=0;
   let portfolioIncomeSelection={projectId:'',month:''};
   const viewKey=`dividend-os-view-v2:${demoMode?'demo':'local'}`;
   function rememberView(): void{try{localStorage.setItem(viewKey,JSON.stringify({page:currentPage==='settings'?'home':currentPage,selectedProjectId,portfolioGroup,chartMode,chartMonth,chartYear,homeCashflowMode,homeYearRange}));}catch (_: unknown){}}
@@ -990,10 +990,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function handleClick(event: Event): void {
     if(!(event.target instanceof Element))return;
     const button=event.target.closest<HTMLElement>('button,[data-open-project],[data-goal-detail]');if(!button)return;
+    if('homePortfolio'in button.dataset){portfolioDetail=false;renderProjects();showPage('projects');return;}
     if(button.dataset.page){if(button.dataset.page==='projects'&&portfolioDetail){portfolioDetail=false;renderProjects();}showPage(button.dataset.page);return;}
-    if(button.dataset.projectDetail){portfolioOverviewScroll=window.scrollY;selectedProjectId=button.dataset.projectDetail;portfolioDetail=true;portfolioDetailTab='dividend';renderProjects();ensureUiHistory();window.scrollTo({top:0,behavior:'instant'});rememberView();return;}
+    if(button.dataset.projectDetail){portfolioOverviewScroll=currentPage==='projects'?window.scrollY:0;selectedProjectId=button.dataset.projectDetail;portfolioGroup=projectById(selectedProjectId)?.category==='highYield'?'highYield':'dividend';portfolioDetail=true;portfolioDetailTab='summary';renderProjects();showPage('projects');ensureUiHistory();window.scrollTo({top:0,behavior:'instant'});rememberView();return;}
     if('portfolioOverview'in button.dataset){portfolioDetail=false;renderProjects();window.scrollTo({top:portfolioOverviewScroll,behavior:'instant'});rememberView();return;}
-    if(button.dataset.projectDetailTab){if(!['dividend','recovery','records'].includes(button.dataset.projectDetailTab))return;portfolioDetailTab=button.dataset.projectDetailTab;renderProjects();document.querySelector<HTMLElement>(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({preventScroll:true});return;}
+    if(button.dataset.projectDetailTab){if(!['summary','dividend','recovery','records'].includes(button.dataset.projectDetailTab))return;portfolioDetailTab=button.dataset.projectDetailTab;renderProjects();document.querySelector<HTMLElement>(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({preventScroll:true});return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency==='USD'?'USD':'KRW';saveState();renderAll(true);return;}
     if(button.dataset.chartKey){chartSelection=button.dataset.chartKey;renderProjects();return;}
     if(button.dataset.portfolioIncomeMonth){
@@ -1003,8 +1004,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       document.querySelector<HTMLElement>(`[data-portfolio-income-month="${month}"]`)?.focus({preventScroll:true});return;
     }
     if(button.dataset.incomeMonth){openIncomeMonth(button.dataset.incomeMonth,button.dataset.incomeProject||'',button.dataset.incomeSymbol||'');return;}
-    if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;return;}
-    if('historyMore'in button.dataset){historyLimit+=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;return;}
+    if('recordAdd'in button.dataset){openModal(`<h3 class="modal-title">기록 추가</h3><p class="modal-desc">${esc(projectById(selectedProjectId)?.symbol||'')}에 저장할 기록을 선택해 주세요.</p><div class="form-grid"><button class="btn soft" data-add-trade>매수 · 매도</button><button class="btn primary" data-add-dividend>배당 입금</button><button class="btn soft" data-add-withdrawal="${esc(selectedProjectId)}">배당 사용 · 회수</button><button class="btn soft" data-add-split>분할 · 역분할</button></div>`);return;}
+    if('historyReset'in button.dataset){historyFilter={};historyLimit=10;renderProjects();return;}
+    if('historyMore'in button.dataset){historyLimit+=10;renderProjects();return;}
     if(button.dataset.chartYearShift){const latest=computeProject(selectedProjectId).postedDividends.map((row)=>String(row.date).slice(0,4)).filter((year)=>/^\d{4}$/.test(year)).sort().at(-1)||todayISO().slice(0,4),base=/^\d{4}$/.test(chartYear)?Number(chartYear):Number(latest);chartYear=String(base+Number(button.dataset.chartYearShift));chartSelection='';renderProjects();return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;chartSelection='';renderProjects();return;}
     if(button.dataset.homeCashflowMode){homeCashflowMode=button.dataset.homeCashflowMode;cashflowMonthKey='';rememberView();renderHome();return;}
@@ -1017,7 +1019,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(button.dataset.selectProject){historyFilter={};historyLimit=10;selectedProjectId=button.dataset.selectProject;renderProjects();return;}
     if('addProject'in button.dataset){openProjectForm();return;}
     if('projectSettings'in button.dataset){openProjectForm(projectById());return;}
-    if('editPrice'in button.dataset){openPriceForm();return;}
+    if('editPrice'in button.dataset||'summaryPrice'in button.dataset){openPriceForm();return;}
     if('addTrade'in button.dataset){openTradeForm();return;}
     if('addDividend'in button.dataset||'quickDividend'in button.dataset){openDividendForm();return;}
     if(button.dataset.addDividendFor){selectedProjectId=button.dataset.addDividendFor;openDividendForm();return;}
@@ -1111,12 +1113,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     },true);
     document.addEventListener('click',(event: Event)=>{handleClick(event);rememberView();});
     window.addEventListener('pagehide',rememberView);
-    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=submittedFormData(event);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();document.querySelector<HTMLDetailsElement>('.record-center')!.open=true;});
+    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=submittedFormData(event);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();});
     document.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement||event.target instanceof HTMLSelectElement))return;if(event.target.matches('[data-project-select]')){selectedProjectId=event.target.value;renderProjects();rememberView();return;}if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();rememberView();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();rememberView();});
     document.getElementById('modal')!.addEventListener('input',()=>{modalDirty=true;});
     document.getElementById('modal')!.addEventListener('change',()=>{modalDirty=true;});
     document.getElementById('modalBackdrop')!.addEventListener('click',(event: Event)=>{if(event.target instanceof Element&&event.target.id==='modalBackdrop')requestCloseModal();});
-    document.addEventListener('keydown',(event: KeyboardEvent)=>{if(!(event.target instanceof Element))return;const tab=event.target.closest<HTMLElement>('[data-project-detail-tab]');if(tab&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const tabs=['dividend','recovery','records'],index=tabs.indexOf(portfolioDetailTab),next=event.key==='Home'?0:event.key==='End'?2:(index+(event.key==='ArrowRight'?1:2))%3;document.querySelector<HTMLElement>(`[data-project-detail-tab="${tabs[next]}"]`)?.click();return;}const card=event.target.closest<HTMLElement>('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
+    document.addEventListener('keydown',(event: KeyboardEvent)=>{if(!(event.target instanceof Element))return;const tab=event.target.closest<HTMLElement>('[data-project-detail-tab]');if(tab&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const tabs=['summary','dividend','recovery','records'],index=tabs.indexOf(portfolioDetailTab),next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;document.querySelector<HTMLElement>(`[data-project-detail-tab="${tabs[next]}"]`)?.click();return;}const card=event.target.closest<HTMLElement>('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('dividendReplacementInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
     document.getElementById('restoreInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});

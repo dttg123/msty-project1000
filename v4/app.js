@@ -52,7 +52,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     let historyLimit = 10, modalDirty = false, modalSaving = false, modalFocus = null, modalScroll = 0;
     let cashflowMonthKey = '';
     let portfolioGroup = 'highYield';
-    let portfolioDetail = false, portfolioDetailTab = 'dividend', portfolioOverviewScroll = 0;
+    let portfolioDetail = false, portfolioDetailTab = 'summary', portfolioOverviewScroll = 0;
     let portfolioIncomeSelection = { projectId: '', month: '' };
     const viewKey = `dividend-os-view-v2:${demoMode ? 'demo' : 'local'}`;
     function rememberView() { try {
@@ -1946,6 +1946,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         const button = event.target.closest('button,[data-open-project],[data-goal-detail]');
         if (!button)
             return;
+        if ('homePortfolio' in button.dataset) {
+            portfolioDetail = false;
+            renderProjects();
+            showPage('projects');
+            return;
+        }
         if (button.dataset.page) {
             if (button.dataset.page === 'projects' && portfolioDetail) {
                 portfolioDetail = false;
@@ -1955,11 +1961,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         if (button.dataset.projectDetail) {
-            portfolioOverviewScroll = window.scrollY;
+            portfolioOverviewScroll = currentPage === 'projects' ? window.scrollY : 0;
             selectedProjectId = button.dataset.projectDetail;
+            portfolioGroup = projectById(selectedProjectId)?.category === 'highYield' ? 'highYield' : 'dividend';
             portfolioDetail = true;
-            portfolioDetailTab = 'dividend';
+            portfolioDetailTab = 'summary';
             renderProjects();
+            showPage('projects');
             ensureUiHistory();
             window.scrollTo({ top: 0, behavior: 'instant' });
             rememberView();
@@ -1973,7 +1981,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         if (button.dataset.projectDetailTab) {
-            if (!['dividend', 'recovery', 'records'].includes(button.dataset.projectDetailTab))
+            if (!['summary', 'dividend', 'recovery', 'records'].includes(button.dataset.projectDetailTab))
                 return;
             portfolioDetailTab = button.dataset.projectDetailTab;
             renderProjects();
@@ -2006,17 +2014,19 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             openIncomeMonth(button.dataset.incomeMonth, button.dataset.incomeProject || '', button.dataset.incomeSymbol || '');
             return;
         }
+        if ('recordAdd' in button.dataset) {
+            openModal(`<h3 class="modal-title">기록 추가</h3><p class="modal-desc">${esc(projectById(selectedProjectId)?.symbol || '')}에 저장할 기록을 선택해 주세요.</p><div class="form-grid"><button class="btn soft" data-add-trade>매수 · 매도</button><button class="btn primary" data-add-dividend>배당 입금</button><button class="btn soft" data-add-withdrawal="${esc(selectedProjectId)}">배당 사용 · 회수</button><button class="btn soft" data-add-split>분할 · 역분할</button></div>`);
+            return;
+        }
         if ('historyReset' in button.dataset) {
             historyFilter = {};
             historyLimit = 10;
             renderProjects();
-            document.querySelector('.record-center').open = true;
             return;
         }
         if ('historyMore' in button.dataset) {
             historyLimit += 10;
             renderProjects();
-            document.querySelector('.record-center').open = true;
             return;
         }
         if (button.dataset.chartYearShift) {
@@ -2100,7 +2110,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             openProjectForm(projectById());
             return;
         }
-        if ('editPrice' in button.dataset) {
+        if ('editPrice' in button.dataset || 'summaryPrice' in button.dataset) {
             openPriceForm();
             return;
         }
@@ -2435,7 +2445,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         window.addEventListener('pagehide', rememberView);
         document.addEventListener('submit', (event) => { if (!(event.target instanceof HTMLFormElement))
             return; if (event.target.id !== 'historyFilterForm')
-            return; event.preventDefault(); const form = submittedFormData(event); historyFilter = { month: String(form.get('month') || ''), kind: String(form.get('kind') || ''), query: String(form.get('query') || '') }; historyLimit = 10; renderProjects(); document.querySelector('.record-center').open = true; });
+            return; event.preventDefault(); const form = submittedFormData(event); historyFilter = { month: String(form.get('month') || ''), kind: String(form.get('kind') || ''), query: String(form.get('query') || '') }; historyLimit = 10; renderProjects(); });
         document.addEventListener('change', (event) => { if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement))
             return; if (event.target.matches('[data-project-select]')) {
             selectedProjectId = event.target.value;
@@ -2456,7 +2466,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         document.addEventListener('keydown', (event) => { if (!(event.target instanceof Element))
             return; const tab = event.target.closest('[data-project-detail-tab]'); if (tab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
             event.preventDefault();
-            const tabs = ['dividend', 'recovery', 'records'], index = tabs.indexOf(portfolioDetailTab), next = event.key === 'Home' ? 0 : event.key === 'End' ? 2 : (index + (event.key === 'ArrowRight' ? 1 : 2)) % 3;
+            const tabs = ['summary', 'dividend', 'recovery', 'records'], index = tabs.indexOf(portfolioDetailTab), next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
             document.querySelector(`[data-project-detail-tab="${tabs[next]}"]`)?.click();
             return;
         } const card = event.target.closest('[data-open-project],[data-goal-detail]'); if (card && (event.key === 'Enter' || event.key === ' ')) {
