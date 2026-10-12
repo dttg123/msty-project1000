@@ -1,0 +1,18 @@
+{
+  "state": "passed",
+  "exitCode": 0,
+  "startedAt": "2026-10-11T23:47:23.143Z",
+  "finishedAt": "2026-10-11T23:57:43.692Z",
+  "sourceSHA256": "b53189d0efb27e955a188caba34135bad3cf1de37b3e7494d6a32276e12d59a5",
+  "zipSHA256": "b7f822d28045a663a1ca354922d3d07a698ddb48403c1f09b3ada9676c2d3078",
+  "stats": {
+    "startTime": "2026-10-11T23:47:23.698Z",
+    "duration": 619954.926,
+    "expected": 166,
+    "skipped": 12,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "errors": [],
+  "scope": "ordinary browser; skipped opt-in tests and physical device are not passed"
+}
