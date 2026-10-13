@@ -22,7 +22,7 @@ const id=new Date().toISOString().replace(/[:.]/g,'-');
 const log=path.join(dir,`${stage}-${id}.log`);
 const report=path.join(dir,`${stage}-${id}.json`);
 const checkpoint=path.join(dir,`${stage}-checkpoint.json`);
-const bundle=path.join(root,'../updates/DividendOS-web-1.4.0.zip');
+const bundle=path.join(root,'../updates/DividendOS-web-1.5.0.zip');
 const state={stage,status:'running',startedAt:new Date().toISOString(),command:[command,...args],log,report,bundleSha256:createHash('sha256').update(readFileSync(bundle)).digest('hex'),lastOutputAt:null,tail:''};
 const save=()=>{state.updatedAt=new Date().toISOString();writeFileSync(checkpoint+'.tmp',JSON.stringify(state,null,2)+'\n');renameSync(checkpoint+'.tmp',checkpoint);};
 save();

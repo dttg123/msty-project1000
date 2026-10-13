@@ -15,7 +15,7 @@ async function readLedger(page,key='state'){
 
 async function manualForm(page,kind){
   await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
-  await openPortfolioDetail(page,'records');for(const name of ['record-center','manual-tools']){
+  await openPortfolioDetail(page,'records');for(const name of ['manual-tools']){
     if(await page.locator(`.${name}`).getAttribute('open')===null)await page.locator(`.${name} > summary`).click();
   }
   await page.locator(`[data-add-${kind}]`).click();

@@ -1,0 +1,22 @@
+import {test,expect} from '@playwright/test';
+import {pathToFileURL} from 'node:url';
+import {readFile} from 'node:fs/promises';
+import {readStateFromBackupFile} from '../../backup.js';
+test('downloadable review app boots offline, saves input, reloads and exports a restorable ZIP',async({page},info)=>{
+ test.skip(!process.env.REVIEW_HTML_PATH,'Run after building the standalone review copy.');
+ const errors=[],network=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(/^https?:/.test(r.url()))network.push(r.url());});
+ await page.goto(pathToFileURL(process.env.REVIEW_HTML_PATH).href);await expect(page.locator('#splashScreen')).toBeHidden();
+ await expect(page.locator('.demo-banner')).toContainText('배포 전 확인본');
+ await page.locator('#page-home [data-project-detail="demo-msty"]').click();
+ await expect(page.locator('#detail-panel-summary')).toBeVisible();
+ await page.locator('[data-project-detail-tab="records"]').click();await expect(page.locator('.records-list')).toBeVisible();
+ await page.locator('[data-record-add]').click();await page.locator('#modal [data-add-dividend]').click();
+ await page.locator('#dividendForm [name="amountUSD"]').fill('12.34');await page.locator('#dividendForm button[type="submit"].primary').click();await expect(page.locator('#dividendForm')).toBeHidden();
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-project-detail]').last().click();await page.locator('[data-project-detail-tab="records"]').click();
+ await expect(page.locator('.records-list')).toContainText('16,906');
+ await page.locator('[data-page="settings"]').click();const backups=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});await backups.locator(':scope > summary').click();await page.locator('[data-backup]').click();
+ const download=page.waitForEvent('download');await page.locator('[data-backup-download]').click();const file=await download,path=info.outputPath('review-data.zip');await file.saveAs(path);
+ const bytes=await readFile(path);const restored=await readStateFromBackupFile({name:'review-data.zip',arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)});
+ expect(restored.dividends.some(d=>d.amountUSD===12.34&&d.projectId==='demo-msty')).toBe(true);
+ await page.screenshot({path:info.outputPath('review-file.png'),fullPage:true});expect(errors).toEqual([]);expect(network).toEqual([]);
+});
