@@ -95,10 +95,11 @@ assert.match(elements.get('page-projects').innerHTML,/달력 월별 실제 입�
 assert.match(elements.get('page-projects').innerHTML,/data-chart-year-shift="-1"/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/<select[^>]+data-chart-year/,'long year dropdown must not return');
 assert.match(elements.get('page-projects').innerHTML,/2026년 01월 실제 입금/);
-assert.equal((elements.get('page-projects').innerHTML.match(/data-add-dividend>/g)||[]).length,1,'manual dividend fallback must remain available');
+assert.equal((elements.get('page-projects').innerHTML.match(/data-record-add/g)||[]).length,1,'one central record menu must retain manual entry');
+assert.doesNotMatch(elements.get('page-projects').innerHTML,/data-add-(trade|dividend|split)>/,'duplicate manual input buttons must be removed');
 assert.match(elements.get('page-projects').innerHTML,/class="manual-tools embedded-tools"/);
-assert.match(elements.get('page-projects').innerHTML,/토스 미연동·누락 기록만 보정/);
-assert.ok(elements.get('page-projects').innerHTML.indexOf('data-add-dividend>')>elements.get('page-projects').innerHTML.indexOf('실제 입금 흐름'),'manual entry must stay inside the final record center');
+assert.match(elements.get('page-projects').innerHTML,/현재가 수정 · 잔액 보정 · 장부 점검/);
+assert.ok(elements.get('page-projects').innerHTML.indexOf('data-record-add')>elements.get('page-projects').innerHTML.indexOf('실제 입금 흐름'),'manual entry must stay inside the final record center');
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/class="price-shortcut"/);
 assert.match(elements.get('page-projects').innerHTML,/data-income-project="p-msty"/);
 assert.doesNotMatch(elements.get('page-home').innerHTML,/cashflow-selected/,'do not repeat monthly totals below chart');
@@ -111,7 +112,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 1년 받은 배당/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.5/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.6/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 배포 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
@@ -173,7 +174,7 @@ assert.match(elements.get('page-goal').innerHTML,/원금 회수 중/);
 assert.match(elements.get('page-goal').innerHTML,/25\.0%/);
 assert.match(elements.get('page-goal').innerHTML,/✓ 1,000주 달성/);
 assert.match(elements.get('page-goal').innerHTML,/원금 회수<\/span><b>25\.0%/,'recovery rate must be labeled separately from the achieved share target');
-console.log('DividendOS v1.5 view QA: PASS');
+console.log('DividendOS v1.6 view QA: PASS');
 
 state.settings.displayCurrency='USD';selectedProjectId='p-msty';portfolioGroup='highYield';
 state.dividends=[{id:'known',projectId:'p-msty',date:'2026-01-02',amountUSD:2,sharesAtPayment:10},{id:'unknown',projectId:'p-msty',date:'2026-01-09',amountUSD:4,sharesAtPayment:0}];

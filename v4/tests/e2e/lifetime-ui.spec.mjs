@@ -1,4 +1,4 @@
-import {openPortfolioDetail} from './portfolio-navigation.mjs';
+import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 
 // Opt-in release QA. Every record goes through the visible form and Save button.
@@ -17,13 +17,7 @@ async function ledger(page){
 }
 
 async function openManual(page,action){
-  await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
-  await openPortfolioDetail(page,'records');for(const selector of ['.manual-tools']){
-    if(await page.locator(selector).getAttribute('open')===null){
-      await page.locator(`${selector} > summary`).click();
-    }
-  }
-  await page.locator(`[data-add-${action}]`).click();
+ await page.locator('[data-page="projects"]').first().click();await openRecordAction(page,'add-'+action);
 }
 
 async function enterTrade(page,date,shares,price){
