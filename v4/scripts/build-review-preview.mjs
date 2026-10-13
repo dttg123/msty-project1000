@@ -30,8 +30,8 @@ html=html.replace(/<link[^>]+(?:manifest|icon|preload|stylesheet)[^>]*>\s*/g,'')
 const font=(await readFile(resolve(work,'fonts/PretendardVariable.woff2'))).toString('base64');
 let css=(await readFile(resolve(work,'styles.css'),'utf8'))+'\n'+(await readFile(resolve(work,'styles-refined.css'),'utf8'));
 css=css.replace("url('./fonts/PretendardVariable.woff2')",`url('data:font/woff2;base64,${font}')`);
-html=html.replace('</head>',`<style>${css}</style></head>`);
+html=html.replace('</head>',()=>`<style>${css}</style></head>`);
 const bundle=(await readFile(resolve(work,'review-bundle.js'),'utf8')).replaceAll('</script','<\\/script');
-html=html.replace(/<script type="module" src="\.\/app\.js[^>]+><\/script>/,`<script>${bundle}</script>`);
+html=html.replace(/<script type="module" src="\.\/app\.js[^>]+><\/script>/,()=>`<script>${bundle}</script>`);
 if(/<script[^>]+src=|<link[^>]+href=|from ['"]https?:/.test(html))throw new Error('Review copy still has a remote runtime dependency.');
 await writeFile(output,html);await rm(work,{recursive:true,force:true});console.log(`Review HTML ready: ${output}`);
