@@ -16,9 +16,12 @@ async function setup(page){
 }
 test('home links select the right category; four tabs and records preserve the ledger',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const before=await setup(page);
+ await expect(page.locator('.home-cashflow-details')).not.toHaveAttribute('open','');
+ await expect(page.locator('.cashflow-year-summary')).toBeHidden();
+ await page.locator('.home-cashflow-details > summary').click();await expect(page.locator('.cashflow-year-summary')).toBeVisible();await page.locator('.home-cashflow-details > summary').click();
  await page.screenshot({path:info.outputPath('app-review-home.png'),fullPage:true});
  await page.locator('#page-home [data-project-detail="schd"]').click();
- await expect(page.locator('#page-projects')).toBeVisible();await expect(page.locator('.project-detail-heading')).toContainText('SCHD');
+ await expect(page.locator('#page-projects')).toBeVisible();await expect(page.locator('.brand-wrap')).toBeHidden();await expect(page.locator('.project-detail-heading')).toContainText('SCHD');
  await expect(page.locator('[data-project-detail-tab="summary"]')).toHaveAttribute('aria-selected','true');
  await expect(page.locator('#detail-panel-summary .portfolio-summary')).toBeVisible();
  await openPortfolioDetail(page,'dividend');await expect(page.locator('#detail-panel-summary')).toBeHidden();
@@ -32,7 +35,12 @@ test('home links select the right category; four tabs and records preserve the l
  await page.screenshot({path:info.outputPath('app-review-summary.png'),fullPage:true});
  await openPortfolioDetail(page,'dividend');await page.screenshot({path:info.outputPath('app-review-dividend.png'),fullPage:true});
  await openPortfolioDetail(page,'recovery');await page.screenshot({path:info.outputPath('app-review-recovery.png'),fullPage:true});
- await openPortfolioDetail(page,'records');await page.screenshot({path:info.outputPath('app-review-records.png'),fullPage:true});
+ await openPortfolioDetail(page,'records');await expect(page.locator('.history-search')).not.toHaveAttribute('open','');
+ await page.locator('#historyFilterForm [name="kind"]').selectOption('dividend');await expect(page.locator('.records-list [data-view-record]')).toHaveCount(1);
+ await page.locator('#historyFilterForm [name="kind"]').selectOption('trade');await expect(page.locator('.records-list')).toContainText('직접매수');
+ await page.locator('[data-history-reset]').click();await expect(page.locator('.records-list [data-view-record]')).toHaveCount(2);
+ await page.locator('.history-search > summary').click();await page.locator('#historyFilterForm [name="query"]').fill('2026-10-09');await page.locator('#historyFilterForm button[type="submit"]').click();await expect(page.locator('.records-list [data-view-record]')).toHaveCount(1);await page.locator('[data-history-reset]').click();
+ await page.screenshot({path:info.outputPath('app-review-records.png'),fullPage:true});
  await page.locator('[data-record-add]').click();await expect(page.locator('#modalBackdrop')).toBeVisible();
  await page.locator('#modal [data-add-dividend]').click();await expect(page.locator('#dividendForm')).toBeVisible();await page.locator('[data-close-modal]').first().click();
  await page.locator('.nav-btn[data-page="goal"]').click();await page.locator('.goal-step-card').first().locator(':scope > summary').click();

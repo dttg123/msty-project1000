@@ -250,10 +250,18 @@ jobs:
       - name: Install Chromium
         working-directory: v4
         run: npx playwright install --with-deps chromium
+      - name: Build standalone offline review copy
+        working-directory: v4
+        run: |
+          npm run build
+          npm exec --yes --package=esbuild@0.28.2 -- esbuild --version
+          ESBUILD_PATH=$(find "$HOME/.npm/_npx" -path '*/node_modules/esbuild/bin/esbuild' -type f | head -n 1)
+          node scripts/build-review-preview.mjs "$RUNNER_TEMP/DividendOS-review.html" "$ESBUILD_PATH"
       - name: Run mobile and desktop browser QA
         working-directory: v4
         env:
           QA_LIFETIME_UI: ${{ ((github.event_name == 'workflow_dispatch' && inputs.lifetime_ui) || contains(github.head_ref, 'lifetime-ui') || contains(github.ref_name, 'lifetime-ui')) && '1' || '0' }}
+          REVIEW_HTML_PATH: ${{ runner.temp }}/DividendOS-review.html
         run: npm run qa:e2e
       - name: Preserve synthetic lifetime UI evidence
         if: always()

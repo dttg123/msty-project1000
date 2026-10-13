@@ -799,4 +799,39 @@ html{scroll-padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16p
 .records-list .record-row-button .record-value{max-width:none;min-width:0;width:auto}
 .records-list .record-row-button .row-value{white-space:nowrap}
 .performance-rows .performance-total{border-top:1px solid var(--line);margin-top:6px;padding-top:15px;font-weight:650}
+/* Second review: compact the default view; keep deeper tools on demand. */
+.home-cashflow-details{margin-top:12px;border-top:1px solid var(--line)}
+.home-cashflow-details>summary{list-style:none;display:flex;align-items:center;gap:10px;min-height:52px;font-size:.875rem;color:var(--muted)}
+.home-cashflow-details>summary strong{margin-left:auto;font-size:.9375rem;color:var(--text);font-variant-numeric:tabular-nums}
+.home-cashflow-details>summary::-webkit-details-marker,.history-search>summary::-webkit-details-marker{display:none}
+.home-cashflow-details[open]>summary b{transform:rotate(180deg)}
+.home-cashflow-details .cashflow-selection{margin-top:0}
+.home-redesign .history-overview .chart-instruction{display:none}
+.home-redesign .history-overview .cashflow-chart{margin-top:9px}
+.app:has(#page-projects.active .project-detail-heading) .topbar{display:contents}
+.app:has(#page-projects.active .project-detail-heading) .brand-wrap{display:none}
+.app:has(#page-projects.active .project-detail-heading) .topbar-actions{position:absolute;top:14px;right:16px;z-index:2;gap:4px}
+.app:has(#page-projects.active .project-detail-heading) .topbar .save-pill{top:47px;bottom:auto;left:auto;right:0;width:auto;max-width:280px;font-size:.6875rem;white-space:nowrap}
+.app:has(#page-projects.active .project-detail-heading) .project-detail-heading{padding-right:125px;grid-template-columns:32px minmax(0,1fr) 44px;gap:5px;min-height:60px;margin:7px 0 12px}
+.app:has(#page-projects.active .project-detail-heading) .project-detail-heading .section-title{text-align:left;font-size:1.125rem;overflow-wrap:anywhere}
+.app:has(#page-projects.active .project-detail-heading) .project-detail-heading .btn{min-width:32px}
+.app:has(#page-projects.active .project-detail-heading) .project-detail-heading .text-link{font-size:.75rem}
+.compact-record-filter.history-filter{display:grid;grid-template-columns:minmax(0,1fr) 84px 52px;gap:8px;align-items:start;margin:0 0 13px}
+.compact-record-filter .filter-caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.compact-record-filter.history-filter .input{min-height:44px;font-size:.875rem;padding:8px;border-radius:10px}
+.compact-record-filter.history-filter label{min-width:0;margin:0}
+.history-search{min-width:0}
+.history-search>summary{list-style:none;min-height:44px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:10px;font-size:.875rem;color:var(--muted)}
+.history-search[open]{grid-column:1/-1;display:grid;grid-template-columns:1fr;gap:10px}
+.history-search[open]>summary{justify-self:end;padding:0 14px;min-height:40px}
+.compact-record-filter .history-query{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin:0}
+.compact-record-filter .history-query .btn{min-height:44px;padding:8px 14px;font-size:.875rem}
+.compact-record-filter .filter-reset{grid-column:1/-1;justify-self:end;min-height:30px;padding:0;font-size:.8125rem}
+.calculation-guide{margin:10px 0;border-top:1px solid var(--line);padding-top:8px}
+.calculation-guide>summary{font-size:.8125rem;color:var(--muted);min-height:40px;display:flex;align-items:center;gap:8px}
+.calculation-guide>summary::after{content:'⌄';margin-left:auto}
+.recovery-short-note{font-size:.8125rem;color:var(--muted);line-height:1.5;margin:13px 0}
+.performance-breakdown .calculation-guide{border-top:0;margin:0;padding:0}
+@media(min-width:721px){.app:has(#page-projects.active .project-detail-heading) .topbar-actions{right:20px}}
+@media(max-width:360px){.app:has(#page-projects.active .project-detail-heading) .project-detail-heading{padding-right:113px}.compact-record-filter.history-filter{grid-template-columns:minmax(0,1fr) 74px 46px;gap:6px}.compact-record-filter.history-filter .input{font-size:.8125rem;padding-inline:6px}}
 @media(max-width:360px){.home-stocks button.home-stock-row{grid-template-columns:32px minmax(0,1fr) auto;gap:8px}.stock-avatar{width:32px;height:32px}.home-stock-row .record-value{max-width:none}.home-stock-row .record-value strong{font-size:.875rem}.records-list .record-row-button{display:flex;flex-wrap:wrap}.records-list .record-row-button .record-value{margin-left:auto;max-width:100%}.records-list .record-row-button .row-value{white-space:normal;overflow-wrap:anywhere}}

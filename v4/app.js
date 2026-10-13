@@ -2447,7 +2447,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return; if (event.target.id !== 'historyFilterForm')
             return; event.preventDefault(); const form = submittedFormData(event); historyFilter = { month: String(form.get('month') || ''), kind: String(form.get('kind') || ''), query: String(form.get('query') || '') }; historyLimit = 10; renderProjects(); });
         document.addEventListener('change', (event) => { if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement))
-            return; if (event.target.matches('[data-project-select]')) {
+            return; if (event.target.closest('#historyFilterForm') && ['month', 'kind'].includes(event.target.name)) {
+            document.querySelector('#historyFilterForm')?.requestSubmit();
+            return;
+        } if (event.target.matches('[data-project-select]')) {
             selectedProjectId = event.target.value;
             renderProjects();
             rememberView();

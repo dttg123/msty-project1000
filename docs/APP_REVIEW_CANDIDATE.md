@@ -25,24 +25,25 @@ No financial engine, storage schema, authentication, cloud policy or release
 evidence validator was changed. An explicit total-return row uses the same
 existing economic total return, separately from ROC accounting adjustments.
 
-## Checks
+## Compact-screen refinement
+
+Home's annual totals and detailed analysis are collapsed by default; early and
+reached dividend alerts remain visible. The detail screen uses one stock header
+while preserving global currency and settings controls. Records put the period,
+type and optional search in one compact filter; period/type changes immediately
+refresh results. Recovery and ROC explanations are expandable, with financial
+values and critical flags still visible.
+
+## Checks for the current refinement
 
 - TypeScript compilation/typecheck and reproducible 40-file static build pass.
-- QA RELEASE profile: 30 test suites pass, including the existing 30-year
-  calculation, stress, resilience, security and contract checks.
-- The focused 13-test mobile UI suite passes after fixing status geometry and
-  shortening the overview. Review navigation also verifies that screen changes
-  preserve trades, dividends, projects, adjustments and splits.
-- The standalone review file boots without HTTP requests, records a dividend,
-  preserves it across reload, and exports a ZIP that passes the existing backup
-  reader and contains that record.
-- Full browser run: 169 passed, 12 opt-in long-entry suites skipped. One
-  desktop settings test exposed a save button partly under the fixed nav.
-  Scroll padding/margins now reserve the nav area, and the settings test also
-  checks that the button is above the nav before clicking. The unchanged
-  scroll-preservation assertion passes after this fix.
-- Final focused recheck covers 36 mobile/desktop navigation, typography, input,
-  settings, and standalone-file cases: all 36 pass after the nav-clearance fix.
+- QA RELEASE profile: all 30 Node test suites pass.
+- Browser assertions cover collapsed annual details, the single detail header,
+  immediate record filtering, search/reset and preservation of financial records.
+- Local Chromium download failed with a malformed archive. Current mobile,
+  desktop and standalone-file browser checks run in the draft PR's CI instead.
+- The prior review completed 36 focused browser checks after the nav-clearance
+  fix; those historical results are not current-refinement verification.
 - Physical Galaxy/actual Toss authentication evidence is outside this web review.
 
 ## Standalone review copy
@@ -58,4 +59,3 @@ Runtime release/version identifiers stay at 1.4 until a separate release cut;
 the review copy is visibly marked as unpublished. Synthetic examples must not
 be treated as the user's production holdings or restored into production.
 
-Final standalone review SHA256: `74050724dbc3e1e9e39752c0be1af971ea394515a359bb9c286e18306025af5d`.
