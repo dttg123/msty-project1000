@@ -10,6 +10,46 @@ const records = (value) => Array.isArray(value) ? value.filter(isRecord) : [];
 export function createViews(context) {
     const { getPortfolioDetail, getPortfolioDetailTab, getPortfolioIncomeMonth, getState, getSelectedProjectId, setSelectedProjectId, getPortfolioGroup, setPortfolioGroup, getChartMode, getChartSelection, getHomeCashflowMode, getHomeYearRange, getHistoryLimit, getHistoryFilter, getChartMonth, getChartYear, getCashflowMonthKey, getCurrentUser, getAutoBackupStatus, getNativeTossStatus, getAppUpdateStatus, getExchangeRateStatus, getCombinedRefreshStatus, getSaveSummary, getOfficialDistributionStatus, isTossBridgeConfigured, activeProjects, projectById, projectRows, computeProject, recoveryStats, totals, displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors } = context;
     const state = new Proxy({}, { get: (_, key) => Reflect.get(getState(), key) });
+    // Preserve reading position and disclosure state when live values change.
+    const viewScopes = new Map();
+    function preserveView(id, scope, draw) {
+        const page = document.getElementById(id);
+        if (!page.querySelectorAll || typeof window === 'undefined') {
+            draw();
+            return;
+        }
+        const same = viewScopes.get(id) === scope, scrollY = window.scrollY, active = page.classList.contains('active');
+        const keys = (selector) => {
+            const counts = new Map();
+            return [...page.querySelectorAll(selector)].map(el => {
+                const base = JSON.stringify([el.id, el.className, el.closest('[data-goal-project]')?.dataset.goalProject || '']);
+                const index = counts.get(base) || 0;
+                counts.set(base, index + 1);
+                return { el, key: base + index };
+            });
+        };
+        const disclosures = new Map(same ? keys('details').map(({ el, key }) => [key, el.open]) : []);
+        const horizontal = new Map(same ? keys('.cashflow-chart,.column-chart,.payment-spark,.project-tabs,.five-year-summary').map(({ el, key }) => [key, el.scrollLeft]) : []);
+        const focused = document.activeElement instanceof HTMLElement && page.contains(document.activeElement) ? document.activeElement : null;
+        const focusId = focused?.id, focusName = focused?.getAttribute('name'), formId = focused?.closest('form')?.id;
+        draw();
+        viewScopes.set(id, scope);
+        keys('details').forEach(({ el, key }) => { if (disclosures.has(key))
+            el.open = disclosures.get(key); });
+        keys('.cashflow-chart,.column-chart,.payment-spark,.project-tabs,.five-year-summary').forEach(({ el, key }) => { if (horizontal.has(key))
+            el.scrollLeft = horizontal.get(key); });
+        if (same && focused && !focused.isConnected) {
+            const replacement = focusId ? document.getElementById(focusId) : formId && focusName ? [...page.querySelectorAll('input,select,textarea')].find(el => el.getAttribute('name') === focusName && el.closest('form')?.id === formId) : null;
+            replacement?.focus({ preventScroll: true });
+        }
+        if (active && document.body.style.position !== 'fixed')
+            window.scrollTo({ top: scrollY, behavior: 'instant' });
+    }
+    function renderHome(options = {}) {
+        preserveView('page-home', 'home', () => drawHome(options));
+    }
+    function renderProjects() { preserveView('page-projects', getSelectedProjectId() + ':' + String(getPortfolioDetail?.()), drawProjects); }
+    function renderGoals() { preserveView('page-goal', 'goals', drawGoals); }
     function refreshPanelHTML() {
         const status = getCombinedRefreshStatus?.() || { busy: false, summary: '' };
         const last = state.integrations.toss.lastSyncAt;
@@ -165,14 +205,14 @@ export function createViews(context) {
     }
     function cashflowChart(items, selectedKey, mode) {
         const max = Math.max(1, ...items.map((item) => item.actual));
-        return `<div class="cashflow-chart actual-only ${mode === 'year' ? 'year-bars' : ''}" aria-label="${mode === 'year' ? '연도별' : '월별'} 실제 배당">${items.map((item) => `<button class="cashflow-month ${item.key === selectedKey ? 'active' : ''}" type="button" data-cashflow-period="${esc(item.key)}" aria-label="${esc(item.label)} 실제 배당 ${esc(fmtMoney(item.actual, 2))}"><div class="cashflow-bars"><i class="cashflow-actual" style="height:${item.actual > 0 ? Math.max(5, item.actual / max * 112) : 0}px"></i></div><span>${esc(mode === 'year' ? item.label : item.label.replace('월', ''))}</span></button>`).join('')}</div>`;
+        return `<div class="cashflow-chart actual-only ${mode === 'year' ? 'year-bars' : ''}" aria-label="${mode === 'year' ? '연도별' : '월별'} 실제 배당">${items.map((item) => `<button class="cashflow-month ${item.key === selectedKey ? 'active' : ''}" aria-pressed="${item.key === selectedKey}" type="button" data-cashflow-period="${esc(item.key)}" aria-label="${esc(item.label)} 실제 배당 ${esc(fmtMoney(item.actual, 2))}"><div class="cashflow-bars"><i class="cashflow-actual" style="height:${item.actual > 0 ? Math.max(5, item.actual / max * 112) : 0}px"></i></div><span>${esc(mode === 'year' ? item.label : item.label.replace('월', ''))}</span></button>`).join('')}</div>`;
     }
-    function renderHome() {
+    function drawHome({ cashflowOnly = false, selectionOnly = false } = {}) {
         const reportRows = reportingDividends(state.dividends.filter((row) => isPostedDividend(row, todayISO())), n(state.settings.exchangeRate));
         const total = totals(), metrics = buildHomeMetrics(total.rows, reportRows), goal = metrics.nextGoal, paceChange = metrics.pace.change, currentMonth = todayISO().slice(0, 7), mode = getHomeCashflowMode?.() || 'month', yearRange = getHomeYearRange?.() || '6', yearCount = yearRange === 'all' ? metrics.years.length : Number(yearRange), series = mode === 'year' ? metrics.years.slice(-yearCount) : metrics.months, defaultKey = mode === 'year' ? (series.at(-1)?.key || String(new Date().getFullYear())) : currentMonth, selectedKey = series.some((item) => item.key === getCashflowMonthKey?.()) ? getCashflowMonthKey() : defaultKey, selected = series.find((item) => item.key === selectedKey) || { key: selectedKey, label: selectedKey, actual: 0, count: 0 };
         const dividendGoal = dividendGoalStatus(state.settings, metrics.month.actual, metrics.year.actual);
         const selectedRows = reportRows.filter((row) => isDate(row.date) && row.date <= todayISO() && row.date.startsWith(selectedKey)), projectMap = new Map(activeProjects().map((project) => [project.id, project])), symbolRows = [...selectedRows.reduce((map, row) => { const project = projectMap.get(row.projectId), symbol = project?.symbol || '보관 종목', item = map.get(symbol) || { symbol, value: 0, project }; item.value += n(row.amountUSD); map.set(symbol, item); return map; }, new Map()).values()].sort((a, b) => b.value - a.value), topSymbols = symbolRows.slice(0, 4), other = symbolRows.slice(4).reduce((sum, row) => sum + row.value, 0), composition = other ? [...topSymbols, { symbol: '기타', value: other, project: null }] : topSymbols, compositionTotal = Math.max(1, composition.reduce((sum, row) => sum + row.value, 0)), compositionColor = (row, index) => row.project ? projectColors(row.project)[0] : `hsl(${225 + index * 24} 18% ${55 - index * 3}%)`;
-        document.getElementById('page-home').innerHTML = `${sectionTitle('홈', '세후 배당')}
+        const html = `${sectionTitle('홈', '세후 배당')}
       <div class="stack home-flow home-redesign">
         <article class="card month-overview">
           <div class="overview-heading"><h3>이번 달 받은 배당</h3><span>${new Date().getMonth() + 1}월</span></div>
@@ -187,6 +227,7 @@ export function createViews(context) {
           <div class="overview-heading"><h3>배당 현금흐름</h3><div class="cashflow-mode"><button class="${mode === 'month' ? 'active' : ''}" data-home-cashflow-mode="month">월별</button><button class="${mode === 'year' ? 'active' : ''}" data-home-cashflow-mode="year">연도별</button></div></div>
           <p class="chart-instruction">막대를 눌러 입금 내역을 확인하세요.</p>
           ${mode === 'year' ? `<div class="year-range-switch" aria-label="연도 표시 범위">${[['6', '최근 6년'], ['10', '10년'], ['all', '전체']].map(([value, label]) => `<button class="${yearRange === value ? 'active' : ''}" data-home-year-range="${value}">${label}</button>`).join('')}</div>` : ''}
+          <div class="cashflow-picked" aria-live="polite" aria-atomic="true"><span>${mode === 'year' ? `${selectedKey}년` : `${selectedKey.replace('-', '년 ')}월`} · ${selectedRows.length}회 입금</span><strong>${fmtMoney(selected.actual, 2)}</strong></div>
           ${cashflowChart(series, selectedKey, mode)}
           ${mode === 'year' && yearRange === 'all' && metrics.years.length > 10 ? `<div class="five-year-summary">${Array.from({ length: Math.ceil(metrics.years.length / 5) }, (_, index) => metrics.years.slice(index * 5, index * 5 + 5)).map(group => `<div><span>${group[0].key}–${group.at(-1)?.key}</span><strong>${fmtMoney(group.reduce((sum, row) => sum + row.actual, 0), 0)}</strong></div>`).join('')}</div>` : ''}
           <details class="home-cashflow-details"><summary><span>연간 배당 · 상세 분석</span><strong>${fmtMoney(metrics.year.actual, 2)}</strong><b>⌄</b></summary><div class="cashflow-detail-body"><div class="cashflow-selection"><div><span>${mode === 'year' ? `${selectedKey}년` : `${selectedKey.replace('-', '년 ')}월`}</span><strong>${fmtMoney(selected.actual, 2)}</strong><small>${selectedRows.length}회 입금</small></div>${composition.length > 1 ? `<div class="composition-bar" aria-label="종목별 실제 배당 비중">${composition.map((row, index) => `<i style="width:${row.value / compositionTotal * 100}%;--segment:${compositionColor(row, index)}" title="${esc(row.symbol)} ${esc(fmtMoney(row.value, 2))}"></i>`).join('')}</div><div class="composition-legend">${composition.map((row, index) => `<span><i style="--dot:${compositionColor(row, index)}"></i>${esc(row.symbol)} <b>${fmtMoney(row.value, 0)}</b></span>`).join('')}</div>` : '<p class="single-symbol-note">' + (composition[0] ? `${esc(composition[0].symbol)}에서 받은 실제 배당입니다.` : '아직 받은 배당이 없어요.') + '</p>'}</div>
@@ -201,8 +242,34 @@ export function createViews(context) {
         </article>
         <article class="card compact next-card ${goal ? 'interactive-card' : ''}" ${goal ? `data-goal-detail="${goal.calc.project.id}" tabindex="0" role="button"` : ''}><div class="card-kicker">다음 목표</div>${goal ? `<div class="next-line"><div><strong>${esc(goal.calc.project.symbol)} · ${goal.milestone.reached ? '목표 달성' : `${fmtShares(goal.milestone.shares)}주`}</strong><span>현재 ${fmtShares(goal.calc.shares)}주${goal.milestone.reached ? ' · 현금흐름 단계' : ` · ${fmtShares(goal.milestone.remaining)}주 남음`}</span></div><b>›</b></div>` : '<div class="empty-inline">종목을 추가해 목표를 시작하세요.</div>'}</article>
       </div>`;
-        if (mode === 'year' && typeof requestAnimationFrame === 'function')
-            requestAnimationFrame(() => document.querySelector('#page-home .cashflow-month.active')?.scrollIntoView({ block: 'nearest', inline: 'center' }));
+        const page = document.getElementById('page-home'), current = page.querySelector?.('.cashflow-card');
+        if (cashflowOnly && current && document.createElement) {
+            const template = document.createElement('template');
+            template.innerHTML = html;
+            const next = template.content.querySelector('.cashflow-card');
+            if (selectionOnly) {
+                current.querySelectorAll('[data-cashflow-period]').forEach(button => { const selected = button.dataset.cashflowPeriod === selectedKey; button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected)); });
+                for (const selector of ['.cashflow-picked', '.cashflow-selection']) {
+                    const target = current.querySelector(selector), source = next.querySelector(selector);
+                    if (target && source)
+                        target.replaceChildren(...source.childNodes);
+                }
+                const link = current.querySelector('[data-income-month]');
+                if (link)
+                    link.dataset.incomeMonth = selectedKey;
+            }
+            else
+                current.replaceChildren(...next.childNodes);
+        }
+        else
+            page.innerHTML = html;
+        // Move only the horizontal rail; scrollIntoView also moves the whole page.
+        if (mode === 'year' && !selectionOnly && typeof requestAnimationFrame === 'function')
+            requestAnimationFrame(() => {
+                const rail = page.querySelector('.cashflow-chart'), selected = rail?.querySelector('.cashflow-month.active');
+                if (rail && selected)
+                    rail.scrollLeft += selected.getBoundingClientRect().left - rail.getBoundingClientRect().left - (rail.clientWidth - selected.clientWidth) / 2;
+            });
     }
     function combinedRecords(calc) {
         return [
@@ -259,7 +326,7 @@ ${detail ? `          <details class="performance-breakdown" open><summary>배�
         const month = todayISO().slice(0, 7), year = Number(month.slice(0, 4)), last = Number(month.slice(5)), dividends = reportingDividends(calc.postedDividends, n(state.settings.exchangeRate)), series = Array.from({ length: 6 }, (_, index) => { const date = new Date(Date.UTC(year, last - 6 + index, 1)), key = date.toISOString().slice(0, 7); return { key, value: dividends.filter(row => row.date.startsWith(key)).reduce((sum, row) => sum + n(row.amountUSD), 0) }; }), max = Math.max(1, ...series.map(row => row.value));
         return `<div class="summary-chart-period">최근 6개월 · ${series[0].key.slice(0, 4) === series[5].key.slice(0, 4) ? series[5].key.slice(0, 4) : series[0].key.slice(0, 4) + '–' + series[5].key.slice(0, 4)}년</div><div class="summary-month-chart" aria-label="최근 월별 실제 세후 배당">${series.map(row => `<button type="button" data-portfolio-income-month="${esc(row.key)}" data-income-month="${esc(row.key)}" data-income-project="${esc(calc.project.id)}" aria-pressed="${row.key === selectedMonth}" aria-label="${esc(row.key)} 실제 배당 ${esc(fmtMoney(row.value, 2))}"><div class="summary-bar-track"><i style="height:${row.value > 0 ? Math.max(6, row.value / max * 100) : 0}%"></i></div><span>${Number(row.key.slice(5))}월</span></button>`).join('')}</div>`;
     }
-    function renderProjects() {
+    function drawProjects() {
         const allProjects = activeProjects(), group = getPortfolioGroup?.() === 'dividend' ? 'dividend' : 'highYield', projects = allProjects.filter((project) => projectGroup(project) === group), counts = { highYield: allProjects.filter((project) => projectGroup(project) === 'highYield').length, dividend: allProjects.filter((project) => projectGroup(project) === 'dividend').length };
         let selectedProjectId = getSelectedProjectId();
         if (!selectedProjectId || !projects.some((project) => project.id === selectedProjectId)) {
@@ -335,7 +402,7 @@ ${detail ? `          <details class="performance-breakdown" open><summary>배�
     function goalMilestonesHTML(calc) {
         return `<div class="goal-milestones" aria-label="주수 목표 달성 기록">${[25, 50, 75, 100].map(level => `<div class="${calc.milestoneDates[level] ? 'achieved' : ''}"><strong>${fmtShares(calc.currentTarget * level / 100)}주</strong><span>${calc.milestoneDates[level] ? fmtDate(calc.milestoneDates[level]) : '미달성'}</span></div>`).join('')}</div>`;
     }
-    function renderGoals() {
+    function drawGoals() {
         const rows = totals().rows;
         document.getElementById('page-goal').innerHTML = `${sectionTitle('다음 목표', '가장 가까운 단계만')}
       <div class="stack">${rows.map((calc) => {

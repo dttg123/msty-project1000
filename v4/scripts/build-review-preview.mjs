@@ -26,7 +26,7 @@ let backup=await readFile(resolve(work,'backup.js'),'utf8');
 backup=backup.replace(/async function fetchAppFiles\(\) \{[\s\S]*?\n\}/,'async function fetchAppFiles() { return []; }');await writeFile(resolve(work,'backup.js'),backup);
 const result=spawnSync(esbuild,[resolve(work,'app.js'),'--bundle','--format=iife','--platform=browser','--minify','--charset=utf8',`--outfile=${resolve(work,'review-bundle.js')}`],{stdio:'inherit'});if(result.status!==0)process.exit(result.status??1);
 let html=await readFile(resolve(work,'index.html'),'utf8');
-html=html.replace(/<link[^>]+(?:manifest|icon|preload|stylesheet)[^>]*>\s*/g,'').replace('<title>DividendOS · v1.4</title>','<title>DividendOS · 배포 전 확인본</title>');
+html=html.replace(/<link[^>]+(?:manifest|icon|preload|stylesheet)[^>]*>\s*/g,'').replace('<title>DividendOS · v1.5</title>','<title>DividendOS · 배포 전 확인본</title>');
 const font=(await readFile(resolve(work,'fonts/PretendardVariable.woff2'))).toString('base64');
 let css=(await readFile(resolve(work,'styles.css'),'utf8'))+'\n'+(await readFile(resolve(work,'styles-refined.css'),'utf8'));
 css=css.replace("url('./fonts/PretendardVariable.woff2')",`url('data:font/woff2;base64,${font}')`);

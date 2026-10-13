@@ -49,3 +49,28 @@ test('home links select the right category; four tabs and records preserve the l
  await page.locator('[data-page="settings"]').click();await page.screenshot({path:info.outputPath('app-review-settings.png'),fullPage:true});
  const after=await ledger(page);for(const key of ['trades','dividends','cashAdjustments','splits','projects'])expect(after[key]).toEqual(before[key]);expect(errors).toEqual([]);
 });
+
+test('chart selection preserves the page, expanded analysis and navigation clearance',async({page},info)=>{
+ await setup(page);
+ await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const s=await storageGet('state');s.dividends.push({id:'sep',projectId:'msty',date:'2026-09-09',amountUSD:30},{id:'aug',projectId:'msty',date:'2026-08-09',amountUSD:20});await storageSet('state',s);});
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
+ const card=page.locator('.cashflow-card'),details=page.locator('.home-cashflow-details');
+ await card.scrollIntoViewIfNeeded();await details.locator(':scope > summary').click();
+ await page.evaluate(()=>{window.__chartRoot=document.querySelector('.cashflow-chart');window.__homeRow=document.querySelector('.home-stocks .list-row');window.__sepBar=document.querySelector('[data-cashflow-period="2026-09"]');});
+ for(const month of ['2026-09','2026-08','2026-10','2026-09']){
+  const button=page.locator(`[data-cashflow-period="${month}"]`);await button.scrollIntoViewIfNeeded();
+  const top=await page.evaluate(()=>window.scrollY);await button.click();
+  await expect(details).toHaveAttribute('open','');await expect(button).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.cashflow-picked')).toContainText(`${+month.slice(5)}월`);
+  expect(await page.evaluate(()=>Math.abs(window.scrollY))).toBeGreaterThan(0);
+  expect(Math.abs(await page.evaluate(()=>window.scrollY)-top)).toBeLessThanOrEqual(2);
+  expect(await page.evaluate(()=>window.__chartRoot===document.querySelector('.cashflow-chart')&&window.__homeRow===document.querySelector('.home-stocks .list-row')&&window.__sepBar===document.querySelector('[data-cashflow-period="2026-09"]'))).toBe(true);
+ }
+ await page.locator('#usdBtn').click();await expect(details).toHaveAttribute('open','');await expect(page.locator('.cashflow-picked strong')).toContainText('$');
+ await page.locator('[data-home-cashflow-mode="year"]').scrollIntoViewIfNeeded();const yearTop=await page.evaluate(()=>window.scrollY);await page.locator('[data-home-cashflow-mode="year"]').click();
+ await expect(details).toHaveAttribute('open','');await page.waitForTimeout(100);expect(Math.abs(await page.evaluate(()=>window.scrollY)-yearTop)).toBeLessThanOrEqual(2);
+ await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
+ const goal=await page.locator('.next-card').boundingBox(),nav=await page.locator('.bottom-nav').boundingBox();expect(goal.y+goal.height).toBeLessThanOrEqual(nav.y-12);
+ expect(await page.locator('.home-stocks .list-row').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('none');
+ await page.screenshot({path:info.outputPath('stable-home-analysis.png'),fullPage:true});
+});

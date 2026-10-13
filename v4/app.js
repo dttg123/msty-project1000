@@ -2046,19 +2046,19 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             homeCashflowMode = button.dataset.homeCashflowMode;
             cashflowMonthKey = '';
             rememberView();
-            renderHome();
+            renderHome({ cashflowOnly: true });
             return;
         }
         if (button.dataset.homeYearRange) {
             homeYearRange = button.dataset.homeYearRange;
             cashflowMonthKey = '';
             rememberView();
-            renderHome();
+            renderHome({ cashflowOnly: true });
             return;
         }
         if (button.dataset.cashflowPeriod) {
             cashflowMonthKey = button.dataset.cashflowPeriod;
-            renderHome();
+            renderHome({ cashflowOnly: true, selectionOnly: true });
             return;
         }
         if (button.dataset.portfolioGroup) {
@@ -2366,6 +2366,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function bindStaticEvents() {
         history.scrollRestoration = 'manual';
+        const nav = document.querySelector('.bottom-nav');
+        if (nav) {
+            const reserveNavSpace = () => document.documentElement.style.setProperty('--bottom-nav-space', Math.ceil(nav.getBoundingClientRect().height) + 'px');
+            reserveNavSpace();
+            if (typeof ResizeObserver !== 'undefined')
+                new ResizeObserver(reserveNavSpace).observe(nav);
+        }
         window.addEventListener('popstate', () => {
             if (!uiHistoryActive)
                 return;

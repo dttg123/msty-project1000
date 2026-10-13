@@ -835,3 +835,21 @@ html{scroll-padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 16p
 @media(min-width:721px){.app:has(#page-projects.active .project-detail-heading) .topbar-actions{right:20px}}
 @media(max-width:360px){.app:has(#page-projects.active .project-detail-heading) .project-detail-heading{padding-right:113px}.compact-record-filter.history-filter{grid-template-columns:minmax(0,1fr) 74px 46px;gap:6px}.compact-record-filter.history-filter .input{font-size:.8125rem;padding-inline:6px}}
 @media(max-width:360px){.home-stocks button.home-stock-row{grid-template-columns:32px minmax(0,1fr) auto;gap:8px}.stock-avatar{width:32px;height:32px}.home-stock-row .record-value{max-width:none}.home-stock-row .record-value strong{font-size:.875rem}.records-list .record-row-button{display:flex;flex-wrap:wrap}.records-list .record-row-button .record-value{margin-left:auto;max-width:100%}.records-list .record-row-button .row-value{white-space:normal;overflow-wrap:anywhere}}
+
+/* Stable updates: selected values change without replaying list entrances. */
+.page .list-row{animation:none}
+.cashflow-picked{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:15px 0 4px;min-height:42px}
+.cashflow-picked span{font-size:.8125rem;color:var(--muted);line-height:1.5}
+.cashflow-picked strong{font-size:1.125rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right}
+.app{padding-bottom:calc(var(--bottom-nav-space,var(--nav-h)) + env(safe-area-inset-bottom) + 24px)}
+html{scroll-padding-bottom:calc(var(--bottom-nav-space,var(--nav-h)) + 16px)}
+.btn,.input,.card-link,details>summary{scroll-margin-bottom:calc(var(--bottom-nav-space,var(--nav-h)) + 16px)}
+.bottom-nav{background:var(--surface);backdrop-filter:none}
+.app:has(#page-projects.active .project-detail-heading) .project-detail-heading .text-link{font-size:.8125rem;min-height:44px}
+.calculation-guide>summary,.history-search>summary{cursor:pointer}
+.composition-legend span{min-width:0;flex-wrap:wrap;row-gap:4px;font-size:.8125rem;line-height:1.5}
+.composition-legend b{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.detail-note,.recovery-short-note,.settings-list .tiny{font-size:.8125rem;line-height:1.6}
+@media(max-width:360px){.cashflow-picked{flex-wrap:wrap;gap:4px}.cashflow-picked strong{margin-left:auto}}
+
+.home-cashflow-details .cashflow-selection{min-height:146px}

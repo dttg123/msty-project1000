@@ -1009,9 +1009,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if('historyMore'in button.dataset){historyLimit+=10;renderProjects();return;}
     if(button.dataset.chartYearShift){const latest=computeProject(selectedProjectId).postedDividends.map((row)=>String(row.date).slice(0,4)).filter((year)=>/^\d{4}$/.test(year)).sort().at(-1)||todayISO().slice(0,4),base=/^\d{4}$/.test(chartYear)?Number(chartYear):Number(latest);chartYear=String(base+Number(button.dataset.chartYearShift));chartSelection='';renderProjects();return;}
     if(button.dataset.chartMode){chartMode=button.dataset.chartMode;chartSelection='';renderProjects();return;}
-    if(button.dataset.homeCashflowMode){homeCashflowMode=button.dataset.homeCashflowMode;cashflowMonthKey='';rememberView();renderHome();return;}
-    if(button.dataset.homeYearRange){homeYearRange=button.dataset.homeYearRange;cashflowMonthKey='';rememberView();renderHome();return;}
-    if(button.dataset.cashflowPeriod){cashflowMonthKey=button.dataset.cashflowPeriod;renderHome();return;}
+    if(button.dataset.homeCashflowMode){homeCashflowMode=button.dataset.homeCashflowMode;cashflowMonthKey='';rememberView();renderHome({cashflowOnly:true});return;}
+    if(button.dataset.homeYearRange){homeYearRange=button.dataset.homeYearRange;cashflowMonthKey='';rememberView();renderHome({cashflowOnly:true});return;}
+    if(button.dataset.cashflowPeriod){cashflowMonthKey=button.dataset.cashflowPeriod;renderHome({cashflowOnly:true,selectionOnly:true});return;}
     if(button.dataset.portfolioGroup){portfolioDetail=false;historyFilter={};historyLimit=10;portfolioGroup=button.dataset.portfolioGroup==='dividend'?'dividend':'highYield';const first=activeProjects().find((project)=>(project.category==='highYield'?'highYield':'dividend')===portfolioGroup);if(first)selectedProjectId=first.id;renderProjects();return;}
     if(button.dataset.goalDetail){selectedProjectId=button.dataset.goalDetail;renderGoals();showPage('goal');const card=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card')].find(el=>el.dataset.goalProject===selectedProjectId);if(card){card.open=true;card.scrollIntoView({block:'nearest'});}return;}
     if(button.dataset.settingsProject){selectedProjectId=button.dataset.settingsProject;openProjectForm(projectById(selectedProjectId));return;}
@@ -1076,6 +1076,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   function bindStaticEvents() {
     history.scrollRestoration='manual';
+    const nav=document.querySelector<HTMLElement>('.bottom-nav');
+    if(nav){
+      const reserveNavSpace=()=>document.documentElement.style.setProperty('--bottom-nav-space',Math.ceil(nav.getBoundingClientRect().height)+'px');
+      reserveNavSpace();if(typeof ResizeObserver!=='undefined')new ResizeObserver(reserveNavSpace).observe(nav);
+    }
+
     window.addEventListener('popstate',()=>{
       if(!uiHistoryActive)return;
       uiHistoryActive=false;
