@@ -40,10 +40,11 @@ values and critical flags still visible.
 - QA RELEASE profile: all 30 Node test suites pass.
 - Browser assertions cover collapsed annual details, the single detail header,
   immediate record filtering, search/reset and preservation of financial records.
-- Local Chromium download failed with a malformed archive. Current mobile,
-  desktop and standalone-file browser checks run in the draft PR's CI instead.
+- Local Chromium download failed with a malformed archive. Mobile, desktop and standalone-file browser checks passed in draft PR CI instead.
 - The prior review completed 36 focused browser checks after the nav-clearance
   fix; those historical results are not current-refinement verification.
+- CI run `38341721588` verified runtime commit `8fd4e750589191452455f324bea9ae0990191757`: 170 browser tests passed; 12 opt-in long-entry tests skipped. The mobile and desktop standalone-file checks both passed. FAST, CORE, Android build and Android backup jobs also passed.
+- Reviewed mobile home, summary, dividend, recovery and record screenshots from artifact `11786809118`.
 - Physical Galaxy/actual Toss authentication evidence is outside this web review.
 
 ## Standalone review copy
@@ -59,3 +60,4 @@ Runtime release/version identifiers stay at 1.4 until a separate release cut;
 the review copy is visibly marked as unpublished. Synthetic examples must not
 be treated as the user's production holdings or restored into production.
 
+Standalone review SHA256: `7b6ecf2da3a70e0b38c57d4fd0f02831b36849c253f3a339968b969ae9b0dd5c`.
