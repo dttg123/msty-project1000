@@ -109,6 +109,7 @@ export function createViews(context) {
       <div class="recovery-calculation-note"><strong>회수 · 재투자 계산 기준</strong>      <p class="detail-note">배당·ROC 조정 전 매입원가와 달러 시세로 판단합니다. 손익이 0이면 방향을 유지합니다. ${status.fresh ? '' : '시세가 없거나 7일 이상 지나 전환 안내를 보류합니다.'} 방향 변경은 실제 거래나 과거 기록을 바꾸지 않습니다.</p>
       <p class="detail-note">${esc(p.symbol)} 밖에서 사용한 배당만 회수에 포함합니다. ISA·다른 종목·생활비 사용을 기록하며 전체 계좌의 출금액을 뜻하지 않습니다. 재투자는 회수가 아닙니다. ${rec.locked ? '기존 확정 원금·시작일을 유지합니다.' : '새로 넣은 돈은 직접 투자금에 더해집니다. 매도대금은 이 배당 회수율에서 제외합니다.'} 잔액 보정은 회수로 계산하지 않습니다.</p>
 </div>
+      ${calc.unconfirmedCapitalFundingCount ? `<p class="detail-note funding-pending">비배당 매수 ${calc.unconfirmedCapitalFundingCount}건의 새 원금·재사용 자금 구분이 필요합니다. 회수 기준은 잠정값입니다.</p>` : ''}
       ${calc.openingBalanceOverlap ? `<p class="detail-note funding-pending">초기 잔액 날짜 이전의 거래가 있습니다. 중간 잔액을 전체 내역에 더하면 중복될 수 있습니다.</p><button class="btn soft small" data-exclude-opening-snapshot="${esc(p.id)}">중간 잔액 중복 확인</button>` : ''}
       ${calc.hasKRWDividends ? '<p class="detail-note">원화 배당은 달러 사용 잔액에서 제외됩니다. 실제 달러 금액을 확인한 뒤 기록하세요.</p>' : ''}
       ${calc.unconfirmedFundingCount ? `<p class="detail-note funding-pending">토스 매수 ${calc.unconfirmedFundingCount}건이 새로 넣은 돈인지 배당 재투자인지 아직 확인되지 않았습니다. 확인 전에는 직접 투자로 임시 계산하므로 투자금과 배당 사용액이 잠정값입니다.</p><button class="btn soft small" data-review-funding="${esc(p.id)}">매수 자금 출처 확인</button>` : ''}

@@ -92,3 +92,8 @@ test('중간 잔액 제외는 원래 값을 보존하고 저장 실패 시 되�
  await page.evaluate(()=>window.__failPlan=false);await page.locator('#modalConfirm').click();await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeEnabled();
  const after=await read(page);expect(after.projects[0].initialDividendBalance).toBe(8);expect(after.projects[0].initialDividendBalanceTreatment).toBe('excludedSnapshot');await details(page);await expect(page.locator('.dividend-use-details')).toContainText('$50');expect(errors).toEqual([]);
 });
+
+test('혼합 자금은 재사용 금액을 새 원금에 더하지 않는다',async({page})=>{
+ const errors=await setup(page,true),before=await read(page);await details(page);await page.locator('[data-review-funding]').click();await page.locator('[data-funding-trade="broker"]').click();await page.locator('#fundingForm [name="amountUSD"]').fill('5');await page.locator('#fundingForm [name="contributionUSD"]').fill('3');await page.locator('#fundingForm button[type="submit"]').click();await expect(page.locator('#fundingForm')).toBeHidden();
+ const after=await read(page);expect(after.trades[1].dividendFunding.contributionUSD).toBe(3);expect(after.trades[1].dividendFunding.cashDebitUSD).toBe(10);expect(after.trades[1].source).toEqual(before.trades[1].source);await details(page);await expect(page.locator('.dividend-use-details')).toContainText('$103');await expect(page.locator('.dividend-use-details')).toContainText('$45');expect(errors).toEqual([]);
+});

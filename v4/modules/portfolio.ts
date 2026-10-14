@@ -83,7 +83,7 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
         const quantity=Math.max(0,n(event.shares)),cash=tradeCashBreakdown(event),amount=cash.grossBuyCostUSD;
         shares+=quantity; normalizedShares+=quantity/factor; costBasis+=amount;purchaseBasis+=amount;totalBuyCashOut+=amount;tradeFees+=cash.feeUSD;tradeTaxes+=cash.taxUSD;
         const funding=event.dividendFunding;
-        if(funding&&funding.sourceFingerprint===event.source?.sourceFingerprint){const debit=funding.cashDebitUSD??amount,part=clamp(n(funding.amountUSD),0,debit);directBuyCost+=debit-part;reinvestAmount+=part;reinvestShares+=debit>0?quantity*part/debit:0;directShares+=debit>0?quantity*(debit-part)/debit:quantity;if(part>0)reinvestCount++;}
+        if(funding&&funding.sourceFingerprint===event.source?.sourceFingerprint){const debit=funding.cashDebitUSD??amount,part=clamp(n(funding.amountUSD),0,debit);directBuyCost+=funding.contributionUSD??(debit-part);reinvestAmount+=part;reinvestShares+=debit>0?quantity*part/debit:0;directShares+=debit>0?quantity*(debit-part)/debit:quantity;if(part>0)reinvestCount++;}
         else if (event.buyType==='direct' || event.buyType==='opening') { directBuyCost+=amount; directShares+=quantity; }
         else if (event.buyType==='reinvest') { reinvestShares+=quantity; reinvestAmount+=amount; reinvestCount++; }
         else if (event.buyType==='mixed') {
@@ -148,6 +148,7 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
     const monthlyEstimate=income.monthly,shortMonthlyEstimate=income.shortMonthly;
     const adjustmentTotal=postedAdjustments.reduce((sum,row)=>sum+n(row.amountUSD),0);
     const unconfirmedFundingCount=postedTrades.filter(row=>row.type==='buy'&&row.source?.provider==='toss'&&(!row.dividendFunding||row.dividendFunding.sourceFingerprint!==row.source.sourceFingerprint)).length;
+    const unconfirmedCapitalFundingCount=postedTrades.filter(row=>row.type==='buy'&&row.dividendFunding?.sourceFingerprint===row.source?.sourceFingerprint&&row.dividendFunding&&((row.dividendFunding.cashDebitUSD??tradeCashBreakdown(row).grossBuyCostUSD)-row.dividendFunding.amountUSD)>.000001&&row.dividendFunding.contributionUSD===undefined).length;
     const openingExcluded=project.initialDividendBalanceTreatment==='excludedSnapshot';
     const openingDate=project.initialDividendBalanceDate;
     const openingBalanceOverlap=!openingExcluded&&n(project.initialDividendBalance)>0&&isDate(openingDate)&&[...postedDividends,...postedTrades.filter(row=>row.type==='buy'&&(row.buyType==='reinvest'||row.buyType==='mixed'||n(row.dividendFunding?.amountUSD)>0)),...postedAdjustments].some(row=>row.date<=openingDate);
@@ -167,7 +168,7 @@ export function createPortfolioEngine(getState: () => AppState, getSelectedProje
     for(const row of cashLedger){cashBalance+=n(row.amountUSD);minDividendBalance=Math.min(minDividendBalance,cashBalance);if(n(row.amountUSD)<0&&cashBalance<-.0001)cashDeficitEvents.push({...row,balance:cashBalance});}
     return {
       project,trades,dividends,adjustments,postedTrades,postedDividends,reportingRows,hasKRWDividends,usdDividendsTotal,postedAdjustments,factor,shares,normalizedShares,costBasis,realized,directBuyCost,sellProceeds,
-      purchaseBasis,priceUnrealized:priceAvailable?marketValue-purchaseBasis:0,unconfirmedFundingCount,openingBalanceOverlap,dividendBalanceConfirmed,spendableDividendBalance,
+      purchaseBasis,priceUnrealized:priceAvailable?marketValue-purchaseBasis:0,unconfirmedFundingCount,unconfirmedCapitalFundingCount,openingBalanceOverlap,dividendBalanceConfirmed,spendableDividendBalance,
       directShares,reinvestAmount,reinvestCount,reinvestShares,currentPrice,priceAvailable,marketValue,unrealized,avgCost,
       currentTarget,progress:currentTarget>0?shares/currentTarget:0,dividendsTotal,yearDividends,currentMonthDividends,trailing12Dividends,
       recentDividend,monthlyEstimate,shortMonthlyEstimate,rawMonthlyEstimate,rawShortMonthlyEstimate,estimateReliable,medianDividendGapDays:medianGap,

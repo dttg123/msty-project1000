@@ -105,7 +105,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
                 const funding = event.dividendFunding;
                 if (funding && funding.sourceFingerprint === event.source?.sourceFingerprint) {
                     const debit = funding.cashDebitUSD ?? amount, part = clamp(n(funding.amountUSD), 0, debit);
-                    directBuyCost += debit - part;
+                    directBuyCost += funding.contributionUSD ?? (debit - part);
                     reinvestAmount += part;
                     reinvestShares += debit > 0 ? quantity * part / debit : 0;
                     directShares += debit > 0 ? quantity * (debit - part) / debit : quantity;
@@ -205,6 +205,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         const monthlyEstimate = income.monthly, shortMonthlyEstimate = income.shortMonthly;
         const adjustmentTotal = postedAdjustments.reduce((sum, row) => sum + n(row.amountUSD), 0);
         const unconfirmedFundingCount = postedTrades.filter(row => row.type === 'buy' && row.source?.provider === 'toss' && (!row.dividendFunding || row.dividendFunding.sourceFingerprint !== row.source.sourceFingerprint)).length;
+        const unconfirmedCapitalFundingCount = postedTrades.filter(row => row.type === 'buy' && row.dividendFunding?.sourceFingerprint === row.source?.sourceFingerprint && row.dividendFunding && ((row.dividendFunding.cashDebitUSD ?? tradeCashBreakdown(row).grossBuyCostUSD) - row.dividendFunding.amountUSD) > .000001 && row.dividendFunding.contributionUSD === undefined).length;
         const openingExcluded = project.initialDividendBalanceTreatment === 'excludedSnapshot';
         const openingDate = project.initialDividendBalanceDate;
         const openingBalanceOverlap = !openingExcluded && n(project.initialDividendBalance) > 0 && isDate(openingDate) && [...postedDividends, ...postedTrades.filter(row => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || n(row.dividendFunding?.amountUSD) > 0)), ...postedAdjustments].some(row => row.date <= openingDate);
@@ -230,7 +231,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         }
         return {
             project, trades, dividends, adjustments, postedTrades, postedDividends, reportingRows, hasKRWDividends, usdDividendsTotal, postedAdjustments, factor, shares, normalizedShares, costBasis, realized, directBuyCost, sellProceeds,
-            purchaseBasis, priceUnrealized: priceAvailable ? marketValue - purchaseBasis : 0, unconfirmedFundingCount, openingBalanceOverlap, dividendBalanceConfirmed, spendableDividendBalance,
+            purchaseBasis, priceUnrealized: priceAvailable ? marketValue - purchaseBasis : 0, unconfirmedFundingCount, unconfirmedCapitalFundingCount, openingBalanceOverlap, dividendBalanceConfirmed, spendableDividendBalance,
             directShares, reinvestAmount, reinvestCount, reinvestShares, currentPrice, priceAvailable, marketValue, unrealized, avgCost,
             currentTarget, progress: currentTarget > 0 ? shares / currentTarget : 0, dividendsTotal, yearDividends, currentMonthDividends, trailing12Dividends,
             recentDividend, monthlyEstimate, shortMonthlyEstimate, rawMonthlyEstimate, rawShortMonthlyEstimate, estimateReliable, medianDividendGapDays: medianGap,

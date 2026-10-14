@@ -95,3 +95,11 @@ console.log('Funding safety PASS: pending spending, cash dates, preserved snapsh
  const stale=structuredClone(s);stale.trades[0].price=11;stale.trades[0].date='2025-01-04';stale.trades[0].source.sourceFingerprint='changed';assert.equal(decodeAppState(stale).trades[0].dividendFunding.cashDebitUSD,30.37);assert.equal(createPortfolioEngine(()=>stale,()=>p.id).computeProject(p).spendableDividendBalance,null);
 }
 console.log('Settled cash precision PASS: source valuation unchanged, rounded debit validated, stale metadata retained');
+{
+ const s=blankState(),p=s.projects[0],t=tossCandidateToTrade({id:'sources',symbol:p.symbol,date:'2025-01-02',type:'buy',shares:2,price:10,currency:'USD'},{projectId:p.id,id:'sources'});s.trades=[t];s.dividends=[{id:'div',projectId:p.id,date:'2025-01-01',amountUSD:12}];
+ t.dividendFunding={amountUSD:12,cashDebitUSD:20,sourceFingerprint:t.source.sourceFingerprint};const calc=()=>createPortfolioEngine(()=>s,()=>p.id).computeProject(p);
+ assert.equal(projectRecovery(calc()).basisConfirmed,false);assert.equal(calc().spendableDividendBalance,0);
+ t.dividendFunding.contributionUSD=6;assert.equal(projectRecovery(calc()).basisConfirmed,true);assert.equal(projectRecovery(calc()).basis,6,'reused non-dividend funds are not new principal');assert.equal(calc().reinvestAmount,12);assert.equal(calc().purchaseBasis,20);
+ const bad=structuredClone(s);bad.trades[0].dividendFunding.contributionUSD=9;assert.throws(()=>decodeAppState(bad));
+}
+console.log('Principal-source PASS: recycled cash excluded, missing contribution marked provisional, excess rejected');
