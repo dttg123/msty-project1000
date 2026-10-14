@@ -7,7 +7,7 @@ async function installDriver(page){await page.evaluate(()=>{
  const pause=()=>new Promise(r=>setTimeout(r,10));
  window.qaSubmit=async(kind,values)=>{
   if(kind==='withdrawal'){document.querySelector('[data-project-detail-tab="recovery"]')?.click();document.querySelector('#page-projects [data-add-withdrawal]').click();}
-  else {document.querySelector('[data-project-detail-tab="records"]')?.click();for(const name of ['manual-tools']){const detail=document.querySelector('.'+name);if(!detail.open)detail.querySelector('summary').click();}document.querySelector(`[data-${kind==='price'?'edit-price':'add-'+kind}]`).click();}
+  else {document.querySelector('[data-project-detail-tab="records"]')?.click();if(kind==='price'){const detail=document.querySelector('.manual-tools');if(!detail.open)detail.querySelector('summary').click();}else document.querySelector('[data-record-add]').click();document.querySelector(`[data-${kind==='price'?'edit-price':'add-'+kind}]`).click();}
   const form=document.querySelector('#'+({price:'price',trade:'trade',dividend:'dividend',withdrawal:'withdrawal'}[kind])+'Form');if(!form)throw Error('Missing form '+kind);
   for(const [name,value] of Object.entries(values)){const input=form.elements.namedItem(name);if(!input)throw Error('Missing field '+kind+':'+name);input.value=String(value);input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}
   if(!form.checkValidity())throw Error('Invalid UI form '+kind+' '+JSON.stringify(values));

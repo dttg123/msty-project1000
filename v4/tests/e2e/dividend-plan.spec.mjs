@@ -1,4 +1,4 @@
-import {openPortfolioDetail} from './portfolio-navigation.mjs';
+import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 import {blankState} from '../../modules/state.js';
 import {tossCandidateToTrade} from '../../modules/toss.js';
@@ -20,7 +20,9 @@ async function useForm(page,amount='30',date='2025-01-04'){
  await openPortfolioDetail(page,'recovery');await page.locator('#page-projects [data-add-withdrawal]').click();await page.locator('#withdrawalForm [name="date"]').fill(date);await page.locator('#withdrawalForm [name="amountUSD"]').fill(amount);
 }
 async function details(page){await openPortfolioDetail(page,'recovery');const d=page.locator('#page-projects .dividend-use-details');if(await d.getAttribute('open')===null)await d.locator(':scope > summary').click();return d;}
-async function manual(page,action){await openPortfolioDetail(page,'records');for(const name of ['manual-tools'])if(await page.locator('.'+name).getAttribute('open')===null)await page.locator('.'+name+' > summary').click();await page.locator(`[data-${action}]`).click();}
+async function manual(page,action){
+ await openRecordAction(page,action);
+}
 
 test('플러스 전환 → ISA 사용 → 마이너스 재개 → 목표 달성은 과거 사용액을 유지한다',async({page})=>{
  test.setTimeout(90000);const errors=await setup(page),before=await read(page);

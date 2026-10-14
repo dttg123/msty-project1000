@@ -1,4 +1,4 @@
-import {openPortfolioDetail} from './portfolio-navigation.mjs';
+import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 import {blankState} from '../../modules/state.js';
 test.use({serviceWorkers:'block'});
@@ -16,7 +16,9 @@ async function setup(page){
 async function useForm(page,amount='30',date='2025-01-04'){
  await openPortfolioDetail(page,'recovery');await page.locator('#page-projects [data-add-withdrawal]').click();await page.locator('#withdrawalForm [name="date"]').fill(date);await page.locator('#withdrawalForm [name="amountUSD"]').fill(amount);
 }
-async function manual(page,action){await openPortfolioDetail(page,'records');for(const name of ['manual-tools'])if(await page.locator('.'+name).getAttribute('open')===null)await page.locator('.'+name+' > summary').click();await page.locator(`[data-${action}]`).click();}
+async function manual(page,action){
+ await openRecordAction(page,action);
+}
 
 
 for(const action of ['edit','delete'])test(`사용 완료한 배당 ${action} 후에도 원장 잔액을 훼손하지 않아야 한다`,async({page},info)=>{

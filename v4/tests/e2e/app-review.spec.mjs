@@ -74,3 +74,26 @@ test('chart selection preserves the page, expanded analysis and navigation clear
  expect(await page.locator('.home-stocks .list-row').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('none');
  await page.screenshot({path:info.outputPath('stable-home-analysis.png'),fullPage:true});
 });
+
+test('one record entry route, one-layer explanations and optional touch feedback',async({page},info)=>{
+ test.setTimeout(60_000);
+ await page.addInitScript(()=>{window.__feedback=[];Object.defineProperty(navigator,'vibrate',{configurable:true,value:pattern=>{window.__feedback.push(pattern);return true;}});});
+ const before=await setup(page);await page.locator('#page-home [data-project-detail="msty"]').click();
+ await openPortfolioDetail(page,'records');await page.locator('.manual-tools > summary').click();
+ await expect(page.locator('.manual-tools [data-add-trade],.manual-tools [data-add-dividend],.manual-tools [data-add-split]')).toHaveCount(0);
+ for(const [action,form] of [['trade','trade'],['dividend','dividend'],['split','split'],['withdrawal','withdrawal']]){
+  await page.locator('[data-record-add]').click();await page.locator(`#modal [data-add-${action}]`).click();await expect(page.locator(`#${form}Form`)).toBeVisible();await page.locator('[data-close-modal]').first().click();
+ }
+ const pulseState=await page.evaluate(()=>({coarse:matchMedia('(pointer: coarse)').matches,pulses:window.__feedback}));if(pulseState.coarse)expect(pulseState.pulses).toContain(12);else expect(pulseState.pulses).toEqual([]);
+ await openPortfolioDetail(page,'recovery');await page.locator('.dividend-use-details > summary').click();await expect(page.locator('.recovery-calculation-note')).toBeVisible();await expect(page.locator('.dividend-use-details details')).toHaveCount(0);
+ await page.locator('.nav-btn[data-page="goal"]').click();await page.locator('[data-goal-project="msty"] > summary').click();await expect(page.locator('[data-goal-project="msty"] .dividend-use-details')).toHaveCount(0);await page.locator('[data-goal-project="msty"] [data-detail-tab="recovery"]').click();await expect(page.locator('#detail-panel-recovery')).toBeVisible();
+ await page.locator('[data-page="settings"]').click();const cloud=page.locator('.settings-connection').filter({has:page.locator('[data-show-login]')});await cloud.locator(':scope > summary').click();await expect(page.locator('[data-show-login]')).toBeVisible();await expect(cloud.locator('details.settings-connection')).toHaveCount(0);
+ const display=page.locator('.settings-section').filter({has:page.locator('#displaySettingsForm')});await display.locator(':scope > summary').click();
+ await page.getByRole('switch',{name:'터치 진동',exact:true}).uncheck();await expect.poll(()=>page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return (await storageGet('interactionPreferences')).haptics;})).toBe(false);
+ await page.getByRole('switch',{name:'화면 효과',exact:true}).uncheck();await expect(page.locator('html')).toHaveAttribute('data-ui-motion','off');
+ const pulses=await page.evaluate(()=>window.__feedback.length);await page.locator('.nav-btn[data-page="home"]').click();await page.locator('#page-home [data-project-detail="msty"]').click();await openPortfolioDetail(page,'records');await page.locator('[data-record-add]').click();expect(await page.evaluate(()=>window.__feedback.length)).toBe(pulses);await page.locator('[data-close-modal]').first().click();
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('html')).toHaveAttribute('data-ui-motion','off');
+ const after=await ledger(page);for(const key of ['trades','dividends','cashAdjustments','splits','projects'])expect(after[key]).toEqual(before[key]);
+ await page.emulateMedia({reducedMotion:'reduce'});await page.locator('[data-page="settings"]').click();const controls=page.locator('.settings-section').filter({has:page.locator('#displaySettingsForm')});await controls.locator(':scope > summary').click();await page.getByRole('switch',{name:'화면 효과',exact:true}).check();await expect(page.locator('html')).toHaveAttribute('data-ui-motion','off');
+ await page.screenshot({path:info.outputPath('touch-feedback-settings.png'),fullPage:true});
+});

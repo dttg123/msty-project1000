@@ -133,9 +133,23 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const splash=document.getElementById('splashScreen'); if(!splash)return;
     splash.classList.add('hide');splash.hidden=true;splash.remove();
   }
+  let interactionPreferences={haptics:true,motion:true};
+  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+  let lastPulse=0,lastPulseKind='';
+  function applyInteractionPreferences(){const enabled=interactionPreferences.motion&&!reducedMotion.matches;document.documentElement.dataset.uiMotion=enabled?'on':'off';if(!enabled)document.querySelectorAll('.view-enter,.panel-enter').forEach(el=>el.classList.remove('view-enter','panel-enter'));}
+  function feedbackPulse(kind:'selection'|'open'|'success'|'error'){
+    if(!interactionPreferences.haptics||reducedMotion.matches||!matchMedia('(pointer: coarse)').matches)return;
+    const now=Date.now();if(now-lastPulse<100&&lastPulseKind===kind)return;
+    lastPulse=now;lastPulseKind=kind;
+    try{navigator.vibrate?.(kind==='success'?[12,35,12]:kind==='error'?[20,40,20]:kind==='open'?12:8);}catch{}
+  }
+  function animateInteraction(element:HTMLElement|null,className:string){
+    if(!element||!interactionPreferences.motion||reducedMotion.matches)return;
+    element.classList.add(className);element.addEventListener('animationend',()=>element.classList.remove(className),{once:true});
+  }
   function toast(message: string,{haptic=false}: {haptic?:boolean} ={}): void {
     const el=document.getElementById('toast');if(!el)return; clearTimeout(toastTimer); el.textContent=message; el.classList.add('show');
-    if(haptic)try{navigator.vibrate?.(18)}catch (_: unknown){} toastTimer=setTimeout(()=>el.classList.remove('show'),2300);
+    if(haptic)feedbackPulse('error'); toastTimer=setTimeout(()=>el.classList.remove('show'),2300);
   }
   async function refreshExchangeRate(manual=false,{preserveMode=false}={}): Promise<void> {
     if(exchangeRateBusy||demoMode)return;
@@ -193,12 +207,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
   async function saveState(immediate =false): Promise<void> {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
-    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
-    if(immediate)await run();else saveTimer=setTimeout(()=>run().catch(console.error),120);
+    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.',{haptic:true});throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
+    if(immediate){await run();if(storageStatus().durable)feedbackPulse('success');}else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
 
   const views = createViews({
-    getPortfolioDetail:()=>portfolioDetail,getPortfolioDetailTab:()=>portfolioDetailTab,
+    getInteractionPreferences:()=>interactionPreferences,getPortfolioDetail:()=>portfolioDetail,getPortfolioDetailTab:()=>portfolioDetailTab,
     getPortfolioIncomeMonth:(projectId)=>portfolioIncomeSelection.projectId===projectId?portfolioIncomeSelection.month:'',
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value) => { selectedProjectId=value; },
     getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getCombinedRefreshStatus:()=>({busy:combinedRefreshBusy,summary:combinedRefreshSummary}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
@@ -249,7 +263,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(!PAGES.includes(page))page='home'; const changed=currentPage!==page;currentPage=page;
     document.querySelectorAll('.page').forEach((el)=>el.classList.toggle('active',el.id===`page-${page}`));
     document.querySelectorAll<HTMLElement>('.nav-btn').forEach((el)=>el.classList.toggle('active',el.dataset.page===page));
-    if(changed)window.scrollTo({top:0,behavior:'instant'});
+    if(changed){window.scrollTo({top:0,behavior:'instant'});animateInteraction(document.getElementById(`page-${page}`),'view-enter');}
     if(page==='settings')ensureUiHistory();
     rememberView();
   }
@@ -265,7 +279,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     if(!backdrop.classList.contains('show')){modalFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;modalScroll=window.scrollY;document.body.style.position='fixed';document.body.style.top=`-${modalScroll}px`;document.body.style.width='100%';}
     modalDirty=false;modal.innerHTML=`<button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button><div class="modal-handle"></div>${html}`;
     modal.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>('input,select,textarea').forEach((input,index)=>{const label=input.closest('div')?.querySelector('label');if(label){input.id='modal-field-'+index;label.htmlFor=input.id;}});
-    backdrop.classList.add('show');modal.scrollTop=0;
+    backdrop.classList.add('show');modal.scrollTop=0;feedbackPulse('open');
     document.querySelectorAll<HTMLElement>('main,.bottom-nav').forEach((el)=>{el.inert=true;});
     modal.setAttribute('aria-label',modal.querySelector('h3')?.textContent||'입력 창');
     modal.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});
@@ -306,7 +320,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       }
       state={...before,projects:restoreRows(before.projects,references.projects),trades:restoreRows(before.trades,references.trades),dividends:restoreRows(before.dividends,references.dividends),splits:restoreRows(before.splits,references.splits),cashAdjustments:restoreRows(before.cashAdjustments,references.cashAdjustments)};
       selectedProjectId=previousProjectId;portfolioGroup=previousGroup;
-      console.error('State action was rolled back',error);toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.');return false;
+      console.error('State action was rolled back',error);toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.',{haptic:true});return false;
     } finally {
       stateActionRunning=false;modalSaving=false;controls.forEach((control,index)=>control.disabled=disabled[index]);
     }
@@ -992,9 +1006,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const button=event.target.closest<HTMLElement>('button,[data-open-project],[data-goal-detail]');if(!button)return;
     if('homePortfolio'in button.dataset){portfolioDetail=false;renderProjects();showPage('projects');return;}
     if(button.dataset.page){if(button.dataset.page==='projects'&&portfolioDetail){portfolioDetail=false;renderProjects();}showPage(button.dataset.page);return;}
-    if(button.dataset.projectDetail){portfolioOverviewScroll=currentPage==='projects'?window.scrollY:0;selectedProjectId=button.dataset.projectDetail;portfolioGroup=projectById(selectedProjectId)?.category==='highYield'?'highYield':'dividend';portfolioDetail=true;portfolioDetailTab='summary';renderProjects();showPage('projects');ensureUiHistory();window.scrollTo({top:0,behavior:'instant'});rememberView();return;}
+    if(button.dataset.projectDetail){portfolioOverviewScroll=currentPage==='projects'?window.scrollY:0;selectedProjectId=button.dataset.projectDetail;portfolioGroup=projectById(selectedProjectId)?.category==='highYield'?'highYield':'dividend';portfolioDetail=true;portfolioDetailTab=button.dataset.detailTab==='recovery'?'recovery':'summary';renderProjects();showPage('projects');ensureUiHistory();window.scrollTo({top:0,behavior:'instant'});rememberView();return;}
     if('portfolioOverview'in button.dataset){portfolioDetail=false;renderProjects();window.scrollTo({top:portfolioOverviewScroll,behavior:'instant'});rememberView();return;}
-    if(button.dataset.projectDetailTab){if(!['summary','dividend','recovery','records'].includes(button.dataset.projectDetailTab))return;portfolioDetailTab=button.dataset.projectDetailTab;renderProjects();document.querySelector<HTMLElement>(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({preventScroll:true});return;}
+    if(button.dataset.projectDetailTab){if(!['summary','dividend','recovery','records'].includes(button.dataset.projectDetailTab))return;if(portfolioDetailTab===button.dataset.projectDetailTab)return;portfolioDetailTab=button.dataset.projectDetailTab;renderProjects();animateInteraction(document.querySelector<HTMLElement>('.detail-panel'),'panel-enter');document.querySelector<HTMLElement>(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({preventScroll:true});return;}
     if(button.dataset.currency){if(state.settings.displayCurrency===button.dataset.currency)return;state.settings.displayCurrency=button.dataset.currency==='USD'?'USD':'KRW';saveState();renderAll(true);return;}
     if(button.dataset.chartKey){chartSelection=button.dataset.chartKey;renderProjects();return;}
     if(button.dataset.portfolioIncomeMonth){
@@ -1076,6 +1090,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
 
   function bindStaticEvents() {
     history.scrollRestoration='manual';
+    reducedMotion.addEventListener('change',applyInteractionPreferences);
     const nav=document.querySelector<HTMLElement>('.bottom-nav');
     if(nav){
       const reserveNavSpace=()=>document.documentElement.style.setProperty('--bottom-nav-space',Math.ceil(nav.getBoundingClientRect().height)+'px');
@@ -1117,10 +1132,18 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       form.dataset.submitting='true';
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;},800);
     },true);
-    document.addEventListener('click',(event: Event)=>{handleClick(event);rememberView();});
+    document.addEventListener('click',(event: Event)=>{
+      const target=event.target instanceof Element?event.target.closest<HTMLElement>('button,[data-goal-detail]'):null;
+      if(event.isTrusted&&target&&!target.matches(':disabled')&&((target.dataset.page&&target.dataset.page!==currentPage)||(target.dataset.projectDetailTab&&target.dataset.projectDetailTab!==portfolioDetailTab)||target.dataset.projectDetail||target.dataset.goalDetail))feedbackPulse('selection');
+      handleClick(event);rememberView();
+    });
     window.addEventListener('pagehide',rememberView);
     document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=submittedFormData(event);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();});
-    document.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement||event.target instanceof HTMLSelectElement))return;if(event.target.closest('#historyFilterForm')&&['month','kind'].includes(event.target.name)){document.querySelector<HTMLFormElement>('#historyFilterForm')?.requestSubmit();return;}if(event.target.matches('[data-project-select]')){selectedProjectId=event.target.value;renderProjects();rememberView();return;}if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();rememberView();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();rememberView();});
+    document.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement||event.target instanceof HTMLSelectElement))return;if(event.target instanceof HTMLInputElement&&event.target.dataset.feedbackSetting){
+      const key=event.target.dataset.feedbackSetting;if(key!=='haptics'&&key!=='motion')return;
+      const control=event.target,next={...interactionPreferences,[key]:control.checked};control.disabled=true;
+      void storageSet('interactionPreferences',next).then(()=>{interactionPreferences=next;applyInteractionPreferences();if(key==='haptics'&&next.haptics)feedbackPulse('selection');}).catch(()=>{control.checked=interactionPreferences[key];toast('터치 설정을 저장하지 못했습니다. 다시 시도해 주세요.');}).finally(()=>control.disabled=false);return;
+    }if(event.target.closest('#historyFilterForm')&&['month','kind'].includes(event.target.name)){document.querySelector<HTMLFormElement>('#historyFilterForm')?.requestSubmit();return;}if(event.target.matches('[data-project-select]')){selectedProjectId=event.target.value;renderProjects();rememberView();return;}if(event.target.matches('[data-chart-year]')){chartYear=event.target.value;renderProjects();rememberView();return;}if(!event.target.matches('[data-chart-month]'))return;chartMonth=event.target.value;renderProjects();rememberView();});
     document.getElementById('modal')!.addEventListener('input',()=>{modalDirty=true;});
     document.getElementById('modal')!.addEventListener('change',()=>{modalDirty=true;});
     document.getElementById('modalBackdrop')!.addEventListener('click',(event: Event)=>{if(event.target instanceof Element&&event.target.id==='modalBackdrop')requestCloseModal();});
@@ -1138,6 +1161,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     try{
       removeLegacyTossBrowserCredentials();
       await openStorage();
+      try{const feedback=await storageGet('interactionPreferences');if(isRecord(feedback))interactionPreferences={haptics:feedback.haptics!==false,motion:feedback.motion!==false};}catch{}
+      applyInteractionPreferences();
       try{const cached=await storageGet('officialDistributionFeed');if(cached)officialFeed=parseOfficialDistributionFeed(cached);}catch{}
       const existing=await storageGet(STATE_KEY);startupSnapshot=existing;startupPhase='records';
       legacyMigrationSource=demoMode?null:await readLegacyState();

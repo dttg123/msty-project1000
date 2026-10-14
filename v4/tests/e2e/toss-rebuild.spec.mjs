@@ -1,4 +1,4 @@
-import {openPortfolioDetail} from './portfolio-navigation.mjs';
+import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 
 async function readLedger(page,key='state'){
@@ -14,11 +14,7 @@ async function readLedger(page,key='state'){
 }
 
 async function manualForm(page,kind){
-  await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
-  await openPortfolioDetail(page,'records');for(const name of ['manual-tools']){
-    if(await page.locator(`.${name}`).getAttribute('open')===null)await page.locator(`.${name} > summary`).click();
-  }
-  await page.locator(`[data-add-${kind}]`).click();
+ await page.locator('[data-page="projects"]').first().click();await openRecordAction(page,'add-'+kind);
 }
 
 async function setup(page,holdingShares){

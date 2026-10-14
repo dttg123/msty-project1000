@@ -853,3 +853,24 @@ html{scroll-padding-bottom:calc(var(--bottom-nav-space,var(--nav-h)) + 16px)}
 @media(max-width:360px){.cashflow-picked{flex-wrap:wrap;gap:4px}.cashflow-picked strong{margin-left:auto}}
 
 .home-cashflow-details .cashflow-selection{min-height:146px}
+
+/* Feedback belongs to navigation and outcomes; chart updates remain still. */
+.view-enter{animation:uiViewEnter .16s ease-out both}
+.panel-enter{animation:uiPanelEnter .14s ease-out both}
+@keyframes uiViewEnter{from{opacity:.85;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes uiPanelEnter{from{opacity:.9;transform:translateY(3px)}to{opacity:1;transform:none}}
+html[data-ui-motion="off"] *,html[data-ui-motion="off"] *::before,html[data-ui-motion="off"] *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+.feedback-settings{margin-top:18px;border-top:1px solid var(--line)}
+.feedback-settings label{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 0;color:var(--text);font-size:.9375rem}
+.feedback-settings small{display:block;margin-top:5px;font-size:.8125rem;line-height:1.5;color:var(--muted)}
+.feedback-settings input{appearance:none;flex:0 0 46px;width:46px;height:28px;border-radius:16px;background:var(--line);position:relative;cursor:pointer}
+.feedback-settings input::after{content:'';position:absolute;width:22px;height:22px;top:3px;left:3px;border-radius:50%;background:#fff;transition:transform .14s ease}
+.feedback-settings input:checked{background:var(--accent)}
+.feedback-settings input:checked::after{transform:translateX(18px)}
+.feedback-settings input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.recovery-calculation-note{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.recovery-calculation-note>strong,.metric-guide>strong{display:block;font-size:.8125rem;color:var(--muted);padding-block:8px}
+.compact-recovery-link{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
+.compact-recovery-link>span{display:flex;justify-content:space-between;gap:12px;color:var(--muted);font-size:.8125rem}
+.embedded-tools .support-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(prefers-reduced-motion:reduce){.view-enter,.panel-enter{animation:none}}

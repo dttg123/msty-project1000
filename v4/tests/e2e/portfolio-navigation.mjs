@@ -7,3 +7,10 @@ export async function openPortfolioDetail(page,tab='dividend'){
  if(await button.getAttribute('aria-selected')!=='true')await button.click();
  await expect(page.locator(`#detail-panel-${tab}`)).toBeVisible();
 }
+
+export async function openRecordAction(page,action){
+ await openPortfolioDetail(page,'records');
+ if(['add-trade','add-dividend','add-split','add-withdrawal'].includes(action))await page.locator('[data-record-add]').click();
+ else {const tools=page.locator('.manual-tools');if(await tools.getAttribute('open')===null)await tools.locator(':scope > summary').click();}
+ await page.locator(`[data-${action}]`).click();
+}

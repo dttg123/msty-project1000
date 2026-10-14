@@ -1,11 +1,11 @@
-import {openPortfolioDetail} from './portfolio-navigation.mjs';
+import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 import {blankState} from '../../modules/state.js';
 const noAuth=`export async function initGoogleAuth(){};export async function logoutGoogle(){};export async function getGoogleIdToken(){return null;}export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){return {revision:1};}export async function subscribeCloudDocument(){return ()=>{};}`;
 async function receipt(page,amount='12.34'){
  await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'dividend');
- await openPortfolioDetail(page,'records');for(const selector of ['.manual-tools'])if(await page.locator(selector).getAttribute('open')===null)await page.locator(selector+' > summary').click();
- await page.locator('[data-add-dividend]').click();await page.locator('#dividendForm [name="date"]').fill('2026-01-02');await page.locator('#dividendForm [name="amountUSD"]').fill(amount);await page.locator('#dividendForm button[type="submit"].primary').click();
+ await openPortfolioDetail(page,'records');
+ await openRecordAction(page,'add-dividend');await page.locator('#dividendForm [name="date"]').fill('2026-01-02');await page.locator('#dividendForm [name="amountUSD"]').fill(amount);await page.locator('#dividendForm button[type="submit"].primary').click();
 }
 async function ledger(page){return page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4');r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('state');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
 

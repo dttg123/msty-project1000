@@ -183,6 +183,30 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         splash.hidden = true;
         splash.remove();
     }
+    let interactionPreferences = { haptics: true, motion: true };
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    let lastPulse = 0, lastPulseKind = '';
+    function applyInteractionPreferences() { const enabled = interactionPreferences.motion && !reducedMotion.matches; document.documentElement.dataset.uiMotion = enabled ? 'on' : 'off'; if (!enabled)
+        document.querySelectorAll('.view-enter,.panel-enter').forEach(el => el.classList.remove('view-enter', 'panel-enter')); }
+    function feedbackPulse(kind) {
+        if (!interactionPreferences.haptics || reducedMotion.matches || !matchMedia('(pointer: coarse)').matches)
+            return;
+        const now = Date.now();
+        if (now - lastPulse < 100 && lastPulseKind === kind)
+            return;
+        lastPulse = now;
+        lastPulseKind = kind;
+        try {
+            navigator.vibrate?.(kind === 'success' ? [12, 35, 12] : kind === 'error' ? [20, 40, 20] : kind === 'open' ? 12 : 8);
+        }
+        catch { }
+    }
+    function animateInteraction(element, className) {
+        if (!element || !interactionPreferences.motion || reducedMotion.matches)
+            return;
+        element.classList.add(className);
+        element.addEventListener('animationend', () => element.classList.remove(className), { once: true });
+    }
     function toast(message, { haptic = false } = {}) {
         const el = document.getElementById('toast');
         if (!el)
@@ -191,10 +215,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         el.textContent = message;
         el.classList.add('show');
         if (haptic)
-            try {
-                navigator.vibrate?.(18);
-            }
-            catch (_) { }
+            feedbackPulse('error');
         toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
     }
     async function refreshExchangeRate(manual = false, { preserveMode = false } = {}) {
@@ -349,7 +370,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         catch (error) {
             setSaveStatus('저장 실패 · 백업 필요', 'cloud-error');
-            toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.');
+            toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.', { haptic: true });
             throw error;
         } setSaveStatus(storageStatus().durable ? '' : '임시 저장 · 백업 필요', storageStatus().durable ? '' : 'cloud-error'); if (currentUser) {
             if (immediate)
@@ -357,13 +378,16 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             else
                 cloudTimer = setTimeout(pushCloudState, 1400);
         } };
-        if (immediate)
+        if (immediate) {
             await run();
+            if (storageStatus().durable)
+                feedbackPulse('success');
+        }
         else
             saveTimer = setTimeout(() => run().catch(console.error), 120);
     }
     const views = createViews({
-        getPortfolioDetail: () => portfolioDetail, getPortfolioDetailTab: () => portfolioDetailTab,
+        getInteractionPreferences: () => interactionPreferences, getPortfolioDetail: () => portfolioDetail, getPortfolioDetailTab: () => portfolioDetailTab,
         getPortfolioIncomeMonth: (projectId) => portfolioIncomeSelection.projectId === projectId ? portfolioIncomeSelection.month : '',
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
         getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getCombinedRefreshStatus: () => ({ busy: combinedRefreshBusy, summary: combinedRefreshSummary }), getSaveSummary, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
@@ -432,8 +456,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         currentPage = page;
         document.querySelectorAll('.page').forEach((el) => el.classList.toggle('active', el.id === `page-${page}`));
         document.querySelectorAll('.nav-btn').forEach((el) => el.classList.toggle('active', el.dataset.page === page));
-        if (changed)
+        if (changed) {
             window.scrollTo({ top: 0, behavior: 'instant' });
+            animateInteraction(document.getElementById(`page-${page}`), 'view-enter');
+        }
         if (page === 'settings')
             ensureUiHistory();
         rememberView();
@@ -465,6 +491,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         } });
         backdrop.classList.add('show');
         modal.scrollTop = 0;
+        feedbackPulse('open');
         document.querySelectorAll('main,.bottom-nav').forEach((el) => { el.inert = true; });
         modal.setAttribute('aria-label', modal.querySelector('h3')?.textContent || '입력 창');
         modal.querySelector('button')?.focus({ preventScroll: true });
@@ -531,7 +558,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             selectedProjectId = previousProjectId;
             portfolioGroup = previousGroup;
             console.error('State action was rolled back', error);
-            toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.');
+            toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.', { haptic: true });
             return false;
         }
         finally {
@@ -1965,7 +1992,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             selectedProjectId = button.dataset.projectDetail;
             portfolioGroup = projectById(selectedProjectId)?.category === 'highYield' ? 'highYield' : 'dividend';
             portfolioDetail = true;
-            portfolioDetailTab = 'summary';
+            portfolioDetailTab = button.dataset.detailTab === 'recovery' ? 'recovery' : 'summary';
             renderProjects();
             showPage('projects');
             ensureUiHistory();
@@ -1983,8 +2010,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         if (button.dataset.projectDetailTab) {
             if (!['summary', 'dividend', 'recovery', 'records'].includes(button.dataset.projectDetailTab))
                 return;
+            if (portfolioDetailTab === button.dataset.projectDetailTab)
+                return;
             portfolioDetailTab = button.dataset.projectDetailTab;
             renderProjects();
+            animateInteraction(document.querySelector('.detail-panel'), 'panel-enter');
             document.querySelector(`[data-project-detail-tab="${portfolioDetailTab}"]`)?.focus({ preventScroll: true });
             return;
         }
@@ -2366,6 +2396,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function bindStaticEvents() {
         history.scrollRestoration = 'manual';
+        reducedMotion.addEventListener('change', applyInteractionPreferences);
         const nav = document.querySelector('.bottom-nav');
         if (nav) {
             const reserveNavSpace = () => document.documentElement.style.setProperty('--bottom-nav-space', Math.ceil(nav.getBoundingClientRect().height) + 'px');
@@ -2448,27 +2479,52 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             setTimeout(() => { if (!form.isConnected)
                 return; delete form.dataset.submitting; }, 800);
         }, true);
-        document.addEventListener('click', (event) => { handleClick(event); rememberView(); });
+        document.addEventListener('click', (event) => {
+            const target = event.target instanceof Element ? event.target.closest('button,[data-goal-detail]') : null;
+            if (event.isTrusted && target && !target.matches(':disabled') && ((target.dataset.page && target.dataset.page !== currentPage) || (target.dataset.projectDetailTab && target.dataset.projectDetailTab !== portfolioDetailTab) || target.dataset.projectDetail || target.dataset.goalDetail))
+                feedbackPulse('selection');
+            handleClick(event);
+            rememberView();
+        });
         window.addEventListener('pagehide', rememberView);
         document.addEventListener('submit', (event) => { if (!(event.target instanceof HTMLFormElement))
             return; if (event.target.id !== 'historyFilterForm')
             return; event.preventDefault(); const form = submittedFormData(event); historyFilter = { month: String(form.get('month') || ''), kind: String(form.get('kind') || ''), query: String(form.get('query') || '') }; historyLimit = 10; renderProjects(); });
-        document.addEventListener('change', (event) => { if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement))
-            return; if (event.target.closest('#historyFilterForm') && ['month', 'kind'].includes(event.target.name)) {
-            document.querySelector('#historyFilterForm')?.requestSubmit();
-            return;
-        } if (event.target.matches('[data-project-select]')) {
-            selectedProjectId = event.target.value;
+        document.addEventListener('change', (event) => {
+            if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement))
+                return;
+            if (event.target instanceof HTMLInputElement && event.target.dataset.feedbackSetting) {
+                const key = event.target.dataset.feedbackSetting;
+                if (key !== 'haptics' && key !== 'motion')
+                    return;
+                const control = event.target, next = { ...interactionPreferences, [key]: control.checked };
+                control.disabled = true;
+                void storageSet('interactionPreferences', next).then(() => { interactionPreferences = next; applyInteractionPreferences(); if (key === 'haptics' && next.haptics)
+                    feedbackPulse('selection'); }).catch(() => { control.checked = interactionPreferences[key]; toast('터치 설정을 저장하지 못했습니다. 다시 시도해 주세요.'); }).finally(() => control.disabled = false);
+                return;
+            }
+            if (event.target.closest('#historyFilterForm') && ['month', 'kind'].includes(event.target.name)) {
+                document.querySelector('#historyFilterForm')?.requestSubmit();
+                return;
+            }
+            if (event.target.matches('[data-project-select]')) {
+                selectedProjectId = event.target.value;
+                renderProjects();
+                rememberView();
+                return;
+            }
+            if (event.target.matches('[data-chart-year]')) {
+                chartYear = event.target.value;
+                renderProjects();
+                rememberView();
+                return;
+            }
+            if (!event.target.matches('[data-chart-month]'))
+                return;
+            chartMonth = event.target.value;
             renderProjects();
             rememberView();
-            return;
-        } if (event.target.matches('[data-chart-year]')) {
-            chartYear = event.target.value;
-            renderProjects();
-            rememberView();
-            return;
-        } if (!event.target.matches('[data-chart-month]'))
-            return; chartMonth = event.target.value; renderProjects(); rememberView(); });
+        });
         document.getElementById('modal').addEventListener('input', () => { modalDirty = true; });
         document.getElementById('modal').addEventListener('change', () => { modalDirty = true; });
         document.getElementById('modalBackdrop').addEventListener('click', (event) => { if (event.target instanceof Element && event.target.id === 'modalBackdrop')
@@ -2521,6 +2577,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         try {
             removeLegacyTossBrowserCredentials();
             await openStorage();
+            try {
+                const feedback = await storageGet('interactionPreferences');
+                if (isRecord(feedback))
+                    interactionPreferences = { haptics: feedback.haptics !== false, motion: feedback.motion !== false };
+            }
+            catch { }
+            applyInteractionPreferences();
             try {
                 const cached = await storageGet('officialDistributionFeed');
                 if (cached)
