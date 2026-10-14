@@ -12,7 +12,7 @@ test('downloadable review app boots offline, saves input, reloads and exports a 
  await page.locator('[data-project-detail-tab="records"]').click();await expect(page.locator('.records-list')).toBeVisible();
  await page.locator('[data-record-add]').click();await page.locator('#modal [data-add-dividend]').click();
  await page.locator('#dividendForm [name="amountUSD"]').fill('12.34');await page.locator('#dividendForm button[type="submit"].primary').click();await expect(page.locator('#dividendForm')).toBeHidden();
- await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-project-detail]').last().click();await page.locator('[data-project-detail-tab="records"]').click();
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('#page-home [data-project-detail="demo-msty"]').click();await page.locator('[data-project-detail-tab="records"]').click();
  await expect(page.locator('.records-list')).toContainText('16,906');
  await page.locator('[data-page="settings"]').click();const backups=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});await backups.locator(':scope > summary').click();await page.locator('[data-backup]').click();
  const download=page.waitForEvent('download');await page.locator('[data-backup-download]').click();const file=await download,path=info.outputPath('review-data.zip');await file.saveAs(path);
