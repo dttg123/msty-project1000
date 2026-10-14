@@ -84,3 +84,14 @@ for(const mode of ['reinvest','mixed','direct']){
  assert.equal(changed.trades[0].dividendFunding,undefined);
 }
 console.log('Funding safety PASS: pending spending, cash dates, preserved snapshot, ZIP restore and legacy allocation rebuild');
+{
+ const s=blankState(),p=s.projects[0],t=tossCandidateToTrade({id:'fractional',symbol:p.symbol,date:'2025-01-02',type:'buy',shares:3,price:10.123,currency:'USD'},{projectId:p.id,id:'fractional'});
+ s.trades=[t];s.dividends=[{id:'funds',projectId:p.id,date:'2025-01-01',amountUSD:40}];
+ const compute=()=>createPortfolioEngine(()=>s,()=>p.id).computeProject(p),raw=compute();
+ t.dividendFunding={amountUSD:30.37,cashDebitUSD:30.37,cashDate:'2025-01-03',sourceFingerprint:t.source.sourceFingerprint};
+ assert.ok(Math.abs(compute().dividendAvailable-9.63)<1e-8);assert.equal(compute().directBuyCost,0);assert.equal(compute().purchaseBasis,raw.purchaseBasis);
+ assert.equal(decodeAppState(s).trades[0].dividendFunding.cashDebitUSD,30.37);
+ const invalid=structuredClone(s);invalid.trades[0].dividendFunding.cashDebitUSD=31;assert.throws(()=>decodeAppState(invalid));
+ const stale=structuredClone(s);stale.trades[0].price=11;stale.trades[0].date='2025-01-04';stale.trades[0].source.sourceFingerprint='changed';assert.equal(decodeAppState(stale).trades[0].dividendFunding.cashDebitUSD,30.37);assert.equal(createPortfolioEngine(()=>stale,()=>p.id).computeProject(p).spendableDividendBalance,null);
+}
+console.log('Settled cash precision PASS: source valuation unchanged, rounded debit validated, stale metadata retained');

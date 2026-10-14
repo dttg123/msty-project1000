@@ -104,11 +104,11 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
                 tradeTaxes += cash.taxUSD;
                 const funding = event.dividendFunding;
                 if (funding && funding.sourceFingerprint === event.source?.sourceFingerprint) {
-                    const part = clamp(n(funding.amountUSD), 0, amount);
-                    directBuyCost += amount - part;
+                    const debit = funding.cashDebitUSD ?? amount, part = clamp(n(funding.amountUSD), 0, debit);
+                    directBuyCost += debit - part;
                     reinvestAmount += part;
-                    reinvestShares += amount > 0 ? quantity * part / amount : 0;
-                    directShares += amount > 0 ? quantity * (amount - part) / amount : quantity;
+                    reinvestShares += debit > 0 ? quantity * part / debit : 0;
+                    directShares += debit > 0 ? quantity * (debit - part) / debit : quantity;
                     if (part > 0)
                         reinvestCount++;
                 }
@@ -218,7 +218,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
             ...(openingAmount ? [{ id: 'opening-balance', date: project.initialDividendBalanceDate || '0000-01-01', createdAt: '', kind: 'opening', amountUSD: openingAmount }] : []),
             ...postedDividends.map((row) => ({ ...row, kind: 'dividend', amountUSD: dividendCashBreakdown(row).netUSD })),
             ...postedAdjustments.map((row) => ({ ...row, kind: 'adjustment', amountUSD: n(row.amountUSD) })),
-            ...postedTrades.filter((row) => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || !!row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint)).map((row) => ({ ...row, date: row.dividendFunding?.sourceFingerprint === row.source?.sourceFingerprint && row.dividendFunding?.cashDate ? row.dividendFunding.cashDate : row.date, kind: 'reinvest', amountUSD: -(row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? clamp(n(row.dividendFunding.amountUSD), 0, tradeCashBreakdown(row).grossBuyCostUSD) : row.buyType === 'mixed' ? clamp(n(row.reinvestAmountUSD), 0, tradeCashBreakdown(row).grossBuyCostUSD) : tradeCashBreakdown(row).grossBuyCostUSD) }))
+            ...postedTrades.filter((row) => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || !!row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint)).map((row) => ({ ...row, date: row.dividendFunding?.sourceFingerprint === row.source?.sourceFingerprint && row.dividendFunding?.cashDate ? row.dividendFunding.cashDate : row.date, kind: 'reinvest', amountUSD: -(row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? clamp(n(row.dividendFunding.amountUSD), 0, row.dividendFunding.cashDebitUSD ?? tradeCashBreakdown(row).grossBuyCostUSD) : row.buyType === 'mixed' ? clamp(n(row.reinvestAmountUSD), 0, tradeCashBreakdown(row).grossBuyCostUSD) : tradeCashBreakdown(row).grossBuyCostUSD) }))
         ].sort((a, b) => { const order = { opening: 0, dividend: 1, adjustment: 2, reinvest: 3 }; return String(a.date).localeCompare(String(b.date)) || (order[a.kind] - order[b.kind]) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id)); });
         let cashBalance = 0, minDividendBalance = 0;
         const cashDeficitEvents = [];

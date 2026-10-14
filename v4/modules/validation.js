@@ -76,9 +76,12 @@ export function validateLedger(raw) {
                 errors.push('매수 유형·재투자액을 확인해 주세요.');
             if (key === 'trades' && row.dividendFunding !== undefined) {
                 const funding = object(row.dividendFunding);
-                if (funding.cashDate !== undefined && (!isDate(funding.cashDate) || String(funding.cashDate) < String(row.date)))
+                const gross = Number(row.shares) * Number(row.price) + Number(row.feeUSD || 0) + Number(row.taxUSD || 0), debit = funding.cashDebitUSD === undefined ? gross : Number(funding.cashDebitUSD);
+                if (funding.cashDebitUSD !== undefined && (!finite(funding.cashDebitUSD) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && Math.abs(debit - Math.round(gross * 100) / 100) > 1e-8)))
+                    errors.push('실제 출금액은 센트 단위 체결금액과 일치해야 합니다.');
+                if (funding.cashDate !== undefined && (!isDate(funding.cashDate) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && String(funding.cashDate) < String(row.date))))
                     errors.push('실제 매수대금 출금일을 확인해 주세요.');
-                if (row.type !== 'buy' || object(row.source).provider !== 'toss' || typeof funding.sourceFingerprint !== 'string' || !funding.sourceFingerprint || !finite(funding.amountUSD) || funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.amountUSD) > Number(row.shares) * Number(row.price) + Number(row.feeUSD || 0) + Number(row.taxUSD || 0))
+                if (row.type !== 'buy' || object(row.source).provider !== 'toss' || typeof funding.sourceFingerprint !== 'string' || !funding.sourceFingerprint || !finite(funding.amountUSD) || funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.amountUSD) > debit + 1e-8)
                     errors.push('매수 자금 출처를 확인해 주세요.');
             }
             if (key === 'cashAdjustments' && row.purpose === 'dividendUse' && (Number(row.amountUSD) >= 0 || !['isa', 'otherDividend', 'living', 'other'].includes(String(row.destination))))
