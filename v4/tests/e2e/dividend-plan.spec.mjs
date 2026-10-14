@@ -72,3 +72,23 @@ test('실제 ZIP 다운로드와 복원이 방향·사용처·토스 자금 출�
 test('외부에서 이미 사용한 배당을 재투자 매수에 중복 사용할 수 없다',async({page})=>{
  const errors=await setup(page);await useForm(page);await page.locator('#withdrawalForm button[type="submit"]').click();await expect(page.locator('#withdrawalForm')).toBeHidden();await manual(page,'add-trade');await page.locator('#tradeForm [name="date"]').fill('2025-01-05');await page.locator('#tradeForm [name="buyType"]').selectOption('reinvest');await page.locator('#tradeForm [name="shares"]').fill('3');await page.locator('#tradeForm [name="price"]').fill('10');await page.locator('#tradeForm button[type="submit"]').click();await expect(page.locator('.toast')).toContainText('배당 잔액이 부족');expect((await read(page)).trades).toHaveLength(1);await page.locator('#tradeForm [name="shares"]').fill('2');await page.locator('#tradeForm button[type="submit"]').click();await expect(page.locator('#tradeForm')).toBeHidden();const saved=await read(page);expect(saved.trades).toHaveLength(2);expect(saved.cashAdjustments[0].amountUSD).toBe(-30);expect(errors).toEqual([]);
 });
+
+test('미확인 자금은 사용을 막고 실제 출금일 확인 후 잔액을 연다',async({page})=>{
+ const errors=await setup(page,true),original=await read(page);
+ await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeDisabled();
+ await details(page);await expect(page.locator('.dividend-use-details')).toContainText('자금 구분 확인 필요');
+ await manual(page,'add-withdrawal');await expect(page.locator('#withdrawalForm')).toHaveCount(0);await expect(page.locator('.toast')).toContainText('배당 사용 전에');await page.locator('#modal [data-close-modal]').click();
+ await details(page);await page.locator('[data-review-funding]').click();await page.locator('[data-funding-trade="broker"]').click();
+ await page.locator('#fundingForm [name="amountUSD"]').fill('10');await page.locator('#fundingForm [name="cashDate"]').fill('2025-01-04');await page.locator('#fundingForm button[type="submit"]').click();
+ await expect(page.locator('#fundingForm')).toBeHidden();await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeEnabled();
+ const after=await read(page);expect(after.trades[1].source).toEqual(original.trades[1].source);expect(after.trades[1].date).toBe(original.trades[1].date);expect(after.trades[1].dividendFunding.cashDate).toBe('2025-01-04');
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await read(page)).trades[1].dividendFunding.cashDate).toBe('2025-01-04');expect(errors).toEqual([]);
+});
+
+test('중간 잔액 제외는 원래 값을 보존하고 저장 실패 시 되돌린다',async({page})=>{
+ const errors=await setup(page);await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const s=await storageGet('state');s.projects[0].initialDividendBalance=8;s.projects[0].initialDividendBalanceDate='2025-01-03';await storageSet('state',s);});
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').click();await openPortfolioDetail(page,'recovery');await details(page);
+ await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeDisabled();await page.locator('[data-exclude-opening-snapshot]').click();await page.evaluate(()=>window.__failPlan=true);await page.locator('#modalConfirm').click();await expect(page.locator('.toast')).toContainText('기기 저장에 실패');expect((await read(page)).projects[0].initialDividendBalanceTreatment).toBeUndefined();
+ await page.evaluate(()=>window.__failPlan=false);await page.locator('#modalConfirm').click();await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeEnabled();
+ const after=await read(page);expect(after.projects[0].initialDividendBalance).toBe(8);expect(after.projects[0].initialDividendBalanceTreatment).toBe('excludedSnapshot');await details(page);await expect(page.locator('.dividend-use-details')).toContainText('$50');expect(errors).toEqual([]);
+});

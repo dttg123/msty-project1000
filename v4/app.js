@@ -648,7 +648,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         } if (reinvestAmountUSD > shares * price + .0001) {
             toast('배당 사용액이 총 매수액보다 큽니다.');
             return;
-        } const ledgerBefore = computeProject(project); const row = record || { id: uid('t'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString(), date, type: 'buy', buyType: 'direct', shares, price }, before = record ? clone(record) : null; assignFields(row, type === 'sell' ? { date, type, buyType: '', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() } : { date, type, buyType: buyType || 'direct', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() }); if (!edit)
+        } const ledgerBefore = computeProject(project); if (type === 'buy' && (buyType === 'reinvest' || buyType === 'mixed') && !ledgerBefore.dividendBalanceConfirmed) {
+            toast('재투자 기록 전에 기존 매수 자금 구분과 초기 잔액을 확인해 주세요.');
+            return;
+        } const row = record || { id: uid('t'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString(), date, type: 'buy', buyType: 'direct', shares, price }, before = record ? clone(record) : null; assignFields(row, type === 'sell' ? { date, type, buyType: '', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() } : { date, type, buyType: buyType || 'direct', shares, price, reinvestAmountUSD, note: String(form.get('note')).trim() }); if (!edit)
             state.trades.push(row); const invalid = computeProject(project).oversells.length; if (invalid) {
             if (edit)
                 restoreRecord(row, before);
@@ -885,6 +888,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         document.getElementById('cashForm').onsubmit = async (event) => { event.preventDefault(); const ledgerBefore = computeProject(project); const form = submittedFormData(event), date = String(form.get('date')), amountUSD = n(form.get('amountUSD')); if (!isDate(date) || !amountUSD) {
             toast('날짜와 0이 아닌 보정액을 입력해 주세요.');
             return;
+        } if (amountUSD < 0 && !ledgerBefore.dividendBalanceConfirmed) {
+            toast('차감 전에 매수 자금 구분과 초기 잔액을 확인해 주세요.');
+            return;
         } const before = record ? clone(record) : null; const row = record || { id: uid('c'), projectId: project.id, symbol: project.symbol, createdAt: new Date().toISOString(), date, amountUSD }; assignFields(row, { date, amountUSD, label: String(form.get('label')).trim() || '잔액 보정' }); if (!edit)
             state.cashAdjustments.push(row); if (hasNewDividendDeficit(ledgerBefore, computeProject(project))) {
             if (edit)
@@ -897,11 +903,19 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function openWithdrawalForm(projectId = selectedProjectId, record = null) {
         const project = projectById(record?.projectId || projectId), calc = computeProject(project), edit = !!record, recovery = project.recovery, returnPage = currentPage;
+        if (!calc.dividendBalanceConfirmed) {
+            toast('배당 사용 전에 매수 자금 구분과 초기 잔액을 확인해 주세요. 계좌 달러 잔액은 배당 잔액과 다릅니다.');
+            return;
+        }
         const available = Math.max(0, calc.dividendAvailable + (edit ? Math.abs(n(record.amountUSD)) : 0));
         const minimum = recovery.locked ? recovery.startDate : '';
         openModal(`<h3 class="modal-title">${esc(project.symbol)} 배당 사용 ${edit ? '수정' : '기록'}</h3><p class="modal-desc">${esc(project.symbol)} 밖에서 실제로 사용한 배당금을 기록합니다. ISA는 환전 시 빠져나간 실제 달러 금액을 입력하고 원화 입금액은 메모에 남기세요. 받는 종목의 매수를 자동 생성하지 않습니다.</p><form id="withdrawalForm" class="form-grid"><div class="record-detail-grid"><div><span>사용 가능 배당</span><strong>${fmtMoney(available, 2)}</strong></div><div><span>남은 회수 원금</span><strong>${fmtMoney(projectRecovery(calc).remaining, 2)}</strong></div></div><div><label class="input-label">사용일</label><input class="input" name="date" type="date" min="${minimum}" max="${todayISO()}" value="${record?.date || todayISO()}" required></div><div><label class="input-label">사용처</label><select class="input" name="destination">${[['isa', 'ISA'], ['otherDividend', '다른 배당주'], ['living', '생활비'], ['other', '기타']].map(([value, label]) => `<option value="${value}" ${value === (record?.destination || 'isa') ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div><label class="input-label">실제 사용액 USD</label><input class="input" name="amountUSD" type="number" min="0.01" max="${Math.max(.01, round(available, 2))}" step="0.01" value="${edit ? Math.abs(n(record.amountUSD)) : ''}" required></div><div><label class="input-label">메모 · 원화 입금액 (선택)</label><input class="input" name="note" value="${esc(record?.note || '')}" placeholder="예: ISA에 40,000원 입금"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${esc(record.id)}">이 사용 기록 삭제</button>` : ''}</form>`);
         document.getElementById('withdrawalForm').onsubmit = async (event) => {
             event.preventDefault();
+            if (!computeProject(project).dividendBalanceConfirmed) {
+                toast('매수 자금 구분과 초기 잔액을 먼저 확인해 주세요.');
+                return;
+            }
             const form = submittedFormData(event), date = String(form.get('date')), amount = n(form.get('amountUSD'));
             const destination = ['isa', 'otherDividend', 'living', 'other'].find(value => value === form.get('destination'));
             if (!isDate(date) || date < minimum || date > todayISO() || amount <= 0 || !destination) {
@@ -939,11 +953,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         const project = projectById(trade.projectId), calc = computeProject(project), gross = tradeCashBreakdown(trade).grossBuyCostUSD;
         const confirmed = trade.dividendFunding?.sourceFingerprint === trade.source.sourceFingerprint;
-        openModal(`<h3 class="modal-title">매수 자금 출처 확인</h3><p class="modal-desc">${esc(project.symbol)} · ${fmtDate(trade.date)} · ${fmtShares(trade.shares)}주 · ${fmtMoney(gross, 2)}. 토스 원본은 유지하며, 이 매수에 쓴 배당금만 별도로 기록합니다. 직접 넣은 돈으로 샀다면 0을 입력하세요.</p><form id="fundingForm" class="form-grid"><label>이 매수에 사용한 배당금 USD<input class="input" name="amountUSD" type="number" min="0" max="${gross}" step="0.00000001" value="${confirmed ? n(trade.dividendFunding?.amountUSD) : ''}" required></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">확인 저장</button></div></form>`);
-        document.getElementById('fundingForm').onsubmit = async (event) => { event.preventDefault(); const amount = n(submittedFormData(event).get('amountUSD')); if (amount < 0 || amount > gross + .000001) {
+        openModal(`<h3 class="modal-title">매수 자금 출처 확인</h3><p class="modal-desc">${esc(project.symbol)} · ${fmtDate(trade.date)} · ${fmtShares(trade.shares)}주 · ${fmtMoney(gross, 2)}. 토스 원본은 유지하며, 이 매수에 쓴 배당금만 별도로 기록합니다. 직접 넣은 돈으로 샀다면 0을 입력하세요.</p><form id="fundingForm" class="form-grid"><label>이 매수에 사용한 배당금 USD<input class="input" name="amountUSD" type="number" min="0" max="${gross}" step="0.00000001" value="${confirmed ? n(trade.dividendFunding?.amountUSD) : ''}" required></label><label>실제 달러 출금일<input class="input" name="cashDate" type="date" min="${trade.date}" max="${todayISO()}" value="${trade.dividendFunding?.cashDate || trade.date}" required></label><p class="detail-note">주문일과 다르면 거래내역의 출금일을 입력하세요. 토스 주문 원본은 바뀌지 않습니다.</p><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">확인 저장</button></div></form>`);
+        document.getElementById('fundingForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), amount = n(form.get('amountUSD')), cashDate = String(form.get('cashDate')); if (!isDate(cashDate) || cashDate < trade.date || cashDate > todayISO()) {
+            toast('실제 달러 출금일을 확인해 주세요.');
+            return;
+        } if (amount < 0 || amount > gross + .000001) {
             toast('배당 사용액은 총 매수액 이하여야 합니다.');
             return;
-        } const before = trade.dividendFunding; trade.dividendFunding = { amountUSD: amount, sourceFingerprint: trade.source.sourceFingerprint }; if (hasNewDividendDeficit(calc, computeProject(project))) {
+        } const before = trade.dividendFunding; trade.dividendFunding = { amountUSD: amount, sourceFingerprint: trade.source.sourceFingerprint, cashDate }; if (hasNewDividendDeficit(calc, computeProject(project))) {
             trade.dividendFunding = before;
             toast('매수일의 배당 잔액이 부족합니다. 누락 입금을 먼저 기록해 주세요.');
             return;
@@ -2163,6 +2180,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         if (button.dataset.fundingTrade) {
             openFundingForm(button.dataset.fundingTrade);
+            return;
+        }
+        if (button.dataset.excludeOpeningSnapshot) {
+            const project = projectById(button.dataset.excludeOpeningSnapshot);
+            if (!computeProject(project).openingBalanceOverlap)
+                return;
+            confirmAction('중간 잔액 중복 제외', `${fmtDate(project.initialDividendBalanceDate)}의 ${fmtMoney(project.initialDividendBalance, 2)}를 별도 입금으로 더하지 않습니다. 전체 입금·사용 내역으로 계산하고 원래 잔액 기록은 보존합니다.`, async () => { project.initialDividendBalanceTreatment = 'excludedSnapshot'; await saveState(true); renderAll(); });
             return;
         }
         if (button.dataset.reviewFunding) {

@@ -1,3 +1,4 @@
+import { tradeCashBreakdown } from './finance.js';
 import { isRecord } from './utils.js';
 import { isDate, n, todayISO, uid } from './utils.js';
 const record = (value) => isRecord(value) ? value : {};
@@ -399,9 +400,14 @@ export function rebuildProjectFromTossSource({ project, sourceLedger, currentTra
     if (!orders.length)
         return { ok: false, reason: 'empty-orders' };
     const rebuiltTrades = orders.map((row) => { const trade = tossCandidateToTrade(row, { projectId: project.id, id: makeId('t'), createdAt }); if (trade?.type === 'buy') {
-        const previous = currentTrades.filter(item => item.projectId === project.id && item.type === 'buy' && item.source?.externalId === trade.source?.externalId && item.source?.accountId === trade.source?.accountId && item.dividendFunding?.sourceFingerprint === trade.source?.sourceFingerprint);
-        if (previous.length === 1)
-            trade.dividendFunding = previous[0].dividendFunding;
+        const previous = currentTrades.filter(item => item.projectId === project.id && item.type === 'buy' && item.source?.externalId === trade.source?.externalId && item.source?.accountId === trade.source?.accountId && item.source?.sourceFingerprint === trade.source?.sourceFingerprint);
+        if (previous.length === 1) {
+            const old = previous[0];
+            if (old.dividendFunding && old.dividendFunding.sourceFingerprint === trade.source?.sourceFingerprint)
+                trade.dividendFunding = { ...old.dividendFunding };
+            else if (old.type === 'buy' && (old.buyType === 'reinvest' || old.buyType === 'mixed'))
+                trade.dividendFunding = { amountUSD: old.buyType === 'reinvest' ? tradeCashBreakdown(old).grossBuyCostUSD : Math.min(Math.max(0, n(old.reinvestAmountUSD)), tradeCashBreakdown(old).grossBuyCostUSD), sourceFingerprint: trade.source.sourceFingerprint };
+        }
     } return trade; }).filter(present);
     const projectTrades = currentTrades.filter((row) => row.projectId === project.id);
     const keepTrades = currentTrades.filter((row) => row.projectId !== project.id);

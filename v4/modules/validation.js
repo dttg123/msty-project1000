@@ -27,6 +27,8 @@ export function validateLedger(raw) {
             securityIds.add(p.securityId);
         if (!/^[A-Z0-9.-]{1,16}$/.test(String(p.symbol || '')))
             errors.push('종목 티커를 확인해 주세요.');
+        if (p.initialDividendBalanceTreatment !== undefined && !['opening', 'excludedSnapshot'].includes(String(p.initialDividendBalanceTreatment)))
+            errors.push('초기 배당 잔액 적용 방식을 확인해 주세요.');
         if (!finite(p.targetUnits, .000001) || !finite(p.currentPrice) || !finite(p.monthlyPlanShares) || !finite(p.initialDividendBalance))
             errors.push('종목 목표·가격·초기 잔액을 확인해 주세요.');
         if (p.dividendPlan !== undefined) {
@@ -74,6 +76,8 @@ export function validateLedger(raw) {
                 errors.push('매수 유형·재투자액을 확인해 주세요.');
             if (key === 'trades' && row.dividendFunding !== undefined) {
                 const funding = object(row.dividendFunding);
+                if (funding.cashDate !== undefined && (!isDate(funding.cashDate) || String(funding.cashDate) < String(row.date)))
+                    errors.push('실제 매수대금 출금일을 확인해 주세요.');
                 if (row.type !== 'buy' || object(row.source).provider !== 'toss' || typeof funding.sourceFingerprint !== 'string' || !funding.sourceFingerprint || !finite(funding.amountUSD) || funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.amountUSD) > Number(row.shares) * Number(row.price) + Number(row.feeUSD || 0) + Number(row.taxUSD || 0))
                     errors.push('매수 자금 출처를 확인해 주세요.');
             }

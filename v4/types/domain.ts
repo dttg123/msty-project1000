@@ -24,7 +24,7 @@ export interface SourceRef {
 }
 
 export interface LedgerRow {
-  dividendFunding?: { amountUSD: number; sourceFingerprint: string };
+  dividendFunding?: { amountUSD: number; sourceFingerprint: string; cashDate?: string };
   source?: SourceRef;
   symbol?: string;
   note?: string;
@@ -91,6 +91,7 @@ export interface Project {
   distributionFrequencyMode: 'auto' | 'manual';
   initialDividendBalance: number;
   initialDividendBalanceDate: string;
+  initialDividendBalanceTreatment?: 'opening' | 'excludedSnapshot';
   afterGoalMode: 'cashflow' | 'reinvest';
   dividendPlan?: { mode: 'reinvest' | 'outside'; history: Array<{ mode: 'reinvest' | 'outside'; confirmedAt: string }> };
   recovery: RecoveryPlan;

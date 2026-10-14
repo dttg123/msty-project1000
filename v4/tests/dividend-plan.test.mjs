@@ -49,3 +49,38 @@ assert.match(usesCSV,/dividendUse,isa/);assert.match(usesCSV,/-30/);
 const buysCSV=exports.find(row=>row.name==='trades.csv').data;assert.match(buysCSV,/dividendFundingUSD,fundingStatus/);assert.match(buysCSV,/,10,confirmed,/);
 assert.match(exports.find(row=>row.name==='goals.csv').data,/dividendUseMode/);assert.match(exports.find(row=>row.name==='goals.csv').data,/,outside/);
 console.log('Dividend plan QA PASS: cash conservation, ROC, stale/zero prices, early/locked recovery, goal continuity, Toss funding preservation, ZIP restore');
+
+// Synthetic regression: a broker import is provisional, not spendable cash.
+{
+ const s=blankState(),p=s.projects[0];
+ s.trades=[tossCandidateToTrade({id:'pending',symbol:p.symbol,date:'2025-01-02',currency:'USD',type:'buy',shares:1,price:12},{projectId:p.id,id:'pending'})];
+ s.dividends=[{id:'cash',projectId:p.id,date:'2025-01-03',amountUSD:20}];
+ const compute=()=>createPortfolioEngine(()=>s,()=>p.id).computeProject(p);
+ assert.equal(compute().spendableDividendBalance,null);
+ const source=structuredClone(s.trades[0].source);
+ s.trades[0].dividendFunding={amountUSD:12,sourceFingerprint:source.sourceFingerprint,cashDate:'2025-01-04'};
+ assert.equal(compute().spendableDividendBalance,8);
+ assert.equal(compute().cashDeficitEvents.length,0,'settlement after receipt can use that receipt');
+ assert.equal(compute().cashLedger.find(r=>r.kind==='reinvest').date,'2025-01-04');
+ assert.deepEqual(s.trades[0].source,source);assert.equal(s.trades[0].date,'2025-01-02');
+ assert.equal(decodeAppState(s).trades[0].dividendFunding.cashDate,'2025-01-04');
+ const bad=structuredClone(s);bad.trades[0].dividendFunding.cashDate='2025-01-01';assert.throws(()=>decodeAppState(bad));
+ s.projects[0].initialDividendBalance=5;s.projects[0].initialDividendBalanceDate='2025-01-03';
+ assert.equal(compute().openingBalanceOverlap,true);assert.equal(compute().spendableDividendBalance,null);
+ s.projects[0].initialDividendBalanceTreatment='excludedSnapshot';
+ assert.equal(compute().spendableDividendBalance,8,'snapshot exclusion is not an invented correction');
+ assert.equal(s.projects[0].initialDividendBalance,5,'original snapshot preserved');
+ const restored=await readStateFromBackupFile(Object.assign(createStoreZip([{name:'data/state.json',data:JSON.stringify(s)}]),{name:'funding.zip'}));
+ assert.equal(restored.projects[0].initialDividendBalanceTreatment,'excludedSnapshot');
+ assert.equal(restored.trades[0].dividendFunding.cashDate,'2025-01-04');
+}
+// Source-bound old reinvest/mixed allocations survive rebuilds; a default direct buy stays pending.
+for(const mode of ['reinvest','mixed','direct']){
+ const s=blankState(),p=s.projects[0],order={id:'legacy',symbol:p.symbol,date:'2025-01-02',currency:'USD',type:'buy',shares:2,price:10,feeUSD:1};
+ const trade=tossCandidateToTrade(order,{projectId:p.id,id:'legacy'});trade.buyType=mode;trade.reinvestAmountUSD=7;
+ const result=rebuildProjectFromTossSource({project:p,sourceLedger:{orders:[order]},currentTrades:[trade],syncStatus:'complete'});
+ assert.equal(result.trades[0].dividendFunding?.amountUSD,mode==='reinvest'?21:mode==='mixed'?7:undefined);
+ const changed=rebuildProjectFromTossSource({project:p,sourceLedger:{orders:[{...order,price:11}]},currentTrades:[trade],syncStatus:'complete'});
+ assert.equal(changed.trades[0].dividendFunding,undefined);
+}
+console.log('Funding safety PASS: pending spending, cash dates, preserved snapshot, ZIP restore and legacy allocation rebuild');
