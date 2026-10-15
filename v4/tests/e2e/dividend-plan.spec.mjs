@@ -134,7 +134,7 @@ test('과거 부족 기록은 추가 사용을 막으면서 기존 사용액 감
  const errors=await setup(page);
  await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const s=await storageGet('stateFundingV1'),p=s.projects[0];s.dividends[0].amountUSD=20;s.dividends.push({id:'later',projectId:p.id,date:'2025-01-05',amountUSD:20});s.cashAdjustments=[{id:'bad',projectId:p.id,date:'2025-01-04',amountUSD:-30,purpose:'dividendUse',destination:'isa'}];await storageSet('stateFundingV1',s);});
  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();await openPortfolioDetail(page,'recovery');await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeDisabled();
- await openPortfolioDetail(page,'records');await page.locator('[data-view-record="cash:bad"]').click();await page.locator('.record-manage > summary').click();await page.locator('[data-edit-record="cash:bad"]').click();await expect(page.locator('#withdrawalForm')).toBeVisible();
+ await openPortfolioDetail(page,'records');await page.locator('.records-list [data-view-record="cash:bad"]').click();await page.locator('.record-manage > summary').click();await page.locator('[data-edit-record="cash:bad"]').click();await expect(page.locator('#withdrawalForm')).toBeVisible();
  await page.locator('#withdrawalForm [name="amountUSD"]').fill('10');await page.locator('#withdrawalForm button[type="submit"]').click();await expect(page.locator('#withdrawalForm')).toBeHidden();expect((await read(page)).cashAdjustments[0].amountUSD).toBe(-10);await openPortfolioDetail(page,'recovery');await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeEnabled();expect(errors).toEqual([]);
 });
 
