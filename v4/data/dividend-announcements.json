@@ -2,8 +2,14 @@
   "format": "dividend-os-official-distributions-v1",
   "symbol": "MSTY",
   "sourceURL": "https://yieldmaxetfs.com/our-etfs/msty/",
-  "retrievedAt": "2026-10-14T01:18:54.648Z",
+  "retrievedAt": "2026-10-15T00:40:44.405Z",
   "rows": [
+    {
+      "declaredDate": "2026-10-14",
+      "exDate": "2026-10-15",
+      "payDate": "2026-10-16",
+      "amountPerShareUSD": 0.2474
+    },
     {
       "declaredDate": "2026-10-07",
       "exDate": "2026-10-08",
@@ -93,12 +99,6 @@
       "exDate": "2026-07-02",
       "payDate": "2026-07-06",
       "amountPerShareUSD": 0.1549
-    },
-    {
-      "declaredDate": "2026-06-24",
-      "exDate": "2026-06-25",
-      "payDate": "2026-06-26",
-      "amountPerShareUSD": 0.1883
     }
   ]
 }
