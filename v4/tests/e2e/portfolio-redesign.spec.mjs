@@ -3,13 +3,13 @@ import {blankState,blankProject} from '../../modules/state.js';
 import {openPortfolioDetail} from './portfolio-navigation.mjs';
 test.use({serviceWorkers:'block'});
 const noAuth=`export async function initGoogleAuth(){};export async function getGoogleIdToken(){return null;}export async function logoutGoogle(){};export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){return {revision:1};}export async function subscribeCloudDocument(){return ()=>{};}`;
-async function read(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('state');});}
+async function read(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('stateFundingV1');});}
 async function setup(page,{appearance='dark',many=false,empty=false,date='2026-10-11T09:00:00Z'}={}){
  const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:noAuth}));await page.clock.setFixedTime(new Date(date));
  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();const fixtureDay=await page.evaluate(()=>new Date().toLocaleDateString('sv-SE'));const s=blankState();s.settings={...s.settings,appearance,displayCurrency:'USD'};const p=s.projects[0];p.id='p-msty';p.projectStart=fixtureDay;p.currentPrice=15.8;p.priceUpdatedAt=date;p.colorIndex=2;p.targetUnits=1000;
  if(!empty){s.trades=[{id:'buy',projectId:p.id,date:'2025-01-01',type:'buy',buyType:'direct',shares:255,price:18}];s.dividends=Array.from({length:8},(_,i)=>({id:'d'+i,projectId:p.id,date:`2026-${String(i+3).padStart(2,'0')}-01`,amountUSD:50+i*10}));}
  if(many)for(let i=0;i<6;i++){const x=blankProject('QASTOCK'+i);x.id='stock'+i;x.projectStart=fixtureDay;x.category=i<4?'highYield':'growth';x.colorIndex=i;s.projects.push(x);}
- await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('state',s);},s);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();return {errors,state:s};
+ await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('stateFundingV1',s);},s);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();return {errors,state:s};
 }
 for(const appearance of ['dark','light'])test(`1.4 ${appearance}: short overview, detail tabs and original ledger`,async({page},info)=>{
  const {errors}=await setup(page,{appearance}),before=await read(page);await expect(page.locator('.portfolio-overview')).toBeVisible();await expect(page.locator('#page-projects .card')).toHaveCount(2);await expect(page.locator('.summary-month-chart button')).toHaveCount(6);await expect(page.locator('.dividend-management,.record-center,[data-refresh-official-distributions]')).toHaveCount(0);

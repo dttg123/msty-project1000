@@ -67,6 +67,11 @@ export function validateLedger(raw) {
                 continue;
             }
             rowIds.add(row.id);
+            if (row.cashTime !== undefined && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(row.cashTime)))
+                errors.push('입출금 시각은 거래내역의 현지 시각으로 입력해 주세요.');
+            const fundingTime = object(row.dividendFunding).cashTime;
+            if (fundingTime !== undefined && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(fundingTime)))
+                errors.push('매수대금 출금 시각을 확인해 주세요.');
             const valid = (field, min = 0) => finite(row[field], min);
             if (key === 'trades' && (!['buy', 'sell'].includes(String(row.type)) || !valid('shares', .00000001) || !valid('price')))
                 errors.push('거래 수량·단가가 올바르지 않습니다.');

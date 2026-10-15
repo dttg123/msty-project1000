@@ -1,5 +1,5 @@
 import {spawn} from 'node:child_process';
-import {mkdirSync,readFileSync,writeFileSync,appendFileSync,renameSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync,appendFileSync,renameSync,readdirSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
@@ -7,6 +7,31 @@ import path from 'node:path';
 // Run one bounded QA stage. Persist status before launching and on every output.
 const root=fileURLToPath(new URL('../',import.meta.url));
 const stage=process.argv[2];
+const dir=path.join(root,'test-results','resume');mkdirSync(dir,{recursive:true});
+function sourceFingerprint(){
+  const hash=createHash('sha256');
+  function visit(relative=''){
+    for(const entry of readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){
+      if(['node_modules','dist','test-results','playwright-report','android','.generated','.review-build'].includes(entry.name)||entry.name.startsWith('.'))continue;
+      const name=path.join(relative,entry.name);
+      if(entry.isDirectory())visit(name);
+      else if(/\.(?:ts|js|mjs|json|html|css)$/.test(name)){hash.update(name);hash.update(readFileSync(path.join(root,name)));}
+    }
+  }
+  visit();return hash.digest('hex');
+}
+if(stage==='status'){
+  const current=sourceFingerprint();
+  for(const file of readdirSync(dir).filter(name=>name.endsWith('-checkpoint.json'))){
+    const value=JSON.parse(readFileSync(path.join(dir,file),'utf8'));
+    // PIDs are namespaced by the executor and cannot prove liveness in another
+    // command. A missing heartbeat is stale evidence, never a successful run.
+    const stale=Date.now()-Date.parse(value.updatedAt||value.startedAt)>90000;
+    const status=value.status==='running'?(stale?'stale':'running-unconfirmed'):value.status;
+    console.log(JSON.stringify({stage:value.stage,status,sourceMatches:value.sourceFingerprint===current,updatedAt:value.updatedAt,log:value.log,exitCode:value.exitCode??null}));
+  }
+  process.exit(0);
+}
 const stages={
   release:['npm',['run','qa:release'],{}],
   browser:['npx',['playwright','test','--reporter=list,json'],{}],
@@ -17,13 +42,12 @@ const stages={
 };
 if(!stages[stage]){console.error('Usage: node scripts/qa-resume.mjs release|browser|hard|lifetime|high|switching');process.exit(2);}
 const [command,args,extra]=stages[stage];
-const dir=path.join(root,'test-results','resume');mkdirSync(dir,{recursive:true});
 const id=new Date().toISOString().replace(/[:.]/g,'-');
 const log=path.join(dir,`${stage}-${id}.log`);
 const report=path.join(dir,`${stage}-${id}.json`);
 const checkpoint=path.join(dir,`${stage}-checkpoint.json`);
 const bundle=path.join(root,'../updates/DividendOS-web-1.6.0.zip');
-const state={stage,status:'running',startedAt:new Date().toISOString(),command:[command,...args],log,report,bundleSha256:createHash('sha256').update(readFileSync(bundle)).digest('hex'),lastOutputAt:null,tail:''};
+const state={stage,status:'running',pid:process.pid,sourceFingerprint:sourceFingerprint(),startedAt:new Date().toISOString(),command:[command,...args],log,report,bundleSha256:existsSync(bundle)?createHash('sha256').update(readFileSync(bundle)).digest('hex'):null,lastOutputAt:null,tail:''};
 const save=()=>{state.updatedAt=new Date().toISOString();writeFileSync(checkpoint+'.tmp',JSON.stringify(state,null,2)+'\n');renameSync(checkpoint+'.tmp',checkpoint);};
 save();
 const child=spawn(command,args,{cwd:root,env:{...process.env,CI:'1',...extra,PLAYWRIGHT_JSON_OUTPUT_NAME:report},stdio:['ignore','pipe','pipe']});

@@ -9,7 +9,7 @@ async function ledger(page){
     request.onerror=()=>reject(request.error);
     request.onsuccess=()=>{
       const db=request.result,tx=db.transaction('kv','readonly');
-      const get=tx.objectStore('kv').get('state');
+      const get=tx.objectStore('kv').get('stateFundingV1');
       get.onsuccess=()=>{db.close();resolve(get.result);};
       get.onerror=()=>{db.close();reject(get.error);};
     };

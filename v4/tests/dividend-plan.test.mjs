@@ -103,3 +103,36 @@ console.log('Settled cash precision PASS: source valuation unchanged, rounded de
  const bad=structuredClone(s);bad.trades[0].dividendFunding.contributionUSD=9;assert.throws(()=>decodeAppState(bad));
 }
 console.log('Principal-source PASS: recycled cash excluded, missing contribution marked provisional, excess rejected');
+
+// Intraday ordering, not import/creation order, determines whether income existed.
+{
+ const s=blankState(),p=s.projects[0],compute=()=>createPortfolioEngine(()=>s,()=>p.id).computeProject(p);
+ s.dividends=[{id:'income',projectId:p.id,date:'2025-02-03',amountUSD:20,cashTime:'16:09'}];
+ s.trades=[{id:'buy',projectId:p.id,date:'2025-02-03',type:'buy',buyType:'reinvest',shares:1,price:10,cashTime:'06:57'}];
+ assert.equal(compute().dividendAvailable,10);
+ assert.equal(compute().cashDeficitEvents.length,1,'a later receipt cannot fund an earlier debit');
+ assert.equal(compute().spendableDividendBalance,null,'positive closing balance cannot conceal historic deficit');
+ s.trades[0].cashTime='17:00';assert.equal(compute().spendableDividendBalance,10);
+ const timed=compute();delete s.trades[0].cashTime;
+ assert.deepEqual(compute().cashTimingUnconfirmedDates,['2025-02-03']);
+ assert.equal(compute().spendableDividendBalance,null);
+ assert.equal(hasNewDividendDeficit(timed,compute()),true);
+ // Enough prior-day cash makes the unknown order financially irrelevant.
+ s.dividends.unshift({id:'prior',projectId:p.id,date:'2025-02-02',amountUSD:15});
+ assert.deepEqual(compute().cashTimingUnconfirmedDates,[]);assert.equal(compute().spendableDividendBalance,25);
+ s.trades[0].cashTime='17:00';
+ assert.equal(decodeAppState(s).trades[0].cashTime,'17:00');
+ const bad=structuredClone(s);bad.dividends[0].cashTime='25:00';assert.throws(()=>decodeAppState(bad));
+ const restored=await readStateFromBackupFile(Object.assign(createStoreZip([{name:'data/state.json',data:JSON.stringify(s)}]),{name:'timed.zip'}));
+ assert.deepEqual(compute().cashLedger,createPortfolioEngine(()=>restored,()=>p.id).computeProject(p).cashLedger);
+}
+{
+ const s=blankState(),p=s.projects[0],t=tossCandidateToTrade({id:'future-settlement',symbol:p.symbol,date:'2025-01-02',type:'buy',shares:1,price:12,currency:'USD'},{projectId:p.id,id:'future-settlement'});
+ t.dividendFunding={amountUSD:12,contributionUSD:0,sourceFingerprint:t.source.sourceFingerprint,cashDate:'2099-01-03'};
+ s.trades=[t];s.dividends=[{id:'income',projectId:p.id,date:'2025-01-01',amountUSD:20}];
+ const c=createPortfolioEngine(()=>s,()=>p.id).computeProject(p);
+ assert.equal(c.reinvestAmount,12);assert.equal(c.dividendAvailable,20,'future settlement is not a posted debit');
+ assert.equal(c.reservedDividendAmount,12);assert.equal(c.spendableDividendBalance,8,'committed dividends cannot be spent twice');
+ assert.equal(c.cashLedger.some(row=>row.date.startsWith('2099')),false);
+}
+console.log('Operational cash PASS: intraday deficit, unknown clocks, prior-day funding, ZIP timing, future settlement reservation');

@@ -1,5 +1,6 @@
-export const STATE_KEY = 'state';
-export const SAFETY_KEY = 'safetyBackup';
+// Older clients must never overwrite the new funding ledger.
+export const STATE_KEY = 'stateFundingV1';
+export const SAFETY_KEY = 'safetyBackupFundingV1';
 export const PAGES = ['home', 'projects', 'goal', 'settings'];
 export const PROJECT_CATEGORIES = [
     ['highYield', '고배당·인컴'],

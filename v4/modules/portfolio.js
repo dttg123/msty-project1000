@@ -210,17 +210,20 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         const openingDate = project.initialDividendBalanceDate;
         const openingBalanceOverlap = !openingExcluded && n(project.initialDividendBalance) > 0 && isDate(openingDate) && [...postedDividends, ...postedTrades.filter(row => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || n(row.dividendFunding?.amountUSD) > 0)), ...postedAdjustments].some(row => row.date <= openingDate);
         const openingAmount = openingExcluded ? 0 : Math.max(0, n(project.initialDividendBalance));
-        const dividendAvailable = openingAmount + usdDividendsTotal + adjustmentTotal - reinvestAmount;
-        const dividendBalanceConfirmed = unconfirmedFundingCount === 0 && !openingBalanceOverlap && !hasKRWDividends;
-        const spendableDividendBalance = dividendBalanceConfirmed ? Math.max(0, dividendAvailable) : null;
         const analytics = buildDividendAnalytics(project, reportingRows, projectRows('splits', project.id), avgCost, asOf);
         const lifetimeDividendRecoveryPct = directBuyCost > 0 ? dividendsTotal / directBuyCost * 100 : 0;
-        const cashLedger = [
+        const cashEntries = [
             ...(openingAmount ? [{ id: 'opening-balance', date: project.initialDividendBalanceDate || '0000-01-01', createdAt: '', kind: 'opening', amountUSD: openingAmount }] : []),
             ...postedDividends.map((row) => ({ ...row, kind: 'dividend', amountUSD: dividendCashBreakdown(row).netUSD })),
             ...postedAdjustments.map((row) => ({ ...row, kind: 'adjustment', amountUSD: n(row.amountUSD) })),
-            ...postedTrades.filter((row) => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || !!row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint)).map((row) => ({ ...row, date: row.dividendFunding?.sourceFingerprint === row.source?.sourceFingerprint && row.dividendFunding?.cashDate ? row.dividendFunding.cashDate : row.date, kind: 'reinvest', amountUSD: -(row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? clamp(n(row.dividendFunding.amountUSD), 0, row.dividendFunding.cashDebitUSD ?? tradeCashBreakdown(row).grossBuyCostUSD) : row.buyType === 'mixed' ? clamp(n(row.reinvestAmountUSD), 0, tradeCashBreakdown(row).grossBuyCostUSD) : tradeCashBreakdown(row).grossBuyCostUSD) }))
-        ].sort((a, b) => { const order = { opening: 0, dividend: 1, adjustment: 2, reinvest: 3 }; return String(a.date).localeCompare(String(b.date)) || (order[a.kind] - order[b.kind]) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id)); });
+            ...postedTrades.filter((row) => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || !!row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint)).map((row) => ({ ...row, cashTime: row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? row.dividendFunding?.cashTime : row.cashTime, date: row.dividendFunding?.sourceFingerprint === row.source?.sourceFingerprint && row.dividendFunding?.cashDate ? row.dividendFunding.cashDate : row.date, kind: 'reinvest', amountUSD: -(row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? clamp(n(row.dividendFunding.amountUSD), 0, row.dividendFunding.cashDebitUSD ?? tradeCashBreakdown(row).grossBuyCostUSD) : row.buyType === 'mixed' ? clamp(n(row.reinvestAmountUSD), 0, tradeCashBreakdown(row).grossBuyCostUSD) : tradeCashBreakdown(row).grossBuyCostUSD) }))
+        ].filter(row => row.date <= asOf && Math.abs(row.amountUSD) > 0);
+        const dayClocks = new Map();
+        for (const row of cashEntries)
+            if (row.kind !== 'opening')
+                dayClocks.set(row.date, (dayClocks.get(row.date) ?? true) && !!('cashTime' in row && row.cashTime));
+        const timedDays = new Set([...dayClocks].filter(([, complete]) => complete).map(([date]) => date));
+        const cashLedger = cashEntries.sort((a, b) => { const order = { opening: 0, dividend: 1, adjustment: 2, reinvest: 3 }; return String(a.date).localeCompare(String(b.date)) || (timedDays.has(a.date) && 'cashTime' in a && 'cashTime' in b && a.cashTime && b.cashTime ? String(a.cashTime).padEnd(8, ':00').localeCompare(String(b.cashTime).padEnd(8, ':00')) || a.amountUSD - b.amountUSD : 0) || (order[a.kind] - order[b.kind]) || String(a.createdAt || a.id).localeCompare(String(b.createdAt || b.id)); });
         let cashBalance = 0, minDividendBalance = 0;
         const cashDeficitEvents = [];
         for (const row of cashLedger) {
@@ -229,9 +232,37 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
             if (n(row.amountUSD) < 0 && cashBalance < -.0001)
                 cashDeficitEvents.push({ ...row, balance: cashBalance });
         }
+        // Check the earliest possible debit order for missing clocks. Creation time
+        // is an editing timestamp, not proof of when the money changed hands.
+        const cashTimingUnconfirmedDates = [];
+        let priorDayBalance = 0;
+        const days = new Map();
+        for (const row of cashLedger) {
+            const rows = days.get(row.date) || [];
+            rows.push(row);
+            days.set(row.date, rows);
+        }
+        for (const [date, rows] of days) {
+            const clock = (row) => 'cashTime' in row ? row.cashTime : undefined;
+            const uncertain = rows.some(row => row.amountUSD < 0 && !clock(row)) || rows.some(row => row.kind !== 'opening' && row.amountUSD > 0 && !clock(row));
+            if (uncertain && rows.some(row => row.amountUSD < 0) && rows.some(row => row.kind !== 'opening' && row.amountUSD > 0)) {
+                const earliest = [...rows].sort((a, b) => {
+                    const rank = (row) => row.kind === 'opening' ? -1 : clock(row) ? 1 : row.amountUSD < 0 ? 0 : 2;
+                    return rank(a) - rank(b) || String(clock(a) || '').localeCompare(String(clock(b) || '')) || a.amountUSD - b.amountUSD;
+                });
+                let balance = priorDayBalance;
+                if (earliest.some(row => { balance += row.amountUSD; return row.amountUSD < 0 && balance < -.0001; }))
+                    cashTimingUnconfirmedDates.push(date);
+            }
+            priorDayBalance += rows.reduce((sum, row) => sum + row.amountUSD, 0);
+        }
+        const reservedDividendAmount = postedTrades.reduce((sum, row) => { const f = row.dividendFunding; return sum + (row.type === 'buy' && f?.sourceFingerprint === row.source?.sourceFingerprint && f?.cashDate && f.cashDate > asOf ? n(f.amountUSD) : 0); }, 0);
+        const dividendAvailable = cashBalance;
+        const dividendBalanceConfirmed = unconfirmedFundingCount === 0 && !openingBalanceOverlap && !hasKRWDividends && cashDeficitEvents.length === 0 && cashTimingUnconfirmedDates.length === 0;
+        const spendableDividendBalance = dividendBalanceConfirmed ? Math.max(0, dividendAvailable - reservedDividendAmount) : null;
         return {
             project, trades, dividends, adjustments, postedTrades, postedDividends, reportingRows, hasKRWDividends, usdDividendsTotal, postedAdjustments, factor, shares, normalizedShares, costBasis, realized, directBuyCost, sellProceeds,
-            purchaseBasis, priceUnrealized: priceAvailable ? marketValue - purchaseBasis : 0, unconfirmedFundingCount, unconfirmedCapitalFundingCount, openingBalanceOverlap, dividendBalanceConfirmed, spendableDividendBalance,
+            purchaseBasis, priceUnrealized: priceAvailable ? marketValue - purchaseBasis : 0, unconfirmedFundingCount, unconfirmedCapitalFundingCount, openingBalanceOverlap, dividendBalanceConfirmed, spendableDividendBalance, cashTimingUnconfirmedDates, reservedDividendAmount,
             directShares, reinvestAmount, reinvestCount, reinvestShares, currentPrice, priceAvailable, marketValue, unrealized, avgCost,
             currentTarget, progress: currentTarget > 0 ? shares / currentTarget : 0, dividendsTotal, yearDividends, currentMonthDividends, trailing12Dividends,
             recentDividend, monthlyEstimate, shortMonthlyEstimate, rawMonthlyEstimate, rawShortMonthlyEstimate, estimateReliable, medianDividendGapDays: medianGap,

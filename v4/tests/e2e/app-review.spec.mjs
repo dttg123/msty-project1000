@@ -3,7 +3,7 @@ import {blankState,blankProject} from '../../modules/state.js';
 import {openPortfolioDetail} from './portfolio-navigation.mjs';
 test.use({serviceWorkers:'block'});
 const noAuth=`export async function initGoogleAuth(){};export async function getGoogleIdToken(){return null;}export async function logoutGoogle(){};export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){return {revision:1};}export async function subscribeCloudDocument(){return ()=>{};}`;
-async function ledger(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('state');});}
+async function ledger(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('stateFundingV1');});}
 async function setup(page){
  await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:noAuth}));
  await page.clock.setFixedTime(new Date('2026-10-11T09:00:00Z'));
@@ -12,7 +12,7 @@ async function setup(page){
  const growth=blankProject('SCHD');growth.id='schd';growth.category='growth';growth.currentPrice=28;s.projects.push(growth);
  s.trades=[{id:'buy',projectId:'msty',date:'2026-10-03',type:'buy',buyType:'direct',shares:250,price:20},{id:'schd-buy',projectId:'schd',date:'2026-10-03',type:'buy',buyType:'direct',shares:10,price:25}];
  s.dividends=[{id:'d1',projectId:'msty',date:'2026-10-09',amountUSD:40},{id:'d2',projectId:'schd',date:'2026-10-08',amountUSD:5}];
- await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('state',s);},s);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();return ledger(page);
+ await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('stateFundingV1',s);},s);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();return ledger(page);
 }
 test('home links select the right category; four tabs and records preserve the ledger',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const before=await setup(page);
@@ -52,7 +52,7 @@ test('home links select the right category; four tabs and records preserve the l
 
 test('chart selection preserves the page, expanded analysis and navigation clearance',async({page},info)=>{
  await setup(page);
- await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const s=await storageGet('state');s.dividends.push({id:'sep',projectId:'msty',date:'2026-09-09',amountUSD:30},{id:'aug',projectId:'msty',date:'2026-08-09',amountUSD:20});await storageSet('state',s);});
+ await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const s=await storageGet('stateFundingV1');s.dividends.push({id:'sep',projectId:'msty',date:'2026-09-09',amountUSD:30},{id:'aug',projectId:'msty',date:'2026-08-09',amountUSD:20});await storageSet('stateFundingV1',s);});
  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
  const card=page.locator('.cashflow-card'),details=page.locator('.home-cashflow-details');
  await card.scrollIntoViewIfNeeded();await details.locator(':scope > summary').click();

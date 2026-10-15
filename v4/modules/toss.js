@@ -374,7 +374,7 @@ export function tossCandidateToDividend(candidate, { projectId, id, sharesAtPaym
     if (!row || row.currency !== 'USD' || !projectId || !id)
         return null;
     return {
-        id, projectId, symbol: row.symbol, date: row.date, amountUSD: row.amountUSD, grossAmountUSD: row.grossAmountUSD, withholdingTaxUSD: row.withholdingTaxUSD, feeUSD: row.feeUSD, sharesAtPayment: Math.max(0, n(sharesAtPayment)),
+        cashTime: undefined, id, projectId, symbol: row.symbol, date: row.date, amountUSD: row.amountUSD, grossAmountUSD: row.grossAmountUSD, withholdingTaxUSD: row.withholdingTaxUSD, feeUSD: row.feeUSD, sharesAtPayment: Math.max(0, n(sharesAtPayment)),
         referencePrice: 0, rocPercent: null, rocStatus: 'estimated', note: '토스 배당 승인 가져오기', createdAt,
         source: { provider: 'toss', externalId: row.externalId, rawExternalId: row.rawExternalId, sourceIdKind: row.sourceIdKind, sourceFingerprint: row.sourceFingerprint, accountId: row.accountId, assetKey: row.assetKey, market: row.market, securityId: row.securityId, importedAt: createdAt }
     };
@@ -417,7 +417,15 @@ export function rebuildProjectFromTossSource({ project, sourceLedger, currentTra
     let rebuiltDividends = projectDividends;
     if (dividendSourceSupported) {
         const rows = unique(sourceLedger?.dividends, normalizeTossDividend);
-        rebuiltDividends = rows.map((row) => tossCandidateToDividend(row, { projectId: project.id, id: makeId('d'), sharesAtPayment: Math.max(0, n(sharesAtDate(row.date))), createdAt })).filter(present);
+        rebuiltDividends = rows.map((row) => {
+            const dividend = tossCandidateToDividend(row, { projectId: project.id, id: makeId('d'), sharesAtPayment: Math.max(0, n(sharesAtDate(row.date))), createdAt });
+            if (dividend) {
+                const previous = projectDividends.filter(item => item.source?.provider === 'toss' && item.source.externalId === dividend.source.externalId && item.source.accountId === dividend.source.accountId && item.source.sourceFingerprint === dividend.source.sourceFingerprint);
+                if (previous.length === 1 && previous[0].cashTime)
+                    dividend.cashTime = previous[0].cashTime;
+            }
+            return dividend;
+        }).filter(present);
     }
     return {
         ok: true, reason: '', trades: [...keepTrades, ...rebuiltTrades], dividends: [...keepDividends, ...rebuiltDividends],

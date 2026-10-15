@@ -10,11 +10,11 @@ export async function getCloudDocument(){return {state:structuredClone(window.__
 export async function getLegacyCloudDocument(){return null;}
 export async function saveCloudDocument(uid,state,options){if(options.expectedRevision!==window.__revision)throw {code:'cloud-conflict'};window.__remote=structuredClone(state);return {revision:++window.__revision};}
 export async function subscribeCloudDocument(){return ()=>{};}`;
-async function ledger(page){return page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4');r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('state');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
+async function ledger(page){return page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4');r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('stateFundingV1');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
 test('로그인과 클라우드 충돌은 분리되고 초기 배당 교체는 기기에 안전 저장된다',async({page},testInfo)=>{
  await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:api}));
  await page.route('**/data/dividend-announcements.json',r=>r.abort());
- await page.addInitScript(({original,remote})=>{window.__remote=remote;window.__revision=1;window.__seedReady=new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{const db=r.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(original,'state');tx.oncomplete=()=>{db.close();resolve();};};});},{original,remote});
+ await page.addInitScript(({original,remote})=>{window.__remote=remote;window.__revision=1;window.__seedReady=new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{const db=r.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(original,'stateFundingV1');tx.oncomplete=()=>{db.close();resolve();};};});},{original,remote});
  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#authGate')).toBeHidden();await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
  await page.locator('[data-page="settings"]').first().click();await expect(page.locator('#page-settings')).toContainText('연결됨');
  const advanced=page.locator('details.settings-section').filter({has:page.locator('[data-backup]')});await advanced.locator(':scope > summary').click();await expect(page.locator('[data-replace-dividends]')).toBeHidden();
