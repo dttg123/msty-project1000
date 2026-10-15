@@ -42,11 +42,11 @@ const stages={
 };
 if(stage==='extended'){
   const cases={
-    'hard-8':['hard-multi-project.spec.mjs','^8종목'],
-    'hard-9':['hard-multi-project.spec.mjs','^9종목'],
+    'hard-8':['hard-multi-project.spec.mjs','8종목'],
+    'hard-9':['hard-multi-project.spec.mjs','9종목'],
     lifetime:['lifetime-ui.spec.mjs','30년 월별'],
-    'high-8':['lifetime-high-ui.spec.mjs','^8종목'],
-    'high-9':['lifetime-high-ui.spec.mjs','^9종목'],
+    'high-8':['lifetime-high-ui.spec.mjs','8종목'],
+    'high-9':['lifetime-high-ui.spec.mjs','9종목'],
     switching:['lifetime-switching-ui.spec.mjs','9개 플러스']
   };
   const scenario=process.argv[3],browser=process.argv[4];
