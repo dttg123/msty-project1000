@@ -303,3 +303,27 @@ jobs:
         env:
           QA_RELEASE_EVIDENCE_JSON: ${{ vars.QA_RELEASE_EVIDENCE_JSON }}
         run: npm run qa:release:evidence
+
+  release-candidate-verification:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/hardening/release-1.7'
+    needs: [core, e2e, android-backup, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: v4/package-lock.json
+      - name: Install candidate tooling
+        working-directory: v4
+        run: npm ci
+      - name: Verify candidate calculations, storage, and signed update
+        working-directory: v4
+        run: npm run qa:release
+      - name: Check current-candidate physical device and Toss evidence before publication
+        working-directory: v4
+        env:
+          QA_RELEASE_EVIDENCE_JSON: ${{ vars.QA_RELEASE_EVIDENCE_JSON }}
+        run: npm run qa:release:evidence

@@ -61,7 +61,7 @@ const id=new Date().toISOString().replace(/[:.]/g,'-');
 const log=path.join(dir,`${label}-${id}.log`);
 const report=path.join(dir,`${label}-${id}.json`);
 const checkpoint=path.join(dir,`${label}-checkpoint.json`);
-const bundle=path.join(root,'../updates/DividendOS-web-1.6.0.zip');
+const bundle=path.join(root,`../updates/DividendOS-web-${JSON.parse(readFileSync(path.join(root,'package.json'),'utf8')).version}.zip`);
 const state={stage:label,status:'running',pid:process.pid,sourceFingerprint:sourceFingerprint(),startedAt:new Date().toISOString(),command:[command,...args],log,report,bundleSha256:existsSync(bundle)?createHash('sha256').update(readFileSync(bundle)).digest('hex'):null,lastOutputAt:null,tail:''};
 const save=()=>{state.updatedAt=new Date().toISOString();writeFileSync(checkpoint+'.tmp',JSON.stringify(state,null,2)+'\n');renameSync(checkpoint+'.tmp',checkpoint);};
 save();
