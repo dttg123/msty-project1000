@@ -903,7 +903,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function openWithdrawalForm(projectId = selectedProjectId, record = null) {
         const project = projectById(record?.projectId || projectId), calc = computeProject(project), edit = !!record, recovery = project.recovery, returnPage = currentPage;
-        if (!calc.dividendBalanceConfirmed) {
+        if (!calc.dividendBalanceConfirmed && !edit) {
             toast('배당 사용 전에 매수 자금 구분과 초기 잔액을 확인해 주세요. 계좌 달러 잔액은 배당 잔액과 다릅니다.');
             return;
         }
@@ -912,7 +912,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         openModal(`<h3 class="modal-title">${esc(project.symbol)} 배당 사용 ${edit ? '수정' : '기록'}</h3><p class="modal-desc">${esc(project.symbol)} 밖에서 실제로 사용한 배당금을 기록합니다. ISA는 환전 시 빠져나간 실제 달러 금액을 입력하고 원화 입금액은 메모에 남기세요. 받는 종목의 매수를 자동 생성하지 않습니다.</p><form id="withdrawalForm" class="form-grid"><div class="record-detail-grid"><div><span>사용 가능 배당</span><strong>${fmtMoney(available, 2)}</strong></div><div><span>남은 회수 원금</span><strong>${fmtMoney(projectRecovery(calc).remaining, 2)}</strong></div></div><div><label class="input-label">사용일</label><input class="input" name="date" type="date" min="${minimum}" max="${todayISO()}" value="${record?.date || todayISO()}" required></div><div><label class="input-label">사용처</label><select class="input" name="destination">${[['isa', 'ISA'], ['otherDividend', '다른 배당주'], ['living', '생활비'], ['other', '기타']].map(([value, label]) => `<option value="${value}" ${value === (record?.destination || 'isa') ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div><label class="input-label">실제 사용액 USD</label><input class="input" name="amountUSD" type="number" min="0.01" max="${Math.max(.01, round(available, 2))}" step="0.01" value="${edit ? Math.abs(n(record.amountUSD)) : ''}" required></div><div><label class="input-label">메모 · 원화 입금액 (선택)</label><input class="input" name="note" value="${esc(record?.note || '')}" placeholder="예: ISA에 40,000원 입금"></div><div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${esc(record.id)}">이 사용 기록 삭제</button>` : ''}</form>`);
         document.getElementById('withdrawalForm').onsubmit = async (event) => {
             event.preventDefault();
-            if (!computeProject(project).dividendBalanceConfirmed) {
+            if (!computeProject(project).dividendBalanceConfirmed && !edit) {
                 toast('매수 자금 구분·입출금 순서·초기 잔액을 먼저 확인해 주세요.');
                 return;
             }
@@ -922,7 +922,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 toast('사용 날짜·금액·사용처를 확인해 주세요.');
                 return;
             }
-            if (amount > available + .000001) {
+            if (amount > available + .000001 || !calc.dividendBalanceConfirmed && edit && amount > Math.abs(n(record.amountUSD)) + .000001) {
                 toast('사용 가능한 배당금보다 많이 사용할 수 없습니다.');
                 return;
             }
@@ -952,9 +952,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         if (!trade || trade.type !== 'buy' || trade.source?.provider !== 'toss' || !trade.source.sourceFingerprint)
             return;
         const project = projectById(trade.projectId), calc = computeProject(project), gross = tradeCashBreakdown(trade).grossBuyCostUSD;
+        const dateWindow = trade.dividendFunding?.cashDateWindow;
         const confirmed = trade.dividendFunding?.sourceFingerprint === trade.source.sourceFingerprint, cashDebitUSD = round(gross, 2);
-        openModal(`<h3 class="modal-title">매수 자금 출처 확인</h3><p class="modal-desc">${esc(project.symbol)} · ${fmtDate(trade.date)} · ${fmtShares(trade.shares)}주 · ${fmtMoney(gross, 2)}. 토스 원본은 유지하며, 이 매수에 쓴 배당금만 별도로 기록합니다. 직접 넣은 돈으로 샀다면 0을 입력하세요.</p><form id="fundingForm" class="form-grid"><label>이 매수에 사용한 배당금 USD<input class="input" name="amountUSD" type="number" min="0" max="${cashDebitUSD}" step="0.01" value="${confirmed ? n(trade.dividendFunding?.amountUSD) : ''}" required></label><label>나머지 중 MSTY에 투입한 원금 USD (선택)<input class="input" name="contributionUSD" type="number" min="0" max="${cashDebitUSD}" step="0.01" value="${trade.dividendFunding?.contributionUSD ?? ''}" placeholder="모르면 비워두세요"></label><p class="detail-note">MSTY 매도대금·이자를 다시 쓴 금액은 새 원금에 넣지 않습니다. 비워두면 회수 기준은 잠정값입니다.</p><label>실제 달러 출금일<input class="input" name="cashDate" type="date" min="${trade.date}" max="${todayISO()}" value="${trade.dividendFunding?.cashDate || trade.date}" required></label><label>실제 달러 출금 시각 (선택)<input class="input" name="cashTime" type="time" step="1" value="${esc(trade.dividendFunding?.cashTime || '')}"></label><p class="detail-note">주문일과 다르면 거래내역의 출금일을 입력하세요. 토스 주문 원본은 바뀌지 않습니다.</p><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">확인 저장</button></div></form>`);
-        document.getElementById('fundingForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), amount = n(form.get('amountUSD')), cashDate = String(form.get('cashDate')); if (!isDate(cashDate) || cashDate < trade.date || cashDate > todayISO()) {
+        openModal(`<h3 class="modal-title">매수 자금 출처 확인</h3><p class="modal-desc">${esc(project.symbol)} · ${fmtDate(trade.date)} · ${fmtShares(trade.shares)}주 · ${fmtMoney(gross, 2)}. 토스 원본은 유지하며, 이 매수에 쓴 배당금만 별도로 기록합니다. 직접 넣은 돈으로 샀다면 0을 입력하세요.</p><form id="fundingForm" class="form-grid"><label>이 매수에 사용한 배당금 USD<input class="input" name="amountUSD" type="number" min="0" max="${cashDebitUSD}" step="0.01" value="${confirmed ? n(trade.dividendFunding?.amountUSD) : ''}" required></label><label>나머지 중 MSTY에 투입한 원금 USD (선택)<input class="input" name="contributionUSD" type="number" min="0" max="${cashDebitUSD}" step="0.01" value="${trade.dividendFunding?.contributionUSD ?? ''}" placeholder="모르면 비워두세요"></label><p class="detail-note">MSTY 매도대금·이자를 다시 쓴 금액은 새 원금에 넣지 않습니다. 비워두면 회수 기준은 잠정값입니다.</p><label>실제 달러 출금일<input class="input" name="cashDate" type="date" min="${trade.date}" max="${todayISO()}" value="${trade.dividendFunding?.cashDate || (dateWindow ? '' : trade.date)}" ${dateWindow ? '' : 'required'}></label>${dateWindow ? `<p class="detail-note">명세서로 확인한 출금일 범위: ${esc(dateWindow.from)} ~ ${esc(dateWindow.to)}. 날짜를 비워두면 범위를 유지하며 정확한 하루로 단정하지 않습니다.</p>` : ''}<label>실제 달러 출금 시각 (선택)<input class="input" name="cashTime" type="time" step="1" value="${esc(trade.dividendFunding?.cashTime || '')}"></label><p class="detail-note">주문일과 다르면 거래내역의 출금일을 입력하세요. 토스 주문 원본은 바뀌지 않습니다.</p><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">확인 저장</button></div></form>`);
+        document.getElementById('fundingForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), amount = n(form.get('amountUSD')), cashDate = String(form.get('cashDate')); if (cashDate ? (!isDate(cashDate) || cashDate < trade.date || cashDate > todayISO()) : !dateWindow) {
             toast('실제 달러 출금일을 확인해 주세요.');
             return;
         } if (amount < 0 || amount > cashDebitUSD + .00000001) {
@@ -963,7 +964,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         } const contributionText = String(form.get('contributionUSD') || '').trim(), contributionUSD = contributionText ? n(contributionText) : undefined; if (contributionUSD !== undefined && (contributionUSD < 0 || contributionUSD + amount > cashDebitUSD + .00000001)) {
             toast('원금과 배당 사용액의 합계가 출금액을 초과합니다.');
             return;
-        } const before = trade.dividendFunding; trade.dividendFunding = { amountUSD: amount, sourceFingerprint: trade.source.sourceFingerprint, cashDate, cashTime: String(form.get('cashTime') || '') || undefined, cashDebitUSD, ...(contributionUSD !== undefined ? { contributionUSD } : {}) }; if (hasNewDividendDeficit(calc, computeProject(project))) {
+        } const before = trade.dividendFunding; trade.dividendFunding = { amountUSD: amount, sourceFingerprint: trade.source.sourceFingerprint, ...(cashDate ? { cashDate, cashTime: String(form.get('cashTime') || '') || undefined } : { cashDateWindow: dateWindow }), cashDebitUSD, ...(contributionUSD !== undefined ? { contributionUSD } : {}) }; if (hasNewDividendDeficit(calc, computeProject(project))) {
             trade.dividendFunding = before;
             toast('출금 당시 배당 잔액이 부족하거나 입출금 순서가 미확인입니다. 거래내역 시각을 확인해 주세요.');
             return;

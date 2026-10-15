@@ -216,7 +216,7 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
             ...(openingAmount ? [{ id: 'opening-balance', date: project.initialDividendBalanceDate || '0000-01-01', createdAt: '', kind: 'opening', amountUSD: openingAmount }] : []),
             ...postedDividends.map((row) => ({ ...row, kind: 'dividend', amountUSD: dividendCashBreakdown(row).netUSD })),
             ...postedAdjustments.map((row) => ({ ...row, kind: 'adjustment', amountUSD: n(row.amountUSD) })),
-            ...postedTrades.filter((row) => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || !!row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint)).map((row) => ({ ...row, cashTime: row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? row.dividendFunding?.cashTime : row.cashTime, date: row.dividendFunding?.sourceFingerprint === row.source?.sourceFingerprint && row.dividendFunding?.cashDate ? row.dividendFunding.cashDate : row.date, kind: 'reinvest', amountUSD: -(row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? clamp(n(row.dividendFunding.amountUSD), 0, row.dividendFunding.cashDebitUSD ?? tradeCashBreakdown(row).grossBuyCostUSD) : row.buyType === 'mixed' ? clamp(n(row.reinvestAmountUSD), 0, tradeCashBreakdown(row).grossBuyCostUSD) : tradeCashBreakdown(row).grossBuyCostUSD) }))
+            ...postedTrades.filter((row) => row.type === 'buy' && (row.buyType === 'reinvest' || row.buyType === 'mixed' || !!row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint)).map((row) => ({ ...row, cashTime: row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? row.dividendFunding?.cashTime : row.cashTime, date: row.dividendFunding?.sourceFingerprint === row.source?.sourceFingerprint && (row.dividendFunding?.cashDate || row.dividendFunding?.cashDateWindow) ? (row.dividendFunding.cashDate || row.dividendFunding.cashDateWindow.from) : row.date, kind: 'reinvest', amountUSD: -(row.dividendFunding && row.dividendFunding.sourceFingerprint === row.source?.sourceFingerprint ? clamp(n(row.dividendFunding.amountUSD), 0, row.dividendFunding.cashDebitUSD ?? tradeCashBreakdown(row).grossBuyCostUSD) : row.buyType === 'mixed' ? clamp(n(row.reinvestAmountUSD), 0, tradeCashBreakdown(row).grossBuyCostUSD) : tradeCashBreakdown(row).grossBuyCostUSD) }))
         ].filter(row => row.date <= asOf && Math.abs(row.amountUSD) > 0);
         const dayClocks = new Map();
         for (const row of cashEntries)
@@ -256,8 +256,11 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
             }
             priorDayBalance += rows.reduce((sum, row) => sum + row.amountUSD, 0);
         }
-        const reservedDividendAmount = postedTrades.reduce((sum, row) => { const f = row.dividendFunding; return sum + (row.type === 'buy' && f?.sourceFingerprint === row.source?.sourceFingerprint && f?.cashDate && f.cashDate > asOf ? n(f.amountUSD) : 0); }, 0);
-        const dividendAvailable = cashBalance;
+        // A verified date window is not an exact settlement date. Reserve at its
+        // earliest possible debit; include in posted cash only after its latest date.
+        const unsettledDateWindowAmount = postedTrades.reduce((sum, row) => { const f = row.dividendFunding, w = f?.cashDateWindow; return sum + (row.type === 'buy' && f?.sourceFingerprint === row.source?.sourceFingerprint && w && w.from <= asOf && w.to > asOf ? n(f.amountUSD) : 0); }, 0);
+        const reservedDividendAmount = postedTrades.reduce((sum, row) => { const f = row.dividendFunding; return sum + (row.type === 'buy' && f?.sourceFingerprint === row.source?.sourceFingerprint && (f?.cashDate || f?.cashDateWindow?.from) && (f.cashDate || f.cashDateWindow.from) > asOf ? n(f.amountUSD) : 0); }, 0) + unsettledDateWindowAmount;
+        const dividendAvailable = cashBalance + unsettledDateWindowAmount;
         const dividendBalanceConfirmed = unconfirmedFundingCount === 0 && !openingBalanceOverlap && !hasKRWDividends && cashDeficitEvents.length === 0 && cashTimingUnconfirmedDates.length === 0;
         const spendableDividendBalance = dividendBalanceConfirmed ? Math.max(0, dividendAvailable - reservedDividendAmount) : null;
         return {

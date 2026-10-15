@@ -43,6 +43,8 @@ export function validateLedger(raw: unknown): string[] {
       if(row.cashTime!==undefined&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(row.cashTime)))errors.push('입출금 시각은 거래내역의 현지 시각으로 입력해 주세요.');
       const fundingTime=object(row.dividendFunding).cashTime;
       if(fundingTime!==undefined&&!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(fundingTime)))errors.push('매수대금 출금 시각을 확인해 주세요.');
+      const funding=object(row.dividendFunding),window=object(funding.cashDateWindow);
+      if(funding.cashDateWindow!==undefined&&(!isDate(window.from)||!isDate(window.to)||String(window.from)>String(window.to)||funding.cashDate!==undefined||funding.cashTime!==undefined||(funding.sourceFingerprint===object(row.source).sourceFingerprint&&String(window.from)<String(row.date))))errors.push('명세서에서 확인한 출금일 범위를 확인해 주세요.');
       const valid=(field: string,min=0)=>finite(row[field],min);
       if(key==='trades'&&(!['buy','sell'].includes(String(row.type))||!valid('shares',.00000001)||!valid('price')))errors.push('거래 수량·단가가 올바르지 않습니다.');
       if(key==='trades'&&((row.feeUSD!==undefined&&!valid('feeUSD'))||(row.taxUSD!==undefined&&!valid('taxUSD'))))errors.push('거래 수수료·세금을 확인해 주세요.');

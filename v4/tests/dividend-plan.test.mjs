@@ -136,3 +136,26 @@ console.log('Principal-source PASS: recycled cash excluded, missing contribution
  assert.equal(c.cashLedger.some(row=>row.date.startsWith('2099')),false);
 }
 console.log('Operational cash PASS: intraday deficit, unknown clocks, prior-day funding, ZIP timing, future settlement reservation');
+
+// A cropped statement date can be bounded without claiming a guessed exact day.
+{
+ const s=blankState(),p=s.projects[0],t=tossCandidateToTrade({id:'bounded',symbol:p.symbol,date:'2025-01-02',type:'buy',shares:1,price:12,currency:'USD'},{projectId:p.id,id:'bounded'});
+ t.dividendFunding={amountUSD:12,contributionUSD:0,sourceFingerprint:t.source.sourceFingerprint,cashDateWindow:{from:'2025-01-05',to:'2025-01-06'}};
+ s.trades=[t];s.dividends=[{id:'income',projectId:p.id,date:'2025-01-03',amountUSD:20}];
+ const compute=x=>createPortfolioEngine(()=>x,()=>p.id).computeProject(p);
+ assert.equal(compute(s).spendableDividendBalance,8);assert.equal(compute(s).cashLedger.at(-1).date,'2025-01-05');
+ assert.equal(s.trades[0].date,'2025-01-02');assert.equal(s.trades[0].dividendFunding.cashDate,undefined);
+ const restored=decodeAppState(s);assert.deepEqual(restored.trades[0].dividendFunding.cashDateWindow,t.dividendFunding.cashDateWindow);assert.equal(compute(restored).spendableDividendBalance,8);
+ const bad=structuredClone(s);bad.trades[0].dividendFunding.cashDate='2025-01-05';assert.throws(()=>decodeAppState(bad),'a window cannot silently become an exact date');
+ const badRange=structuredClone(s);badRange.trades[0].dividendFunding.cashDateWindow.to='2025-01-04';assert.throws(()=>decodeAppState(badRange));
+}
+console.log('Statement date-window PASS: conservative debit ordering, original dates retained, no invented exact date, restore validation');
+{
+ const {todayISO}=await import('../modules/utils.js');
+ const s=blankState(),p=s.projects[0],t=tossCandidateToTrade({id:'window-in-progress',symbol:p.symbol,date:'2025-01-02',type:'buy',shares:1,price:12,currency:'USD'},{projectId:p.id,id:'window-in-progress'});
+ t.dividendFunding={amountUSD:12,contributionUSD:0,sourceFingerprint:t.source.sourceFingerprint,cashDateWindow:{from:todayISO(),to:'2099-01-01'}};
+ s.trades=[t];s.dividends=[{id:'income',projectId:p.id,date:'2025-01-01',amountUSD:20}];
+ const c=createPortfolioEngine(()=>s,()=>p.id).computeProject(p);
+ assert.equal(c.dividendAvailable,20,'a debit inside a date window is not falsely marked settled');
+ assert.equal(c.reservedDividendAmount,12);assert.equal(c.spendableDividendBalance,8,'an uncertain settlement cannot free reserved funds');
+}

@@ -25,7 +25,7 @@ export interface SourceRef {
 
 export interface LedgerRow {
   cashTime?: string;
-  dividendFunding?: { amountUSD: number; sourceFingerprint: string; cashDate?: string; cashTime?: string; cashDebitUSD?: number; contributionUSD?: number };
+  dividendFunding?: { amountUSD: number; sourceFingerprint: string; cashDate?: string; cashDateWindow?: {from:string;to:string}; cashTime?: string; cashDebitUSD?: number; contributionUSD?: number };
   source?: SourceRef;
   symbol?: string;
   note?: string;
