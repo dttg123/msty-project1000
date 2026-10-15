@@ -36,10 +36,11 @@ async function openAdvancedSettings(page){
 }
 
 test('30년 월별 거래·배당 720건을 개별 입력하고 재시작·ZIP 복원·되돌리기를 대조한다',async({page},testInfo)=>{
-  test.skip(process.env.QA_LIFETIME_UI!=='1'||testInfo.project.name!=='mobile-chromium','Explicit mobile release QA only');
+  test.skip(process.env.QA_LIFETIME_UI!=='1'||(testInfo.project.name!=='mobile-chromium'&&process.env.QA_EXTENDED_UI!=='1'),'Explicit long-duration release QA');
   test.setTimeout(15*60_000);
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
+  await page.route('**/modules/cloud-api.js',route=>route.fulfill({contentType:'application/javascript',body:`export async function initGoogleAuth(){};export async function logoutGoogle(){};export async function getGoogleIdToken(){return null;}export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){return {revision:1};}export async function subscribeCloudDocument(){return ()=>{};}`}));
   await page.goto('/');
   await expect(page.locator('#splashScreen')).toBeHidden();
   const initial=await ledger(page);

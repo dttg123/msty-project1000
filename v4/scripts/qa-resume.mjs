@@ -40,14 +40,29 @@ const stages={
   high:['npx',['playwright','test','lifetime-high-ui.spec.mjs','--project=mobile-chromium','--workers=1','--reporter=list,json'],{QA_HIGH_LIFETIME_UI:'1'}],
   switching:['npx',['playwright','test','lifetime-switching-ui.spec.mjs','--project=mobile-chromium','--workers=1','--reporter=list,json'],{QA_SWITCHING_LIFETIME_UI:'1'}]
 };
+if(stage==='extended'){
+  const cases={
+    'hard-8':['hard-multi-project.spec.mjs','^8종목'],
+    'hard-9':['hard-multi-project.spec.mjs','^9종목'],
+    lifetime:['lifetime-ui.spec.mjs','30년 월별'],
+    'high-8':['lifetime-high-ui.spec.mjs','^8종목'],
+    'high-9':['lifetime-high-ui.spec.mjs','^9종목'],
+    switching:['lifetime-switching-ui.spec.mjs','9개 플러스']
+  };
+  const scenario=process.argv[3],browser=process.argv[4];
+  if(!Object.hasOwn(cases,scenario)||!['mobile-chromium','desktop-chromium'].includes(browser))throw new Error('Choose an explicit extended scenario and browser.');
+  const [file,grep]=cases[scenario];
+  stages.extended=['npx',['playwright','test',file,'--grep',grep,'--project='+browser,'--workers=1','--reporter=line,json'],{QA_HARD_UI:'1',QA_LIFETIME_UI:'1',QA_HIGH_LIFETIME_UI:'1',QA_SWITCHING_LIFETIME_UI:'1',QA_EXTENDED_UI:'1'}];
+}
 if(!stages[stage]){console.error('Usage: node scripts/qa-resume.mjs release|browser|hard|lifetime|high|switching');process.exit(2);}
 const [command,args,extra]=stages[stage];
+const label=stage==='extended'?`${stage}-${process.argv[3]}-${process.argv[4]}`:stage;
 const id=new Date().toISOString().replace(/[:.]/g,'-');
-const log=path.join(dir,`${stage}-${id}.log`);
-const report=path.join(dir,`${stage}-${id}.json`);
-const checkpoint=path.join(dir,`${stage}-checkpoint.json`);
+const log=path.join(dir,`${label}-${id}.log`);
+const report=path.join(dir,`${label}-${id}.json`);
+const checkpoint=path.join(dir,`${label}-checkpoint.json`);
 const bundle=path.join(root,'../updates/DividendOS-web-1.6.0.zip');
-const state={stage,status:'running',pid:process.pid,sourceFingerprint:sourceFingerprint(),startedAt:new Date().toISOString(),command:[command,...args],log,report,bundleSha256:existsSync(bundle)?createHash('sha256').update(readFileSync(bundle)).digest('hex'):null,lastOutputAt:null,tail:''};
+const state={stage:label,status:'running',pid:process.pid,sourceFingerprint:sourceFingerprint(),startedAt:new Date().toISOString(),command:[command,...args],log,report,bundleSha256:existsSync(bundle)?createHash('sha256').update(readFileSync(bundle)).digest('hex'):null,lastOutputAt:null,tail:''};
 const save=()=>{state.updatedAt=new Date().toISOString();writeFileSync(checkpoint+'.tmp',JSON.stringify(state,null,2)+'\n');renameSync(checkpoint+'.tmp',checkpoint);};
 save();
 const child=spawn(command,args,{cwd:root,env:{...process.env,CI:'1',...extra,PLAYWRIGHT_JSON_OUTPUT_NAME:report},stdio:['ignore','pipe','pipe']});
