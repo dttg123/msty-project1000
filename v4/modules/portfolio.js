@@ -261,11 +261,12 @@ export function createPortfolioEngine(getState, getSelectedProjectId) {
         const unsettledDateWindowAmount = postedTrades.reduce((sum, row) => { const f = row.dividendFunding, w = f?.cashDateWindow; return sum + (row.type === 'buy' && f?.sourceFingerprint === row.source?.sourceFingerprint && w && w.from <= asOf && w.to > asOf ? n(f.amountUSD) : 0); }, 0);
         const reservedDividendAmount = postedTrades.reduce((sum, row) => { const f = row.dividendFunding; return sum + (row.type === 'buy' && f?.sourceFingerprint === row.source?.sourceFingerprint && (f?.cashDate || f?.cashDateWindow?.from) && (f.cashDate || f.cashDateWindow.from) > asOf ? n(f.amountUSD) : 0); }, 0) + unsettledDateWindowAmount;
         const dividendAvailable = cashBalance + unsettledDateWindowAmount;
-        const dividendBalanceConfirmed = unconfirmedFundingCount === 0 && !openingBalanceOverlap && !hasKRWDividends && cashDeficitEvents.length === 0 && cashTimingUnconfirmedDates.length === 0;
+        const reservedDividendShortfall = Math.max(0, reservedDividendAmount - dividendAvailable);
+        const dividendBalanceConfirmed = reservedDividendShortfall < .000001 && unconfirmedFundingCount === 0 && !openingBalanceOverlap && !hasKRWDividends && cashDeficitEvents.length === 0 && cashTimingUnconfirmedDates.length === 0;
         const spendableDividendBalance = dividendBalanceConfirmed ? Math.max(0, dividendAvailable - reservedDividendAmount) : null;
         return {
             project, trades, dividends, adjustments, postedTrades, postedDividends, reportingRows, hasKRWDividends, usdDividendsTotal, postedAdjustments, factor, shares, normalizedShares, costBasis, realized, directBuyCost, sellProceeds,
-            purchaseBasis, priceUnrealized: priceAvailable ? marketValue - purchaseBasis : 0, unconfirmedFundingCount, unconfirmedCapitalFundingCount, openingBalanceOverlap, dividendBalanceConfirmed, spendableDividendBalance, cashTimingUnconfirmedDates, reservedDividendAmount,
+            purchaseBasis, priceUnrealized: priceAvailable ? marketValue - purchaseBasis : 0, unconfirmedFundingCount, unconfirmedCapitalFundingCount, openingBalanceOverlap, dividendBalanceConfirmed, spendableDividendBalance, cashTimingUnconfirmedDates, reservedDividendAmount, reservedDividendShortfall,
             directShares, reinvestAmount, reinvestCount, reinvestShares, currentPrice, priceAvailable, marketValue, unrealized, avgCost,
             currentTarget, progress: currentTarget > 0 ? shares / currentTarget : 0, dividendsTotal, yearDividends, currentMonthDividends, trailing12Dividends,
             recentDividend, monthlyEstimate, shortMonthlyEstimate, rawMonthlyEstimate, rawShortMonthlyEstimate, estimateReliable, medianDividendGapDays: medianGap,

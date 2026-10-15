@@ -159,3 +159,17 @@ console.log('Statement date-window PASS: conservative debit ordering, original d
  assert.equal(c.dividendAvailable,20,'a debit inside a date window is not falsely marked settled');
  assert.equal(c.reservedDividendAmount,12);assert.equal(c.spendableDividendBalance,8,'an uncertain settlement cannot free reserved funds');
 }
+{
+ const {settledBuyDebitUSD}=await import('../modules/finance.js');
+ for(const [shares,price,feeUSD,taxUSD,expected] of [[1,1.005,0,0,1.01],[3,10.075,0,0,30.23],[1,1,.004,.001,1.01],[1e-7,10050000,0,0,1.01]]){
+  const s=blankState(),p=s.projects[0],t=tossCandidateToTrade({id:'half-cent',symbol:p.symbol,date:'2025-01-02',type:'buy',shares,price,feeUSD,taxUSD,currency:'USD'},{projectId:p.id,id:'half-cent'});
+  assert.equal(settledBuyDebitUSD(t),expected);t.dividendFunding={amountUSD:expected,cashDebitUSD:expected,contributionUSD:0,sourceFingerprint:t.source.sourceFingerprint};s.trades=[t];s.dividends=[{id:'income',projectId:p.id,date:'2025-01-01',amountUSD:100}];
+  assert.equal(decodeAppState(s).trades[0].dividendFunding.cashDebitUSD,expected);
+ }
+ const s=blankState(),p=s.projects[0],t=tossCandidateToTrade({id:'reserved',symbol:p.symbol,date:'2025-01-02',type:'buy',shares:1,price:12,currency:'USD'},{projectId:p.id,id:'reserved'});
+ t.dividendFunding={amountUSD:12,sourceFingerprint:t.source.sourceFingerprint,cashDate:'2099-01-01'};s.trades=[t];s.dividends=[{id:'income',projectId:p.id,date:'2025-01-01',amountUSD:20}];
+ const compute=()=>createPortfolioEngine(()=>s,()=>p.id).computeProject(p),before=compute();
+ s.trades.push({id:'double-spend',projectId:p.id,date:'2025-01-03',type:'buy',buyType:'reinvest',shares:1,price:10});
+ assert.equal(hasNewDividendDeficit(before,compute()),true,'manual reinvestment cannot consume already reserved cash');assert.equal(compute().spendableDividendBalance,null);
+}
+console.log('Settlement boundaries PASS: decimal half-cents, fractional shares, fee/tax sum, reservation double-spend guard');

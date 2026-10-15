@@ -137,3 +137,18 @@ test('과거 부족 기록은 추가 사용을 막으면서 기존 사용액 감
  await openPortfolioDetail(page,'records');await page.locator('[data-view-record="cash:bad"]').click();await page.locator('.record-manage > summary').click();await page.locator('[data-edit-record="cash:bad"]').click();await expect(page.locator('#withdrawalForm')).toBeVisible();
  await page.locator('#withdrawalForm [name="amountUSD"]').fill('10');await page.locator('#withdrawalForm button[type="submit"]').click();await expect(page.locator('#withdrawalForm')).toBeHidden();expect((await read(page)).cashAdjustments[0].amountUSD).toBe(-10);await openPortfolioDetail(page,'recovery');await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeEnabled();expect(errors).toEqual([]);
 });
+
+test('반 센트 경계의 출금액은 입력 화면·저장 검증·재시작에서 일치한다',async({page})=>{
+ const errors=await setup(page,true);
+ await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js'),{tossCandidateToTrade}=await import('/modules/toss.js');const s=await storageGet('stateFundingV1'),p=s.projects[0];s.trades[1]=tossCandidateToTrade({id:'half-cent',symbol:p.symbol,type:'buy',date:'2025-01-03',currency:'USD',shares:1,price:1.005},{projectId:p.id,id:'broker'});await storageSet('stateFundingV1',s);});
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();await details(page);await page.locator('[data-review-funding]').click();await page.locator('[data-funding-trade="broker"]').click();
+ await expect(page.locator('#fundingForm [name="amountUSD"]')).toHaveAttribute('max','1.01');await page.locator('#fundingForm [name="amountUSD"]').fill('1.01');await page.locator('#fundingForm button[type="submit"]').click();await expect(page.locator('#fundingForm')).toBeHidden();
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();const t=(await read(page)).trades[1];expect(t.price).toBe(1.005);expect(t.dividendFunding.cashDebitUSD).toBe(1.01);expect(t.dividendFunding.amountUSD).toBe(1.01);expect(errors).toEqual([]);
+});
+
+test('결제 예정 재투자 예약금은 수동 재투자에서도 중복 사용되지 않는다',async({page})=>{
+ const errors=await setup(page,true);
+ await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const s=await storageGet('stateFundingV1'),t=s.trades[1];t.dividendFunding={amountUSD:10,contributionUSD:0,sourceFingerprint:t.source.sourceFingerprint,cashDate:'2099-01-01'};await storageSet('stateFundingV1',s);});
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="projects"]').first().click();await manual(page,'add-trade');await page.locator('#tradeForm [name="date"]').fill('2025-01-04');await page.locator('#tradeForm [name="buyType"]').selectOption('reinvest');await page.locator('#tradeForm [name="shares"]').fill('4.5');await page.locator('#tradeForm [name="price"]').fill('10');await page.locator('#tradeForm button[type="submit"]').click();await expect(page.locator('.toast')).toContainText('부족');expect((await read(page)).trades).toHaveLength(2);
+ await page.locator('#tradeForm [name="shares"]').fill('4');await page.locator('#tradeForm button[type="submit"]').click();await expect(page.locator('#tradeForm')).toBeHidden();expect((await read(page)).trades).toHaveLength(3);expect(errors).toEqual([]);
+});

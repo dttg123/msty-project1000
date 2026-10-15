@@ -113,6 +113,7 @@ export function createViews(context) {
       ${calc.openingBalanceOverlap ? `<p class="detail-note funding-pending">초기 잔액 날짜 이전의 거래가 있습니다. 중간 잔액을 전체 내역에 더하면 중복될 수 있습니다.</p><button class="btn soft small" data-exclude-opening-snapshot="${esc(p.id)}">중간 잔액 중복 확인</button>` : ''}
       ${calc.cashTimingUnconfirmedDates.length ? `<p class="detail-note funding-pending">같은 날 입금·출금 순서를 확인할 날짜: ${calc.cashTimingUnconfirmedDates.map(esc).join(', ')}. 입금·매수 기록에서 거래내역 시각을 입력하세요.</p>` : ''}
       ${calc.cashDeficitEvents.length ? '<p class="detail-note funding-pending">과거 출금 당시 배당 잔액이 부족한 기록이 있습니다. 이후 입금으로 가려지지 않도록 사용 가능 표시를 보류합니다.</p>' : ''}
+      ${calc.reservedDividendShortfall > .000001 ? '<p class="detail-note funding-pending">결제 예정 재투자에 필요한 배당 잔액이 부족합니다. 기존 매수 자금 구분을 확인해 주세요.</p>' : ''}
       ${calc.reservedDividendAmount > 0 ? `<p class="detail-note">결제 예정 재투자 ${fmtMoney(calc.reservedDividendAmount, 2)}는 사용 가능액에서 예약 차감합니다.</p>` : ''}
       ${calc.hasKRWDividends ? '<p class="detail-note">원화 배당은 달러 사용 잔액에서 제외됩니다. 실제 달러 금액을 확인한 뒤 기록하세요.</p>' : ''}
       ${calc.unconfirmedFundingCount ? `<p class="detail-note funding-pending">토스 매수 ${calc.unconfirmedFundingCount}건이 새로 넣은 돈인지 배당 재투자인지 아직 확인되지 않았습니다. 확인 전에는 직접 투자로 임시 계산하므로 투자금과 배당 사용액이 잠정값입니다.</p><button class="btn soft small" data-review-funding="${esc(p.id)}">매수 자금 출처 확인</button>` : ''}

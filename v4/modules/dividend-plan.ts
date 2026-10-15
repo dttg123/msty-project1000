@@ -19,6 +19,7 @@ export function projectRecovery(calc:ProjectCalculation){
 }
 
 export function hasNewDividendDeficit(before:ProjectCalculation,after:ProjectCalculation){
+  if(after.reservedDividendShortfall>before.reservedDividendShortfall+.000001)return true;
   const previous=new Map(before.cashDeficitEvents.map(row=>[row.kind+':'+row.id,row.balance]));
   if(after.cashTimingUnconfirmedDates.some(date=>!before.cashTimingUnconfirmedDates.includes(date)))return true;
   return after.cashDeficitEvents.some(row=>row.balance<(previous.get(row.kind+':'+row.id)??0)-.000001);

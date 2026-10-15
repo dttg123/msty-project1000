@@ -1,4 +1,5 @@
 import { isDate } from './utils.js';
+import { settledBuyDebitUSD } from './finance.js';
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const object = (value) => isRecord(value) ? value : {};
 export function validateLedger(raw) {
@@ -85,7 +86,7 @@ export function validateLedger(raw) {
             if (key === 'trades' && row.dividendFunding !== undefined) {
                 const funding = object(row.dividendFunding);
                 const gross = Number(row.shares) * Number(row.price) + Number(row.feeUSD || 0) + Number(row.taxUSD || 0), debit = funding.cashDebitUSD === undefined ? gross : Number(funding.cashDebitUSD);
-                if (funding.cashDebitUSD !== undefined && (!finite(funding.cashDebitUSD) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && Math.abs(debit - Math.round(gross * 100) / 100) > 1e-8)))
+                if (funding.cashDebitUSD !== undefined && (!finite(funding.cashDebitUSD) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && Math.abs(debit - settledBuyDebitUSD({ shares: Number(row.shares), price: Number(row.price), feeUSD: Number(row.feeUSD || 0), taxUSD: Number(row.taxUSD || 0) })) > 1e-8)))
                     errors.push('실제 출금액은 센트 단위 체결금액과 일치해야 합니다.');
                 if (funding.contributionUSD !== undefined && (!finite(funding.contributionUSD) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.contributionUSD) + Number(funding.amountUSD) > debit + 1e-8)))
                     errors.push('직접 투입 원금과 배당 사용액의 합계가 출금액을 초과합니다.');

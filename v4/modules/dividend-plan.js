@@ -15,6 +15,8 @@ export function projectRecovery(calc) {
     return { basisConfirmed: locked || (calc.unconfirmedFundingCount === 0 && calc.unconfirmedCapitalFundingCount === 0), basis, total, remaining: Math.max(0, basis - total), profit: Math.max(0, total - basis), pct: basis > 0 ? total / basis * 100 : 0, locked, uses };
 }
 export function hasNewDividendDeficit(before, after) {
+    if (after.reservedDividendShortfall > before.reservedDividendShortfall + .000001)
+        return true;
     const previous = new Map(before.cashDeficitEvents.map(row => [row.kind + ':' + row.id, row.balance]));
     if (after.cashTimingUnconfirmedDates.some(date => !before.cashTimingUnconfirmedDates.includes(date)))
         return true;
