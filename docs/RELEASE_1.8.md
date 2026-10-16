@@ -15,13 +15,20 @@ Private signing material and synthetic account records are never committed.
 
 ## Verification and publication
 
-The prior UI commit passed 202 ordinary browser checks (12 optional long-duration
-cases skipped), all 30 release suites, Android backup/emulator and signed APK CI.
-The 1.8 candidate reruns version-sensitive checks and CI before publication.
-Current 1.8 Galaxy S25 Ultra and actual read-only Toss confirmation remain pending.
-The 1.7 artifact evidence must not be relabeled or reused for changed runtime.
-The existing release evidence gate is preserved. Missing evidence blocks Pages.
+The 1.8 candidate passed all 30 local RELEASE suites and 38 focused browser
+checks. CI run 38846319654 passed FAST, CORE, ordinary browser QA, Android
+backup/emulator and the permanently signed APK. The old candidate job failed
+only at its pre-publication manual-device requirement.
 
-User approval to publish is recorded in the conversation; it is not a substitute
-for user confirmation that the exact signed candidate runs on their physical device.
-The tested APK and exact runtime fingerprint must be recorded after confirmation.
+The user removed that circular requirement on 2026-10-16: physical confirmation
+must not prevent an in-app update becoming available. CI still blocks publication
+on calculations, storage, security, full browser checks, Android backup,
+permanent signing and matching source-bound ZIP/runtime artifacts.
+`1.8.0.publication.json` records those artifacts and explicitly leaves physical
+Galaxy/Toss acceptance pending after the in-app update. No 1.7 confirmation is
+reused as a 1.8 pass. Historical manual-evidence validation remains separate.
+
+The final APK matches all 40 tested runtime files. APK SHA256:
+f5dcd8d59f1cadd35f3ee990548b218c2f380bb59de818fea0a1db73051ac3be.
+The permanent signing certificate is unchanged. The signed in-app update
+supports the existing native app from 0.12.30 onward; no new APK is required.

@@ -300,9 +300,9 @@ jobs:
       - name: Run RELEASE quality gate
         working-directory: v4
         run: npm run qa:release
-      - name: Verify Q3 device, restore, rollback, and cleanup evidence
+      - name: Verify signed publication artifacts; manual acceptance follows update
         working-directory: v4
-        run: npm run qa:release:evidence
+        run: npm run qa:release:publication
 
   release-candidate-verification:
     if: (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/hardening/release-')) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'hardening/release-'))
@@ -324,9 +324,9 @@ jobs:
       - name: Verify candidate calculations, storage, and signed update
         working-directory: v4
         run: npm run qa:release
-      - name: Check current-candidate physical device and Toss evidence before publication
+      - name: Verify candidate publication artifacts; physical checks remain pending
         working-directory: v4
-        run: npm run qa:release:evidence
+        run: npm run qa:release:publication
 
   deploy-pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
