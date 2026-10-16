@@ -1,7 +1,7 @@
 {
   "name": "dividend-os",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "type": "module",
   "engines": {
     "node": "24.x"
@@ -27,7 +27,8 @@
     "verify:release": "npm run qa:release",
     "qa:e2e:hard": "QA_HARD_UI=1 playwright test hard-multi-project.spec.mjs",
     "qa:e2e:lifetime:high": "QA_HIGH_LIFETIME_UI=1 playwright test lifetime-high-ui.spec.mjs --project=mobile-chromium --workers=1",
-    "qa:e2e:lifetime:switching": "QA_SWITCHING_LIFETIME_UI=1 playwright test lifetime-switching-ui.spec.mjs --project=mobile-chromium --workers=1"
+    "qa:e2e:lifetime:switching": "QA_SWITCHING_LIFETIME_UI=1 playwright test lifetime-switching-ui.spec.mjs --project=mobile-chromium --workers=1",
+    "qa:release:publication": "node scripts/publication-evidence.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3",

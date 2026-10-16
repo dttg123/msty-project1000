@@ -59,3 +59,30 @@ export function validateReleaseEvidence(evidence,{root,head,now=Date.now()}){
   reject(evidence.galaxyS25Ultra?.source==='user-confirmation'&&evidence.tossReadOnly?.source==='user-confirmation','physical device and actual Toss evidence must identify their source');
   validateChecklist(evidence,{appVersion:current.appVersion,now});return current;
 }
+
+// Publication relies on automated CI; manual acceptance is recorded after users
+// can install the signed update. It is never inferred from emulator results.
+export const PUBLICATION_FORMAT='dividend-os-publication-v1';
+export function validatePublicationEvidence(evidence,{root,head,now=Date.now()}){
+  reject(evidence.format===PUBLICATION_FORMAT,'versioned publication record is required');
+  reject(evidence.policy==='automated-before-publication/manual-after-update','publication policy is missing');
+  reject(evidence.authorization?.source==='user-request'&&evidence.authorization?.inAppUpdate===true,'in-app publication authorization is missing');
+  const at=Date.parse(evidence.preparedAt);reject(Number.isFinite(at)&&at<=now+5*60*1000&&now-at<=7*24*60*60*1000,'publication record date is invalid or stale');
+  reject(/^[a-f0-9]{40}$/.test(evidence.commit||''),'invalid tested commit');
+  try{git(root,['merge-base','--is-ancestor',evidence.commit,head]);}catch{throw new Error('Release evidence rejected: tested commit is not an ancestor of this publication');}
+  const artifacts=evidence.artifacts;reject(artifacts&&artifacts.runtimeFiles,'publication artifact fingerprint is missing');
+  const current=collectReleaseArtifacts(root),tested=collectReleaseArtifacts(root,{reference:evidence.commit,runtimePaths:Object.keys(artifacts.runtimeFiles)});
+  reject(evidence.appVersion===current.appVersion,'publication app version changed');
+  for(const key of ['appVersion','webBundleSha256','updateManifestSha256','runtimeSha256','nativeSourceSha256','websiteEntrySha256']){
+    reject(artifacts[key]===tested[key],`recorded publication ${key} does not match tested source`);
+    reject(artifacts[key]===current[key],`publication ${key} changed after automated verification`);
+  }
+  reject(JSON.stringify(canonical(artifacts.runtimeFiles))===JSON.stringify(current.runtimeFiles),'publication runtime file inventory changed');
+  reject(evidence.postPublicationChecks?.phase==='after-update','manual acceptance must follow in-app update');
+  for(const key of ['galaxyS25Ultra','tossReadOnly']){
+    const check=evidence.postPublicationChecks[key];
+    reject(check&&['pending','passed'].includes(check.status),`manual ${key} status must be explicit`);
+    if(check.status==='passed')reject(check.source==='user-confirmation',`manual ${key} cannot be claimed by automation`);
+  }
+  return current;
+}

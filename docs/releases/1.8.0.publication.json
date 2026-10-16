@@ -1,0 +1,80 @@
+{
+  "format": "dividend-os-publication-v1",
+  "policy": "automated-before-publication/manual-after-update",
+  "commit": "55c2a8d80ec17731903e6571f689baea84f98882",
+  "appVersion": "1.8.0",
+  "preparedAt": "2026-10-16T03:51:40.056766+00:00",
+  "authorization": {
+    "source": "user-request",
+    "inAppUpdate": true
+  },
+  "artifacts": {
+    "appVersion": "1.8.0",
+    "webBundleSha256": "ac6843829c44bed1088d729d8fa0677d5bac9b9edffbc4fb6edd6f205d5e5f21",
+    "updateManifestSha256": "78da1f73d3efcfadb011028221cd4643492884f7c25393dc8cfdbcec2f22032e",
+    "runtimeSha256": "b38e29ff7d1d7cec0ec3af99cbd7ff4595d91534f90b355b07a8028d1a82521a",
+    "runtimeFiles": {
+      "app.js": "eee0777c7dfd468421f8deebbfe6b234d4367cc2a4b76e68e51e923c8d306a7d",
+      "auth.js": "0b693a1d21282cb54fa5a72f9fd524043046093190012cda4519290c62006a2c",
+      "backup.js": "9bf23d9062d5bbd577a83d4459d0e95a4815de69998b932e97c4ce3de5d8c58a",
+      "cloud.js": "069df60a4911aa53f440a5446e5c0cbd40cb0667b1300695250245bf2a7729f9",
+      "firebase.js": "ca778555ba98c3b3a28a7c913bac36372903dbcabcfbb85453b025b71ab5163f",
+      "fonts/OFL.txt": "d31ddd9f2bed32fd7e302a205cf2380ba0de6529152d239ef99cfb6f261bfc04",
+      "fonts/PretendardVariable.woff2": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4",
+      "hot-update.js": "5aed7faafba01a9ad4564151f5e4960a2c99fd138b14a12096d886a290be2cfe",
+      "icon-192.png": "b2d839b3f1cd83de03681aa6773937cd0097a7fbc7e4da5f196e2221d09cf171",
+      "icon-512.png": "c21cb146cea9db8fc144299d9b64666b10a22e0bf60a515420ff019a45729055",
+      "index.html": "cb8ba6f07b2644443626a77be326f3c836a70c392d6e85ff0c6585ad875836ff",
+      "manifest.webmanifest": "424e2647284478c9aecfde897dd719ddcfb0b808ab2a84d33c48e8724d74c79a",
+      "modules/activity.js": "14c25138dc0657bd72f88dee203caff134a05b81b68a93b576d0705545f13046",
+      "modules/backup-history.js": "0ea79b87dfd6fe192db48439004870aa0a4cb8f4b0eab723686ed51fb2ad14f0",
+      "modules/cloud-api.js": "ac319312e07440eac3d8ccec498877609f7c1d43ecba3fc23abc0066e35642f5",
+      "modules/cloud-contract.js": "3df66c731b6350a0d33f70a5f4b8a69ba3f2534b507a810346688ec2637cfbf8",
+      "modules/constants.js": "536eba51eff3e1ff1ffeb5a54c8c4bfb05a8d6268c5628ebc30b0fffd16b0964",
+      "modules/corporate-actions.js": "9781ade567f0157f24116672a24f059fa1ea9f567b8a4ce249783f836bca9686",
+      "modules/demo.js": "6b5a06184835800ef23bb4a320ea3935c82d2d76d9c4f16f70895f4764a10f50",
+      "modules/dividend-analytics.js": "49373700c9098e78dd5ab5e6f187c7222ca6802fa556870956e98f769b127019",
+      "modules/dividend-plan.js": "8a59d7149a02aaf7aa906a2f77ab0b523e34590665debcf6595f446ca324bff9",
+      "modules/finance.js": "175438e37a30c490ac41facd34465f491764975cc2176f3f835e290221c5ccc3",
+      "modules/format.js": "1832461b11093e95cd00906723ebf2bf40a8c961f0e18d256dc9b71286fdf067",
+      "modules/home-metrics.js": "080bdaafde6fc0165291da77b1f4ef9b43825f974cae934b0222e5e05eea24be",
+      "modules/income.js": "d228cf2df3a116a816b421de39fb1f171d8233a409068bf3e7e00cba34e9480e",
+      "modules/migration.js": "d511cbd117de6ba60b93f4987ff1e7c97511298cbe57d82e1eaab3e512f5a05e",
+      "modules/portfolio.js": "d65cd67682c35808075b28e3ebef1d0cec869c767a4830f99fac55aba4f5a62f",
+      "modules/state-decoder.js": "50ac795c4ddcf6037be53d801f1ffbc9b6125cc4658b0280c1f92db147b0ebc0",
+      "modules/state.js": "31e67a634dbaebbe35049a618c834d11dbf8e9db6fdaffa15b1faa7d23ab2cf5",
+      "modules/toss.js": "22d3ef4735033e06ca6b2406377ab79b1fd9ae28e50ecf08f0e9e5764c590cf1",
+      "modules/utils.js": "be9c5332712601f7dff20285c1116783c880450129158b78c9ee82b3a09454fb",
+      "modules/validation.js": "23622dd34d321117a0a7da706e10b4f63e7e4cbfcc4907b5209db15bba887778",
+      "modules/views.js": "76583a6690a4d2d9d55bc70ce2f88ebff47da4ef1b8542c7afb982971528f4dd",
+      "runtime-config.js": "ead2842d0a82ab93c4e3567d1c6c02b5d9920bdc02ef4529d635bacd4af44b20",
+      "storage.js": "00c7306e2daa49277351a52dff94ffe827f7d9a6909ca96b57cb331a13ee59bd",
+      "styles-refined.css": "b77a6ab2136c7d2a0336f891e51e711009eebdbc7d06b2376cd95f877290f5c0",
+      "styles.css": "0925c8d4f8e5163f5f209ab67cc8842895bf090d004e4804148be1ff600fcc44",
+      "sw.js": "d2072f22926f32216deb36a3479e57e59bea09b67cc05ddafbb81e015d821f0e",
+      "toss-client.js": "a299273cc0249f9c9b6151e04042114dd5bcab605c02785e9356cc42befa9623",
+      "toss-native.js": "7a8110bdf9c0346fb9ae44c67fcac30b1193bb5d317b5d52e756155c1c643700"
+    },
+    "nativeSourceSha256": "93862abc194eb570a30862668b718729d6ec5b56d13ee1d882885dca06dd2206",
+    "websiteEntrySha256": "ce158f9ee8909669179a0fa18aa1bb3484021843a1ec6ccaa54fde7fed93c4e0"
+  },
+  "candidateApk": {
+    "sourceCommit": "55c2a8d80ec17731903e6571f689baea84f98882",
+    "sha256": "f5dcd8d59f1cadd35f3ee990548b218c2f380bb59de818fea0a1db73051ac3be",
+    "status": "prepared-not-confirmed-installed",
+    "workflowRun": 38846319654,
+    "artifactId": 12023890175
+  },
+  "automatedBaselineRun": 38846319654,
+  "postPublicationChecks": {
+    "phase": "after-update",
+    "galaxyS25Ultra": {
+      "status": "pending",
+      "source": "pending"
+    },
+    "tossReadOnly": {
+      "status": "pending",
+      "source": "pending"
+    }
+  }
+}

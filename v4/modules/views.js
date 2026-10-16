@@ -53,7 +53,7 @@ export function createViews(context) {
     function refreshPanelHTML() {
         const status = getCombinedRefreshStatus?.() || { busy: false, summary: '' };
         const last = state.integrations.toss.lastSyncAt;
-        return `<div class="refresh-panel"><button class="btn soft small" data-sync-all ${status.busy ? 'disabled' : ''}>${status.busy ? '갱신 중…' : '토스·환율 갱신'}</button>${status.summary ? `<p class="tiny muted" role="status">${esc(status.summary)}</p>` : ''}<details class="refresh-info"><summary>조회 정보</summary><p class="tiny muted">토스 ${esc(syncTime(last))}<br>환율 ${state.settings.exchangeRateMode === 'auto' ? `${esc(state.settings.exchangeRateDate || '미확인')} · ${esc(syncTime(state.settings.exchangeRateUpdatedAt))}` : '직접 입력값 유지'}</p></details></div>`;
+        return `<div class="refresh-panel"><button class="btn soft small" data-sync-all aria-busy="${status.busy}" ${status.busy ? 'disabled' : ''}>${status.busy ? '갱신 중…' : '토스·환율 갱신'}</button>${status.summary ? `<p class="tiny muted" role="status">${esc(status.summary)}</p>` : ''}<details class="refresh-info"><summary>조회 정보</summary><p class="tiny muted">토스 ${esc(syncTime(last))}<br>환율 ${state.settings.exchangeRateMode === 'auto' ? `${esc(state.settings.exchangeRateDate || '미확인')} · ${esc(syncTime(state.settings.exchangeRateUpdatedAt))}` : '직접 입력값 유지'}</p></details></div>`;
     }
     function annualAlertHTML(yearUSD) {
         const status = dividendGoalStatus(state.settings, 0, yearUSD);

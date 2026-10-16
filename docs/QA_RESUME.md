@@ -14,6 +14,20 @@ Preserve logs and failed screenshots before restarting a browser stage, because 
 
 Upload changed files as Git blobs, compare each returned Git blob SHA with the local file's Git SHA, then create one tree and one commit. Advance the PR branch only with the expected previous head. A changed head requires inspecting the new changes; do not force overwrite. This leaves the branch unchanged if upload stops midway and makes a completed change recoverable outside the local session.
 
-## Separate release blockers
+## Publication and manual acceptance (revised 2026-10-16)
 
-Current-candidate physical Galaxy S25 Ultra and actual Toss read-only evidence, backup/restore, rollback, PWA preservation and QA-data cleanup remain mandatory release evidence. The old Q3 evidence for 0.12.7 and another commit cannot be relabeled. Emulator and browser tests do not establish physical-device or actual-account completion. No release validator or workflow gate is weakened.
+The user explicitly removed the requirement to install a candidate APK and
+perform physical-device checks before an in-app update can be published.
+Publication now requires FAST/CORE/RELEASE, full ordinary browser QA,
+Android backup/emulator checks, the permanently signed APK/certificate check,
+and artifact-bound signed ZIP/runtime verification. All remain blocking.
+A publication record must match the tested source, runtime, native inputs,
+website entry files and signed ZIP/manifest; stale or changed artifacts fail.
+
+Physical Galaxy S25 Ultra and actual Toss read-only checks happen after the
+user receives the in-app update. They remain explicitly pending until the user
+confirms them. Emulator/browser results never become physical-device evidence.
+The historical strict manual-evidence validator remains available for recording
+and validating manual acceptance; it is not a prerequisite for publication.
+Do not relabel old 0.12.7/1.7 evidence as current 1.8 device confirmation.
+QA ledgers and credentials must never be included in production bundles.
