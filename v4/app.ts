@@ -171,8 +171,31 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     finally{exchangeRateBusy=false;renderRateSettings();}
   }
 
-  function getSaveSummary(): string {if(!currentUser)return '연결 안 됨 · 기기 저장 사용';const text=document.getElementById('saveStatus')?.textContent;if(text)return String(text);if(!cloudReady)return '클라우드 확인 대기';return state.meta.lastCloudSaveAt?'저장 성공 '+new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',dateStyle:'short',timeStyle:'short'}).format(new Date(state.meta.lastCloudSaveAt)):'연결됨 · 저장 성공 기록 없음';}
-  function setSaveStatus(text: string,kind: string =''): void { const el=document.getElementById('saveStatus'); if(el){el.textContent=text;el.className=`save-pill ${kind}`;}const summary=document.getElementById('cloudSaveSummary');if(summary)summary.textContent=getSaveSummary(); }
+  // Cloud status is independent of local saves and rendered DOM text.
+  let cloudStatusText='',cloudStatusKind='',localSaveIssue='',localSaveIssueKind='';
+  function getSaveSummary(): string {
+    if(!currentUser)return '클라우드 로그인 안 됨';
+    if(cloudStatusText)return cloudStatusText;
+    if(!cloudReady)return '연결 확인 중';
+    return state.meta.lastCloudSaveAt?'클라우드 저장 완료':'클라우드 기록 확인 완료';
+  }
+  function refreshSaveStatus(): void {
+    const text=localSaveIssue||(currentUser&&cloudStatusKind!=='cloud-ok'?cloudStatusText:'');
+    const kind=localSaveIssue?localSaveIssueKind:cloudStatusKind;
+    const el=document.getElementById('saveStatus');
+    if(el){el.textContent=text;el.className=`save-pill ${kind}`;}
+    for(const id of ['cloudSaveSummary','cloudConnectionSummary','cloudSectionSummary','syncStatusText']){
+      const target=document.getElementById(id);if(target)target.textContent=id==='cloudSectionSummary'?getSaveSummary().replace(/^클라우드 /,''):getSaveSummary();
+    }
+    const savedAt=document.getElementById('cloudSavedAt');
+    if(savedAt)savedAt.textContent=currentUser&&state.meta.lastCloudSaveAt?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',dateStyle:'short',timeStyle:'short'}).format(new Date(state.meta.lastCloudSaveAt)):'기록 없음';
+  }
+  function setSaveStatus(text: string,kind: string =''): void {
+    localSaveIssue=text;localSaveIssueKind=kind;refreshSaveStatus();
+  }
+  function setCloudStatus(text: string,kind: string =''): void {
+    cloudStatusText=text;cloudStatusKind=kind;refreshSaveStatus();
+  }
   function hasMeaningfulData(value: AppState|null =state) { return !!(value&&(value.trades?.length||value.dividends?.length||value.splits?.length||value.cashAdjustments?.length||value.projects?.some((p)=>n(p.currentPrice)||n(p.monthlyPlanShares)||n(p.initialDividendBalance)))); }
 
   const backupStorage={get:(key:string)=>storageGet('fundingV1:'+key),set:(key:string,value:unknown)=>storageSet('fundingV1:'+key,value),remove:(key:string)=>storageDelete('fundingV1:'+key)};
@@ -187,29 +210,29 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   async function pushCloudState(): Promise<void> {
     if(demoMode||!currentUser||!cloudReady||applyingCloudState)return;
     if(cloudWritePending){cloudPushQueued=true;return;}
-    if(!navigator.onLine){setSaveStatus('오프라인','cloud-error');return;}
+    if(!navigator.onLine){setCloudStatus('오프라인 · 클라우드 저장 대기','cloud-busy');return;}
     const uid=currentUser.uid,generation=cloudConnectGeneration;
     const isCurrent=()=>currentUser?.uid===uid&&generation===cloudConnectGeneration;
     try {
       const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));
-      setSaveStatus('동기화 중','cloud-busy');
+      setCloudStatus('클라우드 저장 중','cloud-busy');
       const now=new Date().toISOString();state.meta.lastCloudAttemptAt=now;cloudWritePending=true;
       const sent=clone(state);sent.meta.lastCloudSaveAt=now;const sentSignature=syncSignature(sent);
       const saved=await saveCloudDocument(uid,sent,{expectedRevision:cloudRevision,appVersion:APP_VERSION});
       if(!isCurrent())return;cloudRevision=saved.revision;
-      cloudWritePending=false;state.meta.lastCloudSaveAt=now;await storageSet(STATE_KEY,state);cloudBaseSignature=sentSignature;await storageSet('cloudSyncFundingBase:'+uid,cloudBaseSignature); setSaveStatus('','cloud-ok');
+      cloudWritePending=false;state.meta.lastCloudSaveAt=now;await storageSet(STATE_KEY,state);cloudBaseSignature=sentSignature;await storageSet('cloudSyncFundingBase:'+uid,cloudBaseSignature); setCloudStatus('','cloud-ok');
     } catch (error: unknown) {
       if(!isCurrent())return;
       cloudWritePending=false;console.error(error);
       if(isRecord(error)&&error.code==='cloud-conflict'){
-        const latest=await getCloudDocument(uid).catch(()=>null);if(!isCurrent())return;pendingCloudState=null;if(latest?.state){try{pendingCloudState=decodeAppState(latest.state);}catch(error){console.error('Cloud conflict payload rejected',error);}}cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
+        const latest=await getCloudDocument(uid).catch(()=>null);if(!isCurrent())return;pendingCloudState=null;if(latest?.state){try{pendingCloudState=decodeAppState(latest.state);}catch(error){console.error('Cloud conflict payload rejected',error);}}cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setCloudStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
       }
-      setSaveStatus('클라우드 오류','cloud-error');toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true});
+      setCloudStatus('클라우드 저장 실패','cloud-error');toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true});
     }finally{cloudWritePending=false;if(cloudPushQueued){cloudPushQueued=false;if(currentUser&&cloudReady)cloudTimer=setTimeout(pushCloudState,0);}}
   }
   async function saveState(immediate =false): Promise<void> {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
-    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.',{haptic:true});throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
+    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.',{haptic:true});throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(cloudReady)setCloudStatus('클라우드 저장 대기','cloud-busy');if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
     if(immediate){await run();if(storageStatus().durable)feedbackPulse('success');}else saveTimer=setTimeout(()=>run().catch(console.error),120);
   }
 
@@ -217,7 +240,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     getInteractionPreferences:()=>interactionPreferences,getPortfolioDetail:()=>portfolioDetail,getPortfolioDetailTab:()=>portfolioDetailTab,
     getPortfolioIncomeMonth:(projectId)=>portfolioIncomeSelection.projectId===projectId?portfolioIncomeSelection.month:'',
     getState:() => state, getSelectedProjectId:() => selectedProjectId, setSelectedProjectId:(value) => { selectedProjectId=value; },
-    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getCombinedRefreshStatus:()=>({busy:combinedRefreshBusy,summary:combinedRefreshSummary}),getSaveSummary,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
+    getChartMode:() => chartMode, getChartSelection:() => chartSelection, getHomeCashflowMode:() => homeCashflowMode, getHomeYearRange:() => homeYearRange, getHistoryFilter:()=>historyFilter,getChartMonth:()=>chartMonth,getChartYear:()=>chartYear, getHistoryLimit:()=>historyLimit,getCashflowMonthKey:() => cashflowMonthKey,getPortfolioGroup:() => portfolioGroup,setPortfolioGroup:(value) => { portfolioGroup=value; },getCurrentUser:() => currentUser,getAutoBackupStatus:()=>autoBackupStatus,getNativeTossStatus:()=>nativeTossStatus,getAppUpdateStatus:()=>appUpdateStatus,getExchangeRateStatus:()=>({busy:exchangeRateBusy,error:exchangeRateError}),getCombinedRefreshStatus:()=>({busy:combinedRefreshBusy,summary:combinedRefreshSummary}),getSaveSummary,getCloudNeedsReview:()=>!!pendingCloudState&&!cloudReady,getOfficialDistributionStatus:()=>({feed:officialFeed,busy:officialBusy,error:officialError}),isTossBridgeConfigured,
     activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
     displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
   });
@@ -697,7 +720,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   async function connectCloudForUser(user: User,review=false): Promise<void> {
     const generation=++cloudConnectGeneration;
     document.getElementById('authGate')?.classList.add('hidden');
-    currentUser=user;cloudReady=false;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('동기화 확인','cloud-busy');
+    currentUser=user;cloudReady=false;cloudUnsubscribe?.();cloudUnsubscribe=null;setCloudStatus('클라우드 연결 확인 중','cloud-busy');
     try{
       const baseSignature=await storageGet<string>('cloudSyncFundingBase:'+user.uid)||null;
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudBaseSignature=baseSignature;
@@ -708,22 +731,21 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
       const choice=await chooseInitialSync(cloudState,review);
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
-      if(choice==='cancel'){pendingCloudState=cloudState;setSaveStatus('기기 저장 · 클라우드 확인 필요','cloud-error');renderAll();return;}
+      if(choice==='cancel'){pendingCloudState=cloudState;setCloudStatus('클라우드 기록 선택 필요','cloud-busy');renderAll();return;}
       if(cloudState){const issues=validateLedger(cloudState);if(issues.length)throw new Error(issues.join(' '));}
       if(review&&choice==='local'&&cloudState&&syncSignature(state)!==syncSignature(cloudState))await storageSet(SAFETY_KEY,clone(cloudState));
       pendingCloudState=null;
-      if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudBaseSignature=syncSignature(state);await storageSet('cloudSyncFundingBase:'+user.uid,cloudBaseSignature);cloudReady=true;if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
+      if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudBaseSignature=syncSignature(state);await storageSet('cloudSyncFundingBase:'+user.uid,cloudBaseSignature);cloudReady=true;setCloudStatus('','cloud-ok');if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
       const unsubscribe=await subscribeCloudDocument(user.uid,(data)=>{
         if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid||!data?.state||applyingCloudState||cloudWritePending||n(data.revision)<=cloudRevision)return;
-        let remote:AppState;try{remote=decodeAppState(data.state);}catch(error){console.error(error);cloudReady=false;clearTimeout(cloudTimer);setSaveStatus('클라우드 기록 검증 실패','cloud-error');return;}pendingCloudState=remote;cloudRevision=n(data.revision);cloudReady=false;clearTimeout(cloudTimer);autoBackup('remote-conflict');setSaveStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');renderAll();
-      },(error)=>{if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;console.error(error);cloudReady=false;setSaveStatus('동기화 오류','cloud-error');});
+        let remote:AppState;try{remote=decodeAppState(data.state);}catch(error){console.error(error);cloudReady=false;clearTimeout(cloudTimer);setCloudStatus('클라우드 기록 검증 실패','cloud-error');return;}pendingCloudState=remote;cloudRevision=n(data.revision);cloudReady=false;clearTimeout(cloudTimer);autoBackup('remote-conflict');setCloudStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');renderAll();
+      },(error)=>{if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;console.error(error);cloudReady=false;setCloudStatus('동기화 오류','cloud-error');});
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid){unsubscribe?.();return;}cloudUnsubscribe=unsubscribe;
-      setSaveStatus('','cloud-ok');
-    }catch (error: unknown){if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudReady=false;clearTimeout(cloudTimer);console.error(error);setSaveStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
+    }catch (error: unknown){if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;cloudReady=false;clearTimeout(cloudTimer);console.error(error);setCloudStatus('연결 오류','cloud-error');document.getElementById('authGate')?.classList.add('hidden');toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');}
   }
-  async function initAuth(): Promise<void>{await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{cloudConnectGeneration++;currentUser=null;cloudBaseSignature=null;pendingCloudState=null;cloudReady=false;cloudRevision=0;cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:(message)=>toast(message,{haptic:true})});}
+  async function initAuth(): Promise<void>{await initGoogleAuth({loginButtonId:'googleLoginBtn',statusElementId:'authGateStatus',onSignedIn:connectCloudForUser,onSignedOut:()=>{cloudConnectGeneration++;currentUser=null;cloudBaseSignature=null;pendingCloudState=null;cloudReady=false;cloudRevision=0;cloudStatusText='';cloudStatusKind='';cloudUnsubscribe?.();cloudUnsubscribe=null;setSaveStatus('');document.getElementById('authGate')?.classList.add('hidden');},onError:(message)=>toast(message,{haptic:true})});}
 
   function refreshTossComparisons() {
     const toss=state.integrations.toss;
@@ -1177,7 +1199,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
     document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=submittedFormData(event);let next: Partial<AppSettings>={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:form.get('appearance')==='dark'?'dark':form.get('appearance')==='light'?'light':'system'};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW,dividendAlertEnabled:form.get('dividendAlertEnabled')!=='off'};message='배당 기준을 저장했습니다.';}if(Object.entries(next).every(([key,value])=>Object.entries(state.settings).some(([setting,current])=>setting===key&&current===value))){toast('바뀐 설정이 없습니다.');return;}const beforeSettings=clone(state.settings);Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();}).catch(()=>{state.settings=beforeSettings;applyTheme(state.settings.appearance);renderAll();showPage('settings');});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
-    window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>setSaveStatus('오프라인','cloud-error'));
+    window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>{if(currentUser)setCloudStatus('오프라인 · 클라우드 저장 대기','cloud-busy');});
   }
 
   async function init(): Promise<void> {

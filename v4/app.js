@@ -265,15 +265,44 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             renderRateSettings();
         }
     }
-    function getSaveSummary() { if (!currentUser)
-        return '연결 안 됨 · 기기 저장 사용'; const text = document.getElementById('saveStatus')?.textContent; if (text)
-        return String(text); if (!cloudReady)
-        return '클라우드 확인 대기'; return state.meta.lastCloudSaveAt ? '저장 성공 ' + new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(state.meta.lastCloudSaveAt)) : '연결됨 · 저장 성공 기록 없음'; }
-    function setSaveStatus(text, kind = '') { const el = document.getElementById('saveStatus'); if (el) {
-        el.textContent = text;
-        el.className = `save-pill ${kind}`;
-    } const summary = document.getElementById('cloudSaveSummary'); if (summary)
-        summary.textContent = getSaveSummary(); }
+    // Cloud status is independent of local saves and rendered DOM text.
+    let cloudStatusText = '', cloudStatusKind = '', localSaveIssue = '', localSaveIssueKind = '';
+    function getSaveSummary() {
+        if (!currentUser)
+            return '클라우드 로그인 안 됨';
+        if (cloudStatusText)
+            return cloudStatusText;
+        if (!cloudReady)
+            return '연결 확인 중';
+        return state.meta.lastCloudSaveAt ? '클라우드 저장 완료' : '클라우드 기록 확인 완료';
+    }
+    function refreshSaveStatus() {
+        const text = localSaveIssue || (currentUser && cloudStatusKind !== 'cloud-ok' ? cloudStatusText : '');
+        const kind = localSaveIssue ? localSaveIssueKind : cloudStatusKind;
+        const el = document.getElementById('saveStatus');
+        if (el) {
+            el.textContent = text;
+            el.className = `save-pill ${kind}`;
+        }
+        for (const id of ['cloudSaveSummary', 'cloudConnectionSummary', 'cloudSectionSummary', 'syncStatusText']) {
+            const target = document.getElementById(id);
+            if (target)
+                target.textContent = id === 'cloudSectionSummary' ? getSaveSummary().replace(/^클라우드 /, '') : getSaveSummary();
+        }
+        const savedAt = document.getElementById('cloudSavedAt');
+        if (savedAt)
+            savedAt.textContent = currentUser && state.meta.lastCloudSaveAt ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(state.meta.lastCloudSaveAt)) : '기록 없음';
+    }
+    function setSaveStatus(text, kind = '') {
+        localSaveIssue = text;
+        localSaveIssueKind = kind;
+        refreshSaveStatus();
+    }
+    function setCloudStatus(text, kind = '') {
+        cloudStatusText = text;
+        cloudStatusKind = kind;
+        refreshSaveStatus();
+    }
     function hasMeaningfulData(value = state) { return !!(value && (value.trades?.length || value.dividends?.length || value.splits?.length || value.cashAdjustments?.length || value.projects?.some((p) => n(p.currentPrice) || n(p.monthlyPlanShares) || n(p.initialDividendBalance)))); }
     const backupStorage = { get: (key) => storageGet('fundingV1:' + key), set: (key, value) => storageSet('fundingV1:' + key, value), remove: (key) => storageDelete('fundingV1:' + key) };
     async function refreshAutoBackupStatus() { const entries = await listAutoBackups(backupStorage); autoBackupStatus = { count: entries.length, lastAt: entries[0]?.createdAt || '', error: '' }; return entries; }
@@ -293,7 +322,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         if (!navigator.onLine) {
-            setSaveStatus('오프라인', 'cloud-error');
+            setCloudStatus('오프라인 · 클라우드 저장 대기', 'cloud-busy');
             return;
         }
         const uid = currentUser.uid, generation = cloudConnectGeneration;
@@ -302,7 +331,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const issues = validateLedger(state);
             if (issues.length)
                 throw new Error(issues.join(' '));
-            setSaveStatus('동기화 중', 'cloud-busy');
+            setCloudStatus('클라우드 저장 중', 'cloud-busy');
             const now = new Date().toISOString();
             state.meta.lastCloudAttemptAt = now;
             cloudWritePending = true;
@@ -318,7 +347,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             await storageSet(STATE_KEY, state);
             cloudBaseSignature = sentSignature;
             await storageSet('cloudSyncFundingBase:' + uid, cloudBaseSignature);
-            setSaveStatus('', 'cloud-ok');
+            setCloudStatus('', 'cloud-ok');
         }
         catch (error) {
             if (!isCurrent())
@@ -341,12 +370,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 cloudRevision = Math.max(cloudRevision, n(latest?.revision));
                 cloudReady = false;
                 await autoBackup('cloud-conflict');
-                setSaveStatus('다른 기기 변경 · 확인 필요', 'cloud-error');
+                setCloudStatus('다른 기기 변경 · 확인 필요', 'cloud-error');
                 toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.', { haptic: true });
                 renderAll();
                 return;
             }
-            setSaveStatus('클라우드 오류', 'cloud-error');
+            setCloudStatus('클라우드 저장 실패', 'cloud-error');
             toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.', { haptic: true });
         }
         finally {
@@ -374,6 +403,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.', { haptic: true });
             throw error;
         } setSaveStatus(storageStatus().durable ? '' : '임시 저장 · 백업 필요', storageStatus().durable ? '' : 'cloud-error'); if (currentUser) {
+            if (cloudReady)
+                setCloudStatus('클라우드 저장 대기', 'cloud-busy');
             if (immediate)
                 await pushCloudState();
             else
@@ -391,7 +422,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         getInteractionPreferences: () => interactionPreferences, getPortfolioDetail: () => portfolioDetail, getPortfolioDetailTab: () => portfolioDetailTab,
         getPortfolioIncomeMonth: (projectId) => portfolioIncomeSelection.projectId === projectId ? portfolioIncomeSelection.month : '',
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getCombinedRefreshStatus: () => ({ busy: combinedRefreshBusy, summary: combinedRefreshSummary }), getSaveSummary, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getCombinedRefreshStatus: () => ({ busy: combinedRefreshBusy, summary: combinedRefreshSummary }), getSaveSummary, getCloudNeedsReview: () => !!pendingCloudState && !cloudReady, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
         displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
@@ -1354,7 +1385,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         cloudReady = false;
         cloudUnsubscribe?.();
         cloudUnsubscribe = null;
-        setSaveStatus('동기화 확인', 'cloud-busy');
+        setCloudStatus('클라우드 연결 확인 중', 'cloud-busy');
         try {
             const baseSignature = await storageGet('cloudSyncFundingBase:' + user.uid) || null;
             if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
@@ -1390,7 +1421,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 return;
             if (choice === 'cancel') {
                 pendingCloudState = cloudState;
-                setSaveStatus('기기 저장 · 클라우드 확인 필요', 'cloud-error');
+                setCloudStatus('클라우드 기록 선택 필요', 'cloud-busy');
                 renderAll();
                 return;
             }
@@ -1409,6 +1440,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 cloudBaseSignature = syncSignature(state);
                 await storageSet('cloudSyncFundingBase:' + user.uid, cloudBaseSignature);
                 cloudReady = true;
+                setCloudStatus('', 'cloud-ok');
                 if (usingLegacyCloud || usingSingleDocument)
                     await pushCloudState();
             }
@@ -1433,7 +1465,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                     console.error(error);
                     cloudReady = false;
                     clearTimeout(cloudTimer);
-                    setSaveStatus('클라우드 기록 검증 실패', 'cloud-error');
+                    setCloudStatus('클라우드 기록 검증 실패', 'cloud-error');
                     return;
                 }
                 pendingCloudState = remote;
@@ -1441,17 +1473,16 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 cloudReady = false;
                 clearTimeout(cloudTimer);
                 autoBackup('remote-conflict');
-                setSaveStatus('다른 기기 변경 · 확인 필요', 'cloud-error');
+                setCloudStatus('다른 기기 변경 · 확인 필요', 'cloud-error');
                 toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');
                 renderAll();
             }, (error) => { if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
-                return; console.error(error); cloudReady = false; setSaveStatus('동기화 오류', 'cloud-error'); });
+                return; console.error(error); cloudReady = false; setCloudStatus('동기화 오류', 'cloud-error'); });
             if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid) {
                 unsubscribe?.();
                 return;
             }
             cloudUnsubscribe = unsubscribe;
-            setSaveStatus('', 'cloud-ok');
         }
         catch (error) {
             if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid)
@@ -1459,12 +1490,12 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             cloudReady = false;
             clearTimeout(cloudTimer);
             console.error(error);
-            setSaveStatus('연결 오류', 'cloud-error');
+            setCloudStatus('연결 오류', 'cloud-error');
             document.getElementById('authGate')?.classList.add('hidden');
             toast('클라우드 연결에 실패했습니다. 기기 저장으로 사용할 수 있습니다.');
         }
     }
-    async function initAuth() { await initGoogleAuth({ loginButtonId: 'googleLoginBtn', statusElementId: 'authGateStatus', onSignedIn: connectCloudForUser, onSignedOut: () => { cloudConnectGeneration++; currentUser = null; cloudBaseSignature = null; pendingCloudState = null; cloudReady = false; cloudRevision = 0; cloudUnsubscribe?.(); cloudUnsubscribe = null; setSaveStatus(''); document.getElementById('authGate')?.classList.add('hidden'); }, onError: (message) => toast(message, { haptic: true }) }); }
+    async function initAuth() { await initGoogleAuth({ loginButtonId: 'googleLoginBtn', statusElementId: 'authGateStatus', onSignedIn: connectCloudForUser, onSignedOut: () => { cloudConnectGeneration++; currentUser = null; cloudBaseSignature = null; pendingCloudState = null; cloudReady = false; cloudRevision = 0; cloudStatusText = ''; cloudStatusKind = ''; cloudUnsubscribe?.(); cloudUnsubscribe = null; setSaveStatus(''); document.getElementById('authGate')?.classList.add('hidden'); }, onError: (message) => toast(message, { haptic: true }) }); }
     function refreshTossComparisons() {
         const toss = state.integrations.toss;
         toss.comparisons = (toss.comparisons || []).map((row) => {
@@ -2651,7 +2682,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             applyTheme('system'); });
         window.addEventListener('online', () => { if (currentUser)
             pushCloudState(); });
-        window.addEventListener('offline', () => setSaveStatus('오프라인', 'cloud-error'));
+        window.addEventListener('offline', () => { if (currentUser)
+            setCloudStatus('오프라인 · 클라우드 저장 대기', 'cloud-busy'); });
     }
     async function init() {
         let startupSnapshot, startupPhase = 'storage';
