@@ -22,7 +22,7 @@
     "qa:e2e": "playwright test",
     "qa:e2e:list": "playwright test --list",
     "qa:release:evidence-template": "node scripts/release-evidence.mjs --template",
-    "qa:release:evidence": "node scripts/release-evidence.mjs --check-env",
+    "qa:release:evidence": "node scripts/release-evidence.mjs --check-release",
     "verify": "npm run qa:core",
     "verify:release": "npm run qa:release",
     "qa:e2e:hard": "QA_HARD_UI=1 playwright test hard-multi-project.spec.mjs",

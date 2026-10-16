@@ -42,3 +42,31 @@ cloud root. A code rollback must not copy the funding ledger into the old client
 or discard source-bound funding metadata. The app's safety copy and checked ZIP
 restore remain the data-recovery path. Do not downgrade and enter new records in
 an old client after a funding-ledger migration.
+
+## Verified 1.7 evidence and deployment correction
+
+The user confirmed installation of the signed 1.7 candidate, home/portfolio/goals,
+retained records after restart, and actual Toss refresh without duplicates.
+These are user-attested physical checks, not agent-performed device tests.
+`docs/releases/1.7.0.json` records the APK digest, tested source commit, all 40
+runtime file digests, native source/dependency digest, signed update manifest
+and ZIP, and the relevant automated CI runs.
+
+The previous repository-wide Q3 variable remained bound to an older exact Git
+commit. Even documentation-only descendants invalidated that record. Separately,
+legacy branch-based Pages publishing could succeed while the quality workflow
+failed. This explains why an earlier version appeared deployed despite the same
+Q3 mismatch; it does not establish that earlier application calculations failed.
+
+The corrected Q3 gate accepts only descendants of the tested source with identical
+runtime, native inputs, root website entry files, signed ZIP and update manifest.
+Changes to those files require new evidence; documentation and QA changes do not
+require a new APK installation. Invalid, expired, foreign or incomplete evidence
+still fails. The release PR now runs this gate before merging. Production Pages
+publishing is downstream of the release gate and signed Android build, with the
+repository Pages source set to GitHub Actions at rollout.
+
+Regression tests cover unchanged descendants, modified runtime/storage/native and
+update files, absent APK evidence, expired/future evidence, missing device flows,
+pending Toss checks and unclean QA state. Financial source and signed app runtime
+remain identical to the device-tested candidate.

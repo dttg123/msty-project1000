@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,rm,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {readFileSync} from 'node:fs';
-import {spawnSync} from 'node:child_process';
+import {spawnSync,execFileSync} from 'node:child_process';
 import {scanContent} from '../scripts/security-policy.mjs';
+import {createHash} from 'node:crypto';
+import {EVIDENCE_FORMAT,collectReleaseArtifacts,validateReleaseEvidence} from '../scripts/release-artifacts.mjs';
 
 const fakeGitHubToken=['ghp_','123456789012345678901234567890'].join('');
 assert.deepEqual(scanContent(`const token='${fakeGitHubToken}';`),['github-token']);
@@ -22,4 +24,32 @@ try{
   assert.notEqual(result.status,0,'TypeScript must block an intentional type error');
 }finally{await rm(directory,{recursive:true,force:true});}
 
-console.log('Tooling gates PASS: fake secret and intentional type error blocked');
+const releaseRepo=await mkdtemp(resolve(tmpdir(),'dividend-os-release-gate-'));
+try{
+  const put=async(name,data)=>{const file=resolve(releaseRepo,name);await mkdir(resolve(file,'..'),{recursive:true});await writeFile(file,data);};
+  const git=(...args)=>execFileSync('git',['-c','user.name=Synthetic QA','-c','user.email=qa@example.test',...args],{cwd:releaseRepo,encoding:'utf8'}).trim();
+  git('init','-q','--initial-branch=main');
+  const files=Object.fromEntries(['index.html','app.js','backup.js','storage.js','cloud.js','sw.js'].map(name=>[name,'synthetic '+name]));
+  for(const [name,body] of Object.entries(files))await put('v4/'+name,body);
+  await put('v4/dist/build-manifest.json',JSON.stringify({files:Object.fromEntries(Object.keys(files).map(name=>[name,'unused-input-digest']))}));
+  await put('index.html','synthetic entry');await put('sw.js','synthetic root worker');
+  await put('v4/package.json',JSON.stringify({version:'1.7.0',dependencies:{native:'1.0.0'},scripts:{test:'synthetic'}}));
+  await put('v4/package-lock.json','synthetic dependency lock');await put('v4/capacitor.config.ts','synthetic config');
+  await put('v4/android/app/build.gradle','synthetic version 34');
+  const zip=Buffer.from('PK\x03\x04synthetic hash-only ZIP fixture');
+  await put('updates/DividendOS-web-1.7.0.zip',zip);
+  await put('updates/latest.json',JSON.stringify({version:'1.7.0',sha256:createHash('sha256').update(zip).digest('hex')}));
+  git('add','.');git('commit','-qm','Synthetic tested release');const commit=git('rev-parse','HEAD');
+  const evidence={format:EVIDENCE_FORMAT,commit,appVersion:'1.7.0',completedAt:new Date().toISOString(),artifacts:collectReleaseArtifacts(releaseRepo),installedApk:{sourceCommit:commit,sha256:'a'.repeat(64)},galaxyS25Ultra:{status:'passed',source:'user-confirmation',flows:['synthetic home','synthetic portfolio','synthetic goals']},tossReadOnly:{status:'passed',source:'user-confirmation',accountDataCaptured:false},backupRestore:{status:'passed',hashMatched:true},rollback:{status:'passed',localDataPreserved:true},pwaUpgrade:{status:'passed',localDataPreserved:true},qaCleanup:{status:'passed',projects:0,trades:0,dividends:0,tossConnections:0,cloudDocuments:0}};
+  const check=e=>validateReleaseEvidence(e,{root:releaseRepo,head:git('rev-parse','HEAD')});check(evidence);
+  await put('docs/release-note.md','Synthetic metadata-only update');git('add','.');git('commit','-qm','Synthetic release documentation');
+  assert.notEqual(git('rev-parse','HEAD'),commit);check(evidence);
+  for(const [name,value] of [['v4/app.js','changed runtime'],['v4/storage.js','changed storage'],['v4/android/app/build.gradle','changed native'],['v4/package-lock.json','changed dependencies'],['v4/capacitor.config.ts','changed native config'],['index.html','changed entry'],['sw.js','changed root worker'],['updates/DividendOS-web-1.7.0.zip','changed ZIP'],['updates/latest.json','{}']]){
+    const before=readFileSync(resolve(releaseRepo,name));await put(name,value);assert.throws(()=>check(evidence),/Release evidence rejected/);await put(name,before);
+  }
+  for(const mutate of [e=>e.appVersion='1.8.0',e=>e.commit='f'.repeat(40),e=>e.artifacts.webBundleSha256='0'.repeat(64),e=>delete e.artifacts,e=>delete e.installedApk,e=>e.galaxyS25Ultra.source='automated',e=>e.galaxyS25Ultra.flows=[],e=>e.tossReadOnly.status='pending',e=>e.qaCleanup.trades=1,e=>e.completedAt=new Date(Date.now()-8*24*60*60*1000).toISOString(),e=>e.completedAt=new Date(Date.now()+60*60*1000).toISOString()]){
+    const changed=structuredClone(evidence);mutate(changed);assert.throws(()=>check(changed),/Release evidence rejected/);
+  }
+  check(evidence);
+}finally{await rm(releaseRepo,{recursive:true,force:true});}
+console.log('Tooling gates PASS: fake secret, type errors, stale/foreign evidence and changed runtime/native/update files blocked; metadata-only descendants preserve verified artifact evidence');
