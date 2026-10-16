@@ -149,7 +149,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
   function toast(message: string,{haptic=false}: {haptic?:boolean} ={}): void {
     const el=document.getElementById('toast');if(!el)return; clearTimeout(toastTimer); el.textContent=message; el.classList.add('show');
-    if(haptic)feedbackPulse('error'); toastTimer=setTimeout(()=>el.classList.remove('show'),2300);
+    if(haptic)feedbackPulse('error');
+    const readingTime=Math.min(9000,Math.max(3500,Array.from(message).length*110));
+    toastTimer=setTimeout(()=>el.classList.remove('show'),readingTime);
   }
   async function refreshExchangeRate(manual=false,{preserveMode=false}={}): Promise<void> {
     if(exchangeRateBusy||demoMode)return;
@@ -262,7 +264,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function showPage(page: string) {
     if(!PAGES.includes(page))page='home'; const changed=currentPage!==page;currentPage=page;
     document.querySelectorAll('.page').forEach((el)=>el.classList.toggle('active',el.id===`page-${page}`));
-    document.querySelectorAll<HTMLElement>('.nav-btn').forEach((el)=>el.classList.toggle('active',el.dataset.page===page));
+    document.querySelectorAll<HTMLElement>('.nav-btn').forEach((el)=>{const active=el.dataset.page===page;el.classList.toggle('active',active);if(active)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
     if(changed){window.scrollTo({top:0,behavior:'instant'});animateInteraction(document.getElementById(`page-${page}`),'view-enter');}
     if(page==='settings')ensureUiHistory();
     rememberView();
@@ -281,7 +283,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     modal.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>('input,select,textarea').forEach((input,index)=>{const label=input.closest('div')?.querySelector('label');if(label){input.id='modal-field-'+index;label.htmlFor=input.id;}});
     backdrop.classList.add('show');modal.scrollTop=0;feedbackPulse('open');
     document.querySelectorAll<HTMLElement>('main,.bottom-nav').forEach((el)=>{el.inert=true;});
-    modal.setAttribute('aria-label',modal.querySelector('h3')?.textContent||'입력 창');
+    const title=modal.querySelector('h3')?.textContent||'입력 창';
+    modal.setAttribute('aria-label',title);backdrop.setAttribute('aria-label',title);
     modal.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});
   }
   function requestCloseModal(): void {
@@ -1159,7 +1162,16 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('modal')!.addEventListener('input',()=>{modalDirty=true;});
     document.getElementById('modal')!.addEventListener('change',()=>{modalDirty=true;});
     document.getElementById('modalBackdrop')!.addEventListener('click',(event: Event)=>{if(event.target instanceof Element&&event.target.id==='modalBackdrop')requestCloseModal();});
-    document.addEventListener('keydown',(event: KeyboardEvent)=>{if(!(event.target instanceof Element))return;const tab=event.target.closest<HTMLElement>('[data-project-detail-tab]');if(tab&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const tabs=['summary','dividend','recovery','records'],index=tabs.indexOf(portfolioDetailTab),next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;document.querySelector<HTMLElement>(`[data-project-detail-tab="${tabs[next]}"]`)?.click();return;}const card=event.target.closest<HTMLElement>('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
+    document.addEventListener('keydown',(event: KeyboardEvent)=>{
+      if(event.key==='Tab'&&document.getElementById('modalBackdrop')?.classList.contains('show')){
+        const modal=document.getElementById('modal')!;
+        const focusable=[...modal.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],summary,[tabindex]')].filter(el=>!el.matches(':disabled,[hidden],[tabindex="-1"]')&&el.getClientRects().length>0&&!el.closest('[inert]'));
+        const first=focusable[0],last=focusable[focusable.length-1],active=document.activeElement;
+        if(!first){event.preventDefault();modal.focus({preventScroll:true});return;}
+        if(event.shiftKey&&(active===first||!modal.contains(active))){event.preventDefault();last.focus();return;}
+        if(!event.shiftKey&&(active===last||!modal.contains(active))){event.preventDefault();first.focus();return;}
+      }
+      if(!(event.target instanceof Element))return;const tab=event.target.closest<HTMLElement>('[data-project-detail-tab]');if(tab&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const tabs=['summary','dividend','recovery','records'],index=tabs.indexOf(portfolioDetailTab),next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;document.querySelector<HTMLElement>(`[data-project-detail-tab="${tabs[next]}"]`)?.click();return;}const card=event.target.closest<HTMLElement>('[data-open-project],[data-goal-detail]');if(card&&(event.key==='Enter'||event.key===' ')){event.preventDefault();card.click();return;}if(event.key==='Escape')requestCloseModal();});
     document.getElementById('dividendReplacementInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
     document.getElementById('restoreInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
