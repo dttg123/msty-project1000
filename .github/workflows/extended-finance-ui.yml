@@ -1,0 +1,63 @@
+name: DividendOS extended financial UI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/extended-finance-ui.yml'
+      - 'v4/**'
+
+permissions:
+  contents: read
+
+jobs:
+  extended:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'fix/funding-safety-review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 135
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        browser: [mobile-chromium, desktop-chromium]
+        scenario: [hard-8, hard-9, lifetime, high-8, high-9, switching]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: v4/package-lock.json
+      - name: Install tooling
+        working-directory: v4
+        run: npm ci
+      - name: Compile checked runtime
+        working-directory: v4
+        run: npm run compile
+      - name: Isolate Chromium dependency repositories
+        run: |
+          sudo python3 - <<'PYTHON'
+          from pathlib import Path
+          for file in Path('/etc/apt/sources.list.d').glob('*'):
+              if file.suffix not in ('.list', '.sources'):
+                  continue
+              content = file.read_text()
+              if 'packages.microsoft.com' not in content:
+                  continue
+              separator = '\n' if file.suffix == '.list' else '\n\n'
+              file.write_text(separator.join(part for part in content.split(separator) if 'packages.microsoft.com' not in part) + '\n')
+          PYTHON
+      - name: Install Chromium
+        working-directory: v4
+        run: npx playwright install --with-deps chromium
+      - name: Run one long-duration UI case
+        working-directory: v4
+        run: node scripts/qa-resume.mjs extended '${{ matrix.scenario }}' '${{ matrix.browser }}'
+      - name: Preserve progress and synthetic financial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-ui-${{ matrix.scenario }}-${{ matrix.browser }}
+          path: v4/test-results
+          if-no-files-found: error
+          retention-days: 14

@@ -1,7 +1,8 @@
 import { collection, doc, getDoc, getDocs, onSnapshot, runTransaction, serverTimestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 import { firestore } from './firebase.js';
 import { assembleCloudState, assertCloudRevision, CLOUD_STORAGE_FORMAT, prepareCloudRevision } from './modules/cloud-contract.js';
-const CLOUD_DOC_ID = 'dividend-os-v4';
+const CLOUD_DOC_ID = 'dividend-os-funding-v1';
+const PREVIOUS_CLOUD_DOC_ID = 'dividend-os-v4';
 const LEGACY_CLOUD_DOC_ID = 'msty-project1000';
 const cloudRef = (uid, docId = CLOUD_DOC_ID) => doc(firestore, 'users', uid, 'apps', docId);
 const revisionRef = (uid, revisionId) => doc(firestore, 'users', uid, 'apps', CLOUD_DOC_ID, 'revisions', revisionId);
@@ -26,22 +27,29 @@ async function cleanupOldRevisions(uid, currentManifest) {
         await batch.commit();
     }
 }
-async function readSplitDocument(uid, manifest) {
+async function readSplitDocument(uid, manifest, docId = CLOUD_DOC_ID) {
     if (typeof manifest.revisionId !== 'string')
         throw new Error('클라우드 revision 정보가 올바르지 않습니다.');
-    const revisionSnapshot = await getDoc(revisionRef(uid, manifest.revisionId));
+    const revisionSnapshot = await getDoc(doc(firestore, 'users', uid, 'apps', docId, 'revisions', manifest.revisionId));
     if (!revisionSnapshot.exists())
         throw new Error('클라우드 revision 정보가 없습니다.');
     const revision = revisionSnapshot.data();
     if (revision.stateHash !== manifest.stateHash || revision.batchId !== manifest.batchId)
         throw new Error('클라우드 revision 포인터 검증에 실패했습니다.');
-    const snapshots = await getDocs(segmentsRef(uid, manifest.revisionId));
+    const snapshots = await getDocs(collection(firestore, 'users', uid, 'apps', docId, 'revisions', manifest.revisionId, 'segments'));
     return { state: await assembleCloudState(manifest, snapshots.docs.map((item) => item.data())), revision: Math.max(0, Number(manifest.revision) || 0), manifest, storageFormat: CLOUD_STORAGE_FORMAT };
 }
 export async function getCloudDocument(uid) {
     const snapshot = await getDoc(cloudRef(uid));
-    if (!snapshot.exists())
-        return null;
+    if (!snapshot.exists()) {
+        // Read the old ledger only to seed the new namespace. Never write back to it.
+        const previous = await getDoc(cloudRef(uid, PREVIOUS_CLOUD_DOC_ID));
+        if (!previous.exists())
+            return null;
+        const data = previous.data();
+        const imported = data.storageFormat === CLOUD_STORAGE_FORMAT ? await readSplitDocument(uid, data, PREVIOUS_CLOUD_DOC_ID) : data;
+        return { ...imported, revision: 0, storageFormat: 'previous-funding-contract', legacySingleDocument: true };
+    }
     const data = snapshot.data();
     if (data.storageFormat === CLOUD_STORAGE_FORMAT)
         return readSplitDocument(uid, data);

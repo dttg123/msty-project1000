@@ -1,4 +1,5 @@
 import { isDate } from './utils.js';
+import { settledBuyDebitUSD } from './finance.js';
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const object = (value) => isRecord(value) ? value : {};
 export function validateLedger(raw) {
@@ -27,6 +28,8 @@ export function validateLedger(raw) {
             securityIds.add(p.securityId);
         if (!/^[A-Z0-9.-]{1,16}$/.test(String(p.symbol || '')))
             errors.push('종목 티커를 확인해 주세요.');
+        if (p.initialDividendBalanceTreatment !== undefined && !['opening', 'excludedSnapshot'].includes(String(p.initialDividendBalanceTreatment)))
+            errors.push('초기 배당 잔액 적용 방식을 확인해 주세요.');
         if (!finite(p.targetUnits, .000001) || !finite(p.currentPrice) || !finite(p.monthlyPlanShares) || !finite(p.initialDividendBalance))
             errors.push('종목 목표·가격·초기 잔액을 확인해 주세요.');
         if (p.dividendPlan !== undefined) {
@@ -65,6 +68,14 @@ export function validateLedger(raw) {
                 continue;
             }
             rowIds.add(row.id);
+            if (row.cashTime !== undefined && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(row.cashTime)))
+                errors.push('입출금 시각은 거래내역의 현지 시각으로 입력해 주세요.');
+            const fundingTime = object(row.dividendFunding).cashTime;
+            if (fundingTime !== undefined && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(fundingTime)))
+                errors.push('매수대금 출금 시각을 확인해 주세요.');
+            const funding = object(row.dividendFunding), window = object(funding.cashDateWindow);
+            if (funding.cashDateWindow !== undefined && (!isDate(window.from) || !isDate(window.to) || String(window.from) > String(window.to) || funding.cashDate !== undefined || funding.cashTime !== undefined || (funding.sourceFingerprint === object(row.source).sourceFingerprint && String(window.from) < String(row.date))))
+                errors.push('명세서에서 확인한 출금일 범위를 확인해 주세요.');
             const valid = (field, min = 0) => finite(row[field], min);
             if (key === 'trades' && (!['buy', 'sell'].includes(String(row.type)) || !valid('shares', .00000001) || !valid('price')))
                 errors.push('거래 수량·단가가 올바르지 않습니다.');
@@ -74,7 +85,14 @@ export function validateLedger(raw) {
                 errors.push('매수 유형·재투자액을 확인해 주세요.');
             if (key === 'trades' && row.dividendFunding !== undefined) {
                 const funding = object(row.dividendFunding);
-                if (row.type !== 'buy' || object(row.source).provider !== 'toss' || typeof funding.sourceFingerprint !== 'string' || !funding.sourceFingerprint || !finite(funding.amountUSD) || funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.amountUSD) > Number(row.shares) * Number(row.price) + Number(row.feeUSD || 0) + Number(row.taxUSD || 0))
+                const gross = Number(row.shares) * Number(row.price) + Number(row.feeUSD || 0) + Number(row.taxUSD || 0), debit = funding.cashDebitUSD === undefined ? gross : Number(funding.cashDebitUSD);
+                if (funding.cashDebitUSD !== undefined && (!finite(funding.cashDebitUSD) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && Math.abs(debit - settledBuyDebitUSD({ shares: Number(row.shares), price: Number(row.price), feeUSD: Number(row.feeUSD || 0), taxUSD: Number(row.taxUSD || 0) })) > 1e-8)))
+                    errors.push('실제 출금액은 센트 단위 체결금액과 일치해야 합니다.');
+                if (funding.contributionUSD !== undefined && (!finite(funding.contributionUSD) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.contributionUSD) + Number(funding.amountUSD) > debit + 1e-8)))
+                    errors.push('직접 투입 원금과 배당 사용액의 합계가 출금액을 초과합니다.');
+                if (funding.cashDate !== undefined && (!isDate(funding.cashDate) || (funding.sourceFingerprint === object(row.source).sourceFingerprint && String(funding.cashDate) < String(row.date))))
+                    errors.push('실제 매수대금 출금일을 확인해 주세요.');
+                if (row.type !== 'buy' || object(row.source).provider !== 'toss' || typeof funding.sourceFingerprint !== 'string' || !funding.sourceFingerprint || !finite(funding.amountUSD) || funding.sourceFingerprint === object(row.source).sourceFingerprint && Number(funding.amountUSD) > debit + 1e-8)
                     errors.push('매수 자금 출처를 확인해 주세요.');
             }
             if (key === 'cashAdjustments' && row.purpose === 'dividendUse' && (Number(row.amountUSD) >= 0 || !['isa', 'otherDividend', 'living', 'other'].includes(String(row.destination))))

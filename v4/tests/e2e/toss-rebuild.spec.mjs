@@ -1,7 +1,7 @@
 import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 
-async function readLedger(page,key='state'){
+async function readLedger(page,key='stateFundingV1'){
   return page.evaluate(key=>new Promise((resolve,reject)=>{
     const request=indexedDB.open('DividendOSDB_V4');
     request.onerror=()=>reject(request.error);
@@ -56,7 +56,7 @@ test('토스 원본 재구축은 238주를 247주로 대조하고 배당과 안�
   await page.locator('[data-rebuild-msty-toss]').click();
   await page.locator('#modalConfirm').click();
   await expect(page.locator('.toast')).toContainText('토스 원본 1건으로 다시 만들었습니다');
-  const rebuilt=await readLedger(page),safety=await readLedger(page,'safetyBackup');
+  const rebuilt=await readLedger(page),safety=await readLedger(page,'safetyBackupFundingV1');
   expect(rebuilt.trades).toHaveLength(1);
   expect(rebuilt.trades[0].shares).toBe(247);
   expect(rebuilt.trades[0].source.provider).toBe('toss');
@@ -109,7 +109,7 @@ test('환율 갱신 성공과 실패를 구분하며 실패 시 저장 환율을
   await setup(page,247);
   let fail=false;
   await page.route('https://api.frankfurter.dev/**',route=>fail?route.fulfill({status:503,body:'Unavailable'}):route.fulfill({contentType:'application/json',body:JSON.stringify({base:'USD',quote:'KRW',rate:1450.25,date:new Date().toISOString().slice(0,10)})}));
-  await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const state=await storageGet('state');state.settings.exchangeRateMode='auto';state.settings.exchangeRateUpdatedAt=new Date().toISOString();await storageSet('state',state);});
+  await page.evaluate(async()=>{const {storageGet,storageSet}=await import('/storage.js');const state=await storageGet('stateFundingV1');state.settings.exchangeRateMode='auto';state.settings.exchangeRateUpdatedAt=new Date().toISOString();await storageSet('stateFundingV1',state);});
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('[data-page="settings"]').first().click();
   await page.locator('[data-sync-all]').click();
   await expect.poll(async()=>(await readLedger(page)).settings.exchangeRate).toBe(1450.25);
@@ -165,7 +165,7 @@ test('과거 수동 중복 후보를 보존하면서 새 4주를 자동 저장�
   await expect(page.locator('.toast')).toContainText('체결 합계와 보유 수량 불일치');
   expect((await readLedger(page)).trades).toEqual(before.trades);
   await load();await expect(page.locator('.toast')).toContainText('매수 1건');
-  const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
+  const saved=await readLedger(page),safety=await readLedger(page,'safetyBackupFundingV1');
   expect(saved.trades).toHaveLength(2);expect(saved.trades.reduce((sum,row)=>sum+row.shares,0)).toBe(251);
   expect(saved.dividends).toEqual(before.dividends);expect(saved.trades[0]).toEqual(before.trades[0]);
   expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
@@ -232,15 +232,15 @@ for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed'
     const {blankState}=await import('/modules/state.js'),{tossCandidateToTrade}=await import('/modules/toss.js');
     const state=blankState();state.trades=orders.map(order=>{const trade=tossCandidateToTrade(order,{projectId:state.projects[0].id,id:order.id,createdAt:'2026-10-01T00:00:00Z'});delete trade.source.filledAt;return trade;});
     state.integrations.toss.sourceLedger.orders=orders;
-    await new Promise((resolve,reject)=>{const request=indexedDB.open('DividendOSDB_V4');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(state,'state');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};});
+    await new Promise((resolve,reject)=>{const request=indexedDB.open('DividendOSDB_V4');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(state,'stateFundingV1');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};});
   },orders);
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();const before=await readLedger(page);
   const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-02-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:scenario==='mismatch'?252:251}],orders:[...orders,{id:'new-buy-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16,filledAt:'2026-02-01T10:00:00+09:00'}]};
   const load=()=>page.locator('#tossImportInput').setInputFiles({name:'legacy-execution.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'dividend-os-toss-snapshot',version:1,exportedAt:'2026-02-02T00:00:00Z',snapshot}))});
-  if(saveFailure)await page.evaluate(key=>window.__failTossSave=key,scenario==='safety-save-failed'?'safetyBackup':'state');
+  if(saveFailure)await page.evaluate(key=>window.__failTossSave=key,scenario==='safety-save-failed'?'safetyBackupFundingV1':'stateFundingV1');
   await load();
   if(saveFailure){
-    await expect.poll(()=>page.evaluate(()=>window.__tossWriteAttempts||[])).toContain(scenario==='safety-save-failed'?'safetyBackup':'state');
+    await expect.poll(()=>page.evaluate(()=>window.__tossWriteAttempts||[])).toContain(scenario==='safety-save-failed'?'safetyBackupFundingV1':'stateFundingV1');
     await expect(page.locator('.toast')).toContainText(scenario==='safety-save-failed'?'Synthetic full disk':'기기 저장에 실패');
     expect((await readLedger(page)).trades).toEqual(before.trades);
     await page.evaluate(()=>window.__failTossSave='');
@@ -249,7 +249,7 @@ for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed'
     await load();await expect(page.locator('.toast')).toContainText('매수 1건');
     expect((await readLedger(page)).trades).toHaveLength(4);expect(errors).toEqual([]);
   }else if(scenario==='matched'){
-    await expect(page.locator('.toast')).toContainText('매수 1건');const saved=await readLedger(page),safety=await readLedger(page,'safetyBackup');
+    await expect(page.locator('.toast')).toContainText('매수 1건');const saved=await readLedger(page),safety=await readLedger(page,'safetyBackupFundingV1');
     expect(saved.trades).toHaveLength(4);expect(saved.integrations.toss.comparisons[0].difference).toBe(0);
     expect(saved.trades.slice(0,3).every(trade=>!!trade.source.filledAt)).toBe(true);
     expect(saved.trades.slice(0,3).map(({source,...row})=>row)).toEqual(before.trades.map(({source,...row})=>row));

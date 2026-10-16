@@ -8,6 +8,13 @@ const memoryStore = new Map();
 const FALLBACK_PREFIX = demoMode ? 'dividend-os-qa:' : 'dividend-os-v4:';
 const FALLBACK_MODE_KEY = `${FALLBACK_PREFIX}storage-backend`;
 const LEGACY_DB_NAME = 'MSTYProject1000DB_V3';
+const FUNDING_STATE_KEY = 'stateFundingV1';
+let expectedFundingJSON;
+const snapshotJSON = (value) => value === undefined ? undefined : JSON.stringify(value);
+const rememberRead = (key, value) => { if (key === FUNDING_STATE_KEY)
+    expectedFundingJSON = snapshotJSON(value); return value; };
+const assertUnchanged = (key, current) => { if (key === FUNDING_STATE_KEY && snapshotJSON(current) !== expectedFundingJSON)
+    throw new Error('다른 화면에서 기록이 바뀌었습니다. 현재 입력을 보관하고 앱을 다시 열어 최신 기록을 확인해 주세요.'); };
 export const storageStatus = () => ({ mode: storageMode, durable: storageMode !== 'memory' });
 function enableFallback() {
     try {
@@ -66,11 +73,11 @@ export function openStorage() {
 }
 export function storageGet(key) {
     if (storageMode === 'memory')
-        return Promise.resolve(memoryStore.get(key));
+        return Promise.resolve(rememberRead(key, memoryStore.get(key)));
     if (storageMode === 'localstorage') {
         try {
             const value = localStorage.getItem(`${FALLBACK_PREFIX}${key}`);
-            return Promise.resolve(value ? JSON.parse(value) : undefined);
+            return Promise.resolve(rememberRead(key, value ? JSON.parse(value) : undefined));
         }
         catch (error) {
             return Promise.reject(error);
@@ -79,18 +86,31 @@ export function storageGet(key) {
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAME, 'readonly');
         const request = tx.objectStore(STORE_NAME).get(key);
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => resolve(rememberRead(key, request.result));
         request.onerror = () => reject(request.error);
     });
 }
 export function storageSet(key, value) {
+    // Capture bytes before awaiting a lock/transaction so later UI edits cannot
+    // change the snapshot being committed.
+    const frozen = key === FUNDING_STATE_KEY ? JSON.parse(JSON.stringify(value)) : value;
     if (storageMode === 'memory') {
-        memoryStore.set(key, value);
-        return Promise.resolve();
+        try {
+            assertUnchanged(key, memoryStore.get(key));
+            memoryStore.set(key, frozen);
+            rememberRead(key, frozen);
+            return Promise.resolve();
+        }
+        catch (error) {
+            return Promise.reject(error);
+        }
     }
     if (storageMode === 'localstorage') {
+        const write = () => { const current = localStorage.getItem(`${FALLBACK_PREFIX}${key}`); assertUnchanged(key, current ? JSON.parse(current) : undefined); localStorage.setItem(`${FALLBACK_PREFIX}${key}`, JSON.stringify(frozen)); rememberRead(key, frozen); };
+        if (key === FUNDING_STATE_KEY && typeof navigator !== 'undefined' && navigator.locks)
+            return navigator.locks.request(`${DB_NAME}:${key}`, write);
         try {
-            localStorage.setItem(`${FALLBACK_PREFIX}${key}`, JSON.stringify(value));
+            write();
             return Promise.resolve();
         }
         catch (error) {
@@ -99,10 +119,24 @@ export function storageSet(key, value) {
     }
     return new Promise((resolve, reject) => {
         const tx = database.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(value, key);
-        tx.oncomplete = () => resolve();
+        const store = tx.objectStore(STORE_NAME);
+        let conflict;
+        if (key === FUNDING_STATE_KEY) {
+            const current = store.get(key);
+            current.onsuccess = () => { try {
+                assertUnchanged(key, current.result);
+                store.put(frozen, key);
+            }
+            catch (error) {
+                conflict = error;
+                tx.abort();
+            } };
+        }
+        else
+            store.put(frozen, key);
+        tx.oncomplete = () => { rememberRead(key, frozen); resolve(); };
         tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error || new Error('저장 작업이 중단되었습니다.'));
+        tx.onabort = () => reject(conflict || tx.error || new Error('저장 작업이 중단되었습니다.'));
     });
 }
 export function storageDelete(key) {

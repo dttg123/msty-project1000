@@ -12,5 +12,5 @@ export async function openRecordAction(page,action){
  await openPortfolioDetail(page,'records');
  if(['add-trade','add-dividend','add-split','add-withdrawal'].includes(action))await page.locator('[data-record-add]').click();
  else {const tools=page.locator('.manual-tools');if(await tools.getAttribute('open')===null)await tools.locator(':scope > summary').click();}
- await page.locator(`[data-${action}]`).click();
+ await page.locator(`${['add-trade','add-dividend','add-split','add-withdrawal'].includes(action)?'#modal ':''}[data-${action}]`).click();
 }

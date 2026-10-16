@@ -7,15 +7,15 @@ async function receipt(page,amount='12.34'){
  await openPortfolioDetail(page,'records');
  await openRecordAction(page,'add-dividend');await page.locator('#dividendForm [name="date"]').fill('2026-01-02');await page.locator('#dividendForm [name="amountUSD"]').fill(amount);await page.locator('#dividendForm button[type="submit"].primary').click();
 }
-async function ledger(page){return page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4');r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('state');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
+async function ledger(page){return page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4');r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('stateFundingV1');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
 
 test('IndexedDB 즉시 거부에도 대체 저장이 작동하고 재시작 후 실제 배당을 유지한다',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:noAuth}));
  await page.addInitScript(()=>Object.defineProperty(window,'indexedDB',{configurable:true,value:{open(){throw new DOMException('Blocked','SecurityError');}}}));
  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();await receipt(page);await expect(page.locator('#dividendForm')).toBeHidden();
- expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('dividend-os-v4:state')).dividends[0].amountUSD)).toBe(12.34);
- await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('dividend-os-v4:state')).dividends[0].amountUSD)).toBe(12.34);expect(errors).toEqual([]);
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('dividend-os-v4:stateFundingV1')).dividends[0].amountUSD)).toBe(12.34);
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('dividend-os-v4:stateFundingV1')).dividends[0].amountUSD)).toBe(12.34);expect(errors).toEqual([]);
  await page.screenshot({path:info.outputPath('durable-fallback.png'),fullPage:true});
 });
 
@@ -33,7 +33,7 @@ export async function saveCloudDocument(uid,state,options){window.__writes++;if(
 export async function subscribeCloudDocument(uid,data,error){window.__subscriptionError=error;return ()=>{};}`;
 async function cloudSetup(page){
  await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:cloudApi}));
- await page.addInitScript(seed=>{window.__remote=structuredClone(seed);window.__revision=1;window.__writes=0;window.__seedReady=new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{const db=r.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(seed,'state');tx.oncomplete=()=>{db.close();resolve();};};});},seed);
+ await page.addInitScript(seed=>{window.__remote=structuredClone(seed);window.__revision=1;window.__writes=0;window.__seedReady=new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{const db=r.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(seed,'stateFundingV1');tx.oncomplete=()=>{db.close();resolve();};};});},seed);
  await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();await expect.poll(()=>page.evaluate(()=>!!window.__subscriptionError)).toBe(true);
 }
 

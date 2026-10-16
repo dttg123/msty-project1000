@@ -49,7 +49,7 @@ for(const mode of ['week','month','year','monthWeeks']){
   assert.match(html,new RegExp(`data-chart-mode="${mode}" class="active"`));
 }
 selectedProjectId='demo-ymax';views.renderProjects();
-assert.match(elements.get('page-projects').innerHTML,/달성 · 원금회수 관리/);
+assert.match(elements.get('page-projects').innerHTML,/원금회수 현황/);
 assert.doesNotMatch(elements.get('page-projects').innerHTML,/실제 인출 회수/);
 views.renderGoals();assert.match(elements.get('page-goal').innerHTML,/data-add-withdrawal="demo-ymax"/);
 views.renderGoals();views.renderSettings();

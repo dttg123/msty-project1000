@@ -1,7 +1,7 @@
 import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 const noAuth=`export async function initGoogleAuth(){};export async function logoutGoogle(){};export async function getGoogleIdToken(){return null;}export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){return {revision:1};}export async function subscribeCloudDocument(){return ()=>{};}`;
-async function ledger(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('state');});}
+async function ledger(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('stateFundingV1');});}
 async function manual(page,kind){
  await openRecordAction(page,'add-'+kind);
 }
@@ -21,7 +21,7 @@ for(const count of [8,9])test(`${count}종목 30년 고액 배당을 실제 입�
    const saved=await ledger(page),actual=saved.dividends.filter(r=>r.projectId===p.id);expect(actual).toHaveLength((y-2025)*12);expect(actual.reduce((a,r)=>a+Math.round(r.amountUSD*100),0)).toBe(cents);console.log(count,p.symbol,y,'입력 폼 저장 PASS',actual.length,'건',cents/100,'USD',Math.round(maxMs),'ms');
   }
   await page.locator('[data-close-modal]').first().click();
-  const calc=await page.evaluate(async id=>{const {storageGet}=await import('/storage.js'),{createPortfolioEngine}=await import('/modules/portfolio.js');const s=await storageGet('state'),c=createPortfolioEngine(()=>s,()=>id).computeProject(id);return {shares:c.shares,dividends:c.dividendsTotal,available:c.dividendAvailable,min:c.minDividendBalance};},p.id);
+  const calc=await page.evaluate(async id=>{const {storageGet}=await import('/storage.js'),{createPortfolioEngine}=await import('/modules/portfolio.js');const s=await storageGet('stateFundingV1'),c=createPortfolioEngine(()=>s,()=>id).computeProject(id);return {shares:c.shares,dividends:c.dividendsTotal,available:c.dividendAvailable,min:c.minDividendBalance};},p.id);
   expect(calc.shares).toBe(10000);expect(calc.dividends).toBeCloseTo(cents/100,5);expect(calc.available).toBeCloseTo(cents/100,5);expect(calc.min).toBeGreaterThanOrEqual(0);evidence.push({symbol:p.symbol,years:30,records:360,usd:cents/100,maxSaveMs:Math.round(maxMs)});
  }
  const before=await ledger(page);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();const after=await ledger(page);expect(after.dividends).toEqual(before.dividends);expect(after.trades).toEqual(before.trades);expect(errors).toEqual([]);for(const p of projects){await select(page,p);await expect(page.locator('.holding-row strong').first()).toHaveText('10,000주');expect(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(1);}

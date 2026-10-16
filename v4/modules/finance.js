@@ -8,6 +8,21 @@ export function tradeCashBreakdown(trade) {
     const feeUSD = finiteNonNegative(trade.feeUSD), taxUSD = finiteNonNegative(trade.taxUSD);
     return { executionAmountUSD, feeUSD, taxUSD, grossBuyCostUSD: trade.type === 'buy' ? executionAmountUSD + feeUSD + taxUSD : 0, netSellProceedsUSD: trade.type === 'sell' ? Math.max(0, executionAmountUSD - feeUSD - taxUSD) : 0 };
 }
+// Round the recorded decimal inputs once, after adding execution, fee and tax.
+// Binary floating-point/toFixed can disagree at half-cent boundaries.
+export function settledBuyDebitUSD(trade) {
+    const decimal = (input) => {
+        const [mantissa, exponent = '0'] = String(finiteNonNegative(input)).toLowerCase().split('e');
+        const [whole, fraction = ''] = mantissa.split('.');
+        const scale = fraction.length - Number(exponent), units = BigInt(whole + fraction);
+        return scale < 0 ? { units: units * 10n ** BigInt(-scale), scale: 0 } : { units, scale };
+    };
+    const shares = decimal(trade.shares), price = decimal(trade.price);
+    const amounts = [{ units: shares.units * price.units, scale: shares.scale + price.scale }, decimal(trade.feeUSD), decimal(trade.taxUSD)];
+    const scale = Math.max(...amounts.map(row => row.scale)), denominator = 10n ** BigInt(scale);
+    const total = amounts.reduce((sum, row) => sum + row.units * 10n ** BigInt(scale - row.scale), 0n);
+    return Number((total * 200n + denominator) / (denominator * 2n)) / 100;
+}
 const hasAmount = (value) => value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0;
 export function dividendCashBreakdown(record) {
     const status = record.status === 'confirmed' || record.status === 'estimated' ? record.status : 'actual';

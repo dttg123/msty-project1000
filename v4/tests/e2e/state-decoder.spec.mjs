@@ -8,10 +8,10 @@ async function open(page){
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/modules/cloud-api.js',route=>route.fulfill({contentType:'application/javascript',body:noAuth}));
   await page.route('**/data/dividend-announcements.json',route=>route.abort());
-  await page.addInitScript(seed=>{Object.defineProperty(window,'indexedDB',{configurable:true,value:{open(){throw new DOMException('Blocked','SecurityError');}}});if(!localStorage.getItem('dividend-os-v4:state'))localStorage.setItem('dividend-os-v4:state',JSON.stringify(seed));},seed);
+  await page.addInitScript(seed=>{Object.defineProperty(window,'indexedDB',{configurable:true,value:{open(){throw new DOMException('Blocked','SecurityError');}}});if(!localStorage.getItem('dividend-os-v4:stateFundingV1'))localStorage.setItem('dividend-os-v4:stateFundingV1',JSON.stringify(seed));},seed);
   await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();return errors;
 }
-async function stored(page){return page.evaluate(()=>JSON.parse(localStorage.getItem('dividend-os-v4:state')));}
+async function stored(page){return page.evaluate(()=>JSON.parse(localStorage.getItem('dividend-os-v4:stateFundingV1')));}
 test('기존 숫자 문자열은 실제 숫자로 복원되고 0원과 미확인 ROC는 재시작해도 유지된다',async({page})=>{
   const errors=await open(page);const first=await stored(page);expect(first.trades[0].shares).toBe(10.5);expect(first.trades[0].feeUSD).toBe(0);expect(first.dividends[0].referencePrice).toBe(0);expect(first.dividends[0].rocPercent).toBeNull();
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();expect((await stored(page)).trades).toEqual(first.trades);expect((await stored(page)).dividends).toEqual(first.dividends);expect(errors).toEqual([]);
@@ -30,7 +30,7 @@ async function seedOriginal(page,snapshot,{native=false}={}){
   await page.route('**/data/dividend-announcements.json',route=>route.abort());
   await page.addInitScript(({snapshot,native})=>{
     Object.defineProperty(window,'indexedDB',{configurable:true,value:{open(){throw new DOMException('Blocked','SecurityError');}}});
-    if(!localStorage.getItem('dividend-os-v4:state'))localStorage.setItem('dividend-os-v4:state',JSON.stringify(snapshot));
+    if(!localStorage.getItem('dividend-os-v4:stateFundingV1'))localStorage.setItem('dividend-os-v4:stateFundingV1',JSON.stringify(snapshot));
     if(native){window.__ready=0;window.__installed=0;window.Capacitor={Plugins:{HotUpdate:{confirmReady:async()=>{window.__ready++;},status:async()=>({available:true,currentVersion:'0.12.24',latestVersion:'0.12.26',updateAvailable:true,nativeUpdateRequired:false}),install:async()=>{window.__installed++;return {started:true};}}}};}
   },{snapshot,native});
   await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();return errors;
@@ -55,9 +55,9 @@ test('실제 구버전 저장 구조의 계속 재투자 모드는 IndexedDB 시
   await page.route('**/data/dividend-announcements.json',route=>route.abort());
   await page.addInitScript(snapshot=>{
     window.__ready=0;window.Capacitor={Plugins:{HotUpdate:{confirmReady:async()=>{window.__ready++;},status:async()=>({available:true,currentVersion:'0.12.26',latestVersion:'0.12.26',updateAvailable:false,nativeUpdateRequired:false})}}};
-    window.__seedReady=new Promise(resolve=>{const request=indexedDB.open('DividendOSDB_V4',1);request.onupgradeneeded=()=>request.result.createObjectStore('kv');request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv','readwrite'),store=tx.objectStore('kv'),get=store.get('state');get.onsuccess=()=>{if(!get.result)store.put(snapshot,'state');};tx.oncomplete=()=>{db.close();resolve();};};});
+    window.__seedReady=new Promise(resolve=>{const request=indexedDB.open('DividendOSDB_V4',1);request.onupgradeneeded=()=>request.result.createObjectStore('kv');request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv','readwrite'),store=tx.objectStore('kv'),get=store.get('stateFundingV1');get.onsuccess=()=>{if(!get.result)store.put(snapshot,'stateFundingV1');};tx.oncomplete=()=>{db.close();resolve();};};});
   },historical);
-  const read=()=>page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('DividendOSDB_V4');request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv'),get=tx.objectStore('kv').get('state');get.onsuccess=()=>{db.close();resolve(get.result);};};}));
+  const read=()=>page.evaluate(()=>new Promise(resolve=>{const request=indexedDB.open('DividendOSDB_V4');request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv'),get=tx.objectStore('kv').get('stateFundingV1');get.onsuccess=()=>{db.close();resolve(get.result);};};}));
   const check=async()=>{await expect(page.locator('#splashScreen')).toBeHidden();await expect(page.locator('#bootRetry')).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>window.__ready)).toBe(1);const state=await read();expect(state.projects[0].afterGoalMode).toBe('reinvest');expect(state.trades).toEqual(historical.trades);expect(state.dividends).toEqual(historical.dividends);await page.locator('[data-page="goal"]').first().click();await expect(page.locator('#page-goal')).toContainText('247');};
   await page.goto('/');await check();await page.reload();await check();
   const zip=createStoreZip([{name:'data/state.json',data:JSON.stringify(historical)}]);await page.locator('#restoreInput').setInputFiles({name:'historical-reinvest.zip',mimeType:'application/zip',buffer:Buffer.from(await zip.arrayBuffer())});await expect(page.locator('#confirmRestore')).toBeVisible();await page.locator('#confirmRestore').click();await expect(page.locator('#confirmRestore')).toHaveCount(0);await page.reload();await check();expect(errors).toEqual([]);

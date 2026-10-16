@@ -10,12 +10,12 @@ function fixture(mode='auto'){
  s.trades=[{id:'buy',projectId:p.id,date:'2025-01-01',type:'buy',buyType:'direct',shares:10,price:10}];
  s.dividends=[{id:'receipt',projectId:p.id,date,amountUSD:40,rocAmountUSD:40}];return s;
 }
-async function read(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('state');});}
+async function read(page){return page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return storageGet('stateFundingV1');});}
 async function setup(page,{mode='auto',nativeAvailable=true}={}){
  await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:cloud}));
  if(nativeAvailable)await page.route('**/toss-native.js',r=>r.fulfill({contentType:'application/javascript',body:native}));
  const fx={calls:0,fail:false};await page.route('https://api.frankfurter.dev/v2/rate/USD/KRW',r=>{fx.calls++;return r.fulfill({status:fx.fail?503:200,contentType:'application/json',body:JSON.stringify({base:'USD',quote:'KRW',rate:1400,date:fixture().settings.exchangeRateDate})});});
- await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('state',s);},fixture(mode));await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();fx.calls=0;return fx;
+ await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('stateFundingV1',s);},fixture(mode));await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();fx.calls=0;return fx;
 }
 async function openDividendSettings(page){
  await page.locator('[data-page="settings"]').first().click();

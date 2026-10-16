@@ -287,6 +287,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
@@ -300,6 +302,67 @@ jobs:
         run: npm run qa:release
       - name: Verify Q3 device, restore, rollback, and cleanup evidence
         working-directory: v4
-        env:
-          QA_RELEASE_EVIDENCE_JSON: ${{ vars.QA_RELEASE_EVIDENCE_JSON }}
         run: npm run qa:release:evidence
+
+  release-candidate-verification:
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/hardening/release-')) || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'hardening/release-'))
+    needs: [core, e2e, android-backup, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: v4/package-lock.json
+      - name: Install candidate tooling
+        working-directory: v4
+        run: npm ci
+      - name: Verify candidate calculations, storage, and signed update
+        working-directory: v4
+        run: npm run qa:release
+      - name: Check current-candidate physical device and Toss evidence before publication
+        working-directory: v4
+        run: npm run qa:release:evidence
+
+  deploy-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [release, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Build verified public runtime
+        working-directory: v4
+        run: node scripts/build.mjs
+      - name: Prepare public files only
+        run: |
+          mkdir -p public-site/v4/data public-site/updates
+          cp index.html sw.js public-site/
+          cp -R v4/dist/. public-site/v4/
+          cp v4/data/dividend-announcements.json public-site/v4/data/
+          cp updates/latest.json updates/DividendOS-web-*.zip public-site/updates/
+          touch public-site/.nojekyll
+      - name: Upload checked Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public-site
+      - name: Publish after release and signed Android checks
+        id: deployment
+        uses: actions/deploy-pages@v4
