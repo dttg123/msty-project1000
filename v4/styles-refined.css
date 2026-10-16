@@ -891,3 +891,11 @@ html[data-ui-motion="off"] *,html[data-ui-motion="off"] *::before,html[data-ui-m
 .top-icon-btn:active,.currency-picker button:active,.project-detail-tabs button:active,.text-link:active{background:var(--accent-soft)}
 @media(max-width:360px){.currency-picker button{min-width:36px;padding-inline:7px}.app:has(#page-projects.active .project-detail-heading) .project-detail-heading{padding-right:129px}}
 @media(prefers-reduced-motion:reduce){.refresh-panel [data-sync-all][aria-busy="true"]::before{animation:none}}
+
+/* Keep storage labels readable on narrow screens and enlarged text. */
+.settings-status>summary{align-items:flex-start;flex-wrap:wrap;gap:8px 12px}
+.settings-status>summary>span:first-child{flex:1 1 95px}
+.settings-status>summary>span:nth-child(2){flex:1 1 130px;text-align:right;overflow-wrap:anywhere}
+.cloud-section-status{max-width:44%;font-size:var(--type-caption);line-height:1.5;overflow-wrap:anywhere;text-align:right}
+
+.month-overview .hero-amount-long{font-size:clamp(1.125rem,6vw,2rem);letter-spacing:-.035em}
