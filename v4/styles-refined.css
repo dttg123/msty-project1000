@@ -910,3 +910,5 @@ html[data-ui-motion="off"] *,html[data-ui-motion="off"] *::before,html[data-ui-m
 .cashflow-pace-summary small{overflow-wrap:anywhere}
 .roc-detail{margin-top:16px}
 html[data-theme] .portfolio-overview .portfolio-month-summary{padding:14px 20px}
+
+@media(max-width:380px){.portfolio-flow-card .detail-title{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}.portfolio-flow-card .detail-title>strong{white-space:nowrap}.portfolio-flow-card .chart-period{justify-self:end}}

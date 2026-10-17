@@ -19,6 +19,7 @@ for(const theme of ['light','dark'])test(`1.10 ${theme}: sub-dollar composition,
  await page.locator('#dividendForm [name="amountUSD"]').fill('12.34');await page.locator('#dividendForm button.primary[type="submit"]').click();await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
  await expect.poll(()=>page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return (await storageGet('stateFundingV1')).dividends.length;})).toBe(4);
  await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('.nav-btn[data-page="projects"]').click();await openPortfolioDetail(page,'dividend');
+ const chartHeading=await page.locator('.portfolio-flow-card .detail-title>strong').evaluate(el=>({height:el.getBoundingClientRect().height,line:parseFloat(getComputedStyle(el).lineHeight)}));expect(chartHeading.height).toBeLessThan(chartHeading.line*1.5);
  const card=page.locator('.dividend-analysis-card');await expect(card).not.toContainText('남은 배당금');await expect(card).not.toContainText('누락 여부 미확인');
  const row=card.locator(':scope > .cashflow-secondary>div').first();const alignment=await row.evaluate(el=>{const a=el.querySelector('span'),b=el.querySelector('strong');return {delta:Math.abs(a.getBoundingClientRect().top-b.getBoundingClientRect().top),margin:getComputedStyle(b).marginTop};});expect(alignment.margin).toBe('0px');expect(alignment.delta).toBeLessThan(3);
  await page.screenshot({path:info.outputPath(`income-${theme}.png`),fullPage:true});
