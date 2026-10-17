@@ -28,8 +28,8 @@ assert.equal(metrics.nextGoal.calc.project.symbol,'MSTY');
 assert.equal(metrics.projectMonth.length,1);
 assert.equal(metrics.projectMonth[0].symbol,'MSTY');
 assert.equal(metrics.projectMonth[0].actual,100);
-assert.equal(metrics.pace.monthly,400/3,'recent three-month average must use actual deposits only');
-assert.equal(metrics.pace.annualized,1600);
+assert.equal(metrics.pace.monthly,300/3,'recent three-month average must use actual deposits only');
+assert.equal(metrics.pace.annualized,1200);
 console.log('DividendOS v0.11.3 home metrics QA: PASS');
 
 const settings={...state.settings,exchangeRate:1300,targetMonthlyDividend:500,warningKRW:18000000,thresholdKRW:20000000};
@@ -41,3 +41,13 @@ assert.equal(dividendGoalStatus(settings,0,20000000/1300).alert,'reached');
 assert.equal(dividendGoalStatus({...settings,dividendAlertEnabled:false},0,99999).alert,'off');
 assert.equal(dividendGoalStatus({...settings,warningKRW:0},0,0).alert,'normal');
 assert.equal(dividendGoalStatus({...settings,warningKRW:25000000},0,19000000/1300).alert,'normal');
+// Completed calendar months only; the unfinished current month cannot skew growth.
+const history=Array.from({length:7},(_,i)=>({id:'pace-'+i,projectId:project.id,date:`2026-${String(i+4).padStart(2,'0')}-01`,amountUSD:i===6?99999:i<3?100:200}));
+const completed=buildHomeMetrics([],history,new Date('2026-10-18T12:00:00'));
+assert.equal(completed.pace.monthly,200);assert.equal(completed.pace.change,100);
+assert.equal(completed.pace.recentFrom,'2026-07');assert.equal(completed.pace.recentTo,'2026-09');
+assert.equal(completed.pace.previousFrom,'2026-04');assert.equal(completed.pace.previousTo,'2026-06');
+assert.equal(buildHomeMetrics([],history.slice(4),new Date('2026-10-18T12:00:00')).pace.available,false);
+assert.equal(buildHomeMetrics([],history.slice(2),new Date('2026-10-18T12:00:00')).pace.change,null);
+assert.equal(buildHomeMetrics([],history.slice(0,3),new Date('2026-10-18T12:00:00')).pace.monthly,0);
+console.log('Completed-month pace PASS: current month excluded, dates explicit, short history suppressed');
