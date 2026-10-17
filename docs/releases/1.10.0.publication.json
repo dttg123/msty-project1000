@@ -1,18 +1,18 @@
 {
   "format": "dividend-os-publication-v1",
   "policy": "automated-before-publication/manual-after-update",
-  "commit": "1c2da30b6bde5766243365aaabb07ee1630c5bca",
+  "commit": "62af905f156dae4afe28393b30274c59fea5cb1b",
   "appVersion": "1.10.0",
-  "preparedAt": "2026-10-17T18:39:38.629Z",
+  "preparedAt": "2026-10-17T18:41:27.230Z",
   "authorization": {
     "source": "user-request",
     "inAppUpdate": true
   },
   "artifacts": {
     "appVersion": "1.10.0",
-    "webBundleSha256": "fdab2ad248452e8ecfe3c9a23977d306a87713e0759ef2f860d4dcd9196edf30",
-    "updateManifestSha256": "1893c5d9c9f4cb130b25ee8f6b96fb43add2c432be54b0cb409a2f621d036808",
-    "runtimeSha256": "3d5ec32942e92e5058ef493124f45e38feba18c976397654518d0cd3a04955cc",
+    "webBundleSha256": "6958176da6fee4cc0d3a897c7b82eae615e0b63eb79e08c4f68f5f827b63be50",
+    "updateManifestSha256": "ad8eafc98669fd8bc193a57c7e7dc5750ea1fc3dee1e6f2232ca424f67d5d652",
+    "runtimeSha256": "21124d51ef07045414a841d3c432d1958f0fce7dd66edf82e3b99dad0952d082",
     "runtimeFiles": {
       "app.js": "f59a778acc7faaec47ff10787fbf1eacd44a70134fa5ee8e0c8ec308125d0e82",
       "auth.js": "0b693a1d21282cb54fa5a72f9fd524043046093190012cda4519290c62006a2c",
@@ -49,7 +49,7 @@
       "modules/views.js": "fa52d017addfc8c7b1c687d381a381c2de36ebad71bd0fecc0c66f0e7344825b",
       "runtime-config.js": "ead2842d0a82ab93c4e3567d1c6c02b5d9920bdc02ef4529d635bacd4af44b20",
       "storage.js": "00c7306e2daa49277351a52dff94ffe827f7d9a6909ca96b57cb331a13ee59bd",
-      "styles-refined.css": "e64864e18e917e3db75c1b5604128364a7e9b7ebe941e8c1355b2e7cb93531e4",
+      "styles-refined.css": "4e888f22aa4265dbfef4930b8ed9c455e08ce0e88d7abd12b8517deb9b2868b3",
       "styles.css": "0925c8d4f8e5163f5f209ab67cc8842895bf090d004e4804148be1ff600fcc44",
       "sw.js": "ee19355cb91276d030cb7e335fdfe59df69e92fcedc3ed0c1aa3d2246da6d069",
       "toss-client.js": "a299273cc0249f9c9b6151e04042114dd5bcab605c02785e9356cc42befa9623",
@@ -69,6 +69,10 @@
     },
     "ci": {
       "status": "required-before-merge"
+    },
+    "narrowChartHeading": {
+      "status": "passed",
+      "checks": 4
     }
   },
   "postPublicationChecks": {
