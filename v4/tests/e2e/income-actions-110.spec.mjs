@@ -1,0 +1,28 @@
+import {test,expect} from '@playwright/test';
+import {blankState,blankProject} from '../../modules/state.js';
+import {openPortfolioDetail} from './portfolio-navigation.mjs';
+const noAuth=`export async function initGoogleAuth(){};export async function getGoogleIdToken(){return null;}export async function logoutGoogle(){};export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){throw new Error('QA cloud disabled');}export async function subscribeCloudDocument(){return ()=>{};}`;
+test.use({serviceWorkers:'block'});
+for(const theme of ['light','dark'])test(`1.10 ${theme}: sub-dollar composition, receipt entry and aligned detail`,async({page},info)=>{
+ await page.setViewportSize({width:320,height:915});await page.clock.setFixedTime(new Date('2026-10-18T03:00:00Z'));
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:noAuth}));await page.route('https://**/*',r=>r.abort());
+ await page.goto('/');await expect(page.locator('#splashScreen')).toBeHidden();
+ const s=blankState(),p=s.projects[0],q=blankProject('CONY');p.id='p';q.id='q';s.projects.push(q);s.settings={...s.settings,appearance:theme,displayCurrency:'USD',exchangeRateMode:'manual'};
+ s.dividends=[{id:'a',projectId:'p',date:'2026-10-01',amountUSD:.2},{id:'b',projectId:'q',date:'2026-10-01',amountUSD:.3},{id:'c',projectId:'p',date:'2026-09-01',amountUSD:.1}];
+ await page.evaluate(async s=>{const {storageSet}=await import('/storage.js');await storageSet('stateFundingV1',s);},s);await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
+ await page.locator('.home-cashflow-details>summary').click();
+ const widths=await page.locator('.composition-bar i').evaluateAll(els=>els.map(e=>parseFloat(e.style.width)));expect(widths).toEqual([60,40]);
+ await page.locator('[data-cashflow-period="2026-09"]').click();await expect(page.locator('.composition-legend')).toContainText('100%');await expect(page.locator('.composition-bar i')).toHaveCount(1);
+ expect(await page.locator('.composition-bar i').evaluate(e=>e.style.width)).toBe('100%');
+ await page.locator('.nav-btn[data-page="projects"]').click();await page.locator('.portfolio-overview [data-quick-dividend]').click();await expect(page.locator('.modal-title')).toContainText('MSTY');
+ await page.locator('#dividendForm [name="amountUSD"]').fill('12.34');await page.locator('#dividendForm button.primary[type="submit"]').click();await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
+ await expect.poll(()=>page.evaluate(async()=>{const {storageGet}=await import('/storage.js');return (await storageGet('stateFundingV1')).dividends.length;})).toBe(4);
+ await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();await page.locator('.nav-btn[data-page="projects"]').click();await openPortfolioDetail(page,'dividend');
+ const chartHeading=await page.locator('.portfolio-flow-card .detail-title>strong').evaluate(el=>({height:el.getBoundingClientRect().height,line:parseFloat(getComputedStyle(el).lineHeight)}));expect(chartHeading.height).toBeLessThan(chartHeading.line*1.5);
+ const card=page.locator('.dividend-analysis-card');await expect(card).not.toContainText('남은 배당금');await expect(card).not.toContainText('누락 여부 미확인');
+ const row=card.locator(':scope > .cashflow-secondary>div').first();const alignment=await row.evaluate(el=>{const a=el.querySelector('span'),b=el.querySelector('strong');return {delta:Math.abs(a.getBoundingClientRect().top-b.getBoundingClientRect().top),margin:getComputedStyle(b).marginTop};});expect(alignment.margin).toBe('0px');expect(alignment.delta).toBeLessThan(3);
+ await page.screenshot({path:info.outputPath(`income-${theme}.png`),fullPage:true});
+ await page.locator('[data-project-detail-tab="summary"]').click();await expect(page.locator('.roc-detail')).toHaveCount(0);await expect(page.locator('.calculation-guide')).not.toContainText('ROC');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(1);expect(errors).toEqual([]);
+});

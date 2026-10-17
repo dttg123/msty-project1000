@@ -76,7 +76,7 @@ test('외부에서 이미 사용한 배당을 재투자 매수에 중복 사용�
 test('미확인 자금은 사용을 막고 실제 출금일 확인 후 잔액을 연다',async({page})=>{
  const errors=await setup(page,true),original=await read(page);
  await expect(page.locator('#page-projects [data-add-withdrawal]')).toBeDisabled();
- await details(page);await expect(page.locator('.dividend-use-details')).toContainText('자금 구분 확인 필요');
+ await details(page);await expect(page.locator('.dividend-use-details')).toContainText('잔액 계산 보류');
  await manual(page,'add-withdrawal');await expect(page.locator('#withdrawalForm')).toHaveCount(0);await expect(page.locator('.toast')).toContainText('배당 사용 전에');await page.locator('#modal [data-close-modal]').click();
  await details(page);await page.locator('[data-review-funding]').click();await page.locator('[data-funding-trade="broker"]').click();
  await page.locator('#fundingForm [name="amountUSD"]').fill('10');await page.locator('#fundingForm [name="cashDate"]').fill('2025-01-04');await page.locator('#fundingForm button[type="submit"]').click();

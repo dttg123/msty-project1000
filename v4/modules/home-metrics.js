@@ -29,10 +29,13 @@ export function buildHomeMetrics(calcs, dividendRows, now = new Date()) {
         return yearMap.get(key) || { key, label: key, actual: 0, count: 0 };
     });
     const trailingMonths = Array.from({ length: 6 }, (_, index) => {
-        const date = new Date(today.getFullYear(), today.getMonth() - 5 + index, 1, 12), key = monthKey(date);
-        return sum(actual.filter((row) => row.date.startsWith(key)));
+        const date = new Date(today.getFullYear(), today.getMonth() - 6 + index, 1, 12), key = monthKey(date);
+        return { key, value: sum(actual.filter((row) => row.date.startsWith(key))) };
     });
-    const previous3 = trailingMonths.slice(0, 3).reduce((a, b) => a + b, 0) / 3, recent3 = trailingMonths.slice(3).reduce((a, b) => a + b, 0) / 3;
+    const previous3 = trailingMonths.slice(0, 3).reduce((a, b) => a + b.value, 0) / 3, recent3 = trailingMonths.slice(3).reduce((a, b) => a + b.value, 0) / 3;
+    const firstRecordedMonth = actual.map(row => row.date.slice(0, 7)).sort()[0] || '';
+    const recentAvailable = !!firstRecordedMonth && firstRecordedMonth <= trailingMonths[3].key;
+    const comparisonAvailable = !!firstRecordedMonth && firstRecordedMonth <= trailingMonths[0].key;
     const projectMonth = calcs.map((calc) => ({
         projectId: calc.project.id,
         symbol: calc.project.symbol,
@@ -49,7 +52,7 @@ export function buildHomeMetrics(calcs, dividendRows, now = new Date()) {
     return {
         month: { actual: monthActual, count: monthRows.length, previous: previousMonth, change: previousMonth > 0 ? (monthActual / previousMonth - 1) * 100 : null, remaining: 0, total: monthActual },
         year: { actual: yearActual, count: yearRows.length, previous: previousYear, change: previousYear > 0 ? (yearActual / previousYear - 1) * 100 : null, remaining: 0, total: yearActual },
-        pace: { monthly: recent3, annualized: recent3 * 12, change: previous3 > 0 ? (recent3 / previous3 - 1) * 100 : null, available: actual.length > 0 },
+        pace: { monthly: recent3, annualized: recent3 * 12, change: comparisonAvailable && previous3 > 0 ? (recent3 / previous3 - 1) * 100 : null, available: recentAvailable, recentFrom: trailingMonths[3].key, recentTo: trailingMonths[5].key, previousFrom: trailingMonths[0].key, previousTo: trailingMonths[2].key },
         months, years, projectMonth, nextDividend: null, forecast: [], missingEstimateCount: 0, nextGoal: (ownedGoals.length ? ownedGoals : goals)[0] || null
     };
 }

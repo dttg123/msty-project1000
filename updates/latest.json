@@ -1,7 +1,7 @@
 {
-  "version": "1.9.0",
+  "version": "1.10.0",
   "minNativeVersion": "0.12.30",
-  "bundleUrl": "https://raw.githubusercontent.com/dttg123/msty-project1000/main/updates/DividendOS-web-1.9.0.zip",
-  "sha256": "c46bb52a2cb71b16db3349290fe6a5997992a5b26d1c89213d1c18051c423bb9",
-  "signature": "ewsKK7NQjQrmEbn8JG88xcwR7rV0MwemT0lbbHLB1q6LxaBBQ5dGIiEDnh5nUS2N43IOIEuxv70z07K7RqbTPFjPSGeq2cHvpUvkmIO/Ok6XVoT3+3LX+tpQtIx287B3cZ/ARx1heDf8P0KQ9G+u7sIuco9JCb3i0YVK9jYtHPlkqtcd/C5fjjYYEGLnYjVE1xBzV/XnaY5W4EOKXEJK1nb+iPJV38ovS1I6Svr+i2ZNO5pJa+C0Pz9HVs4zGVBo9Es17BesrR94kG1+DfvSx4JWFa7K0R7Y6hF8nN9gSc9TS15XWp5+IOJvivDbuk7x47BW+JJXOD0LTqZxs1lrpOo2aH7NmWT6fKvddbAT3Vdtyjw9iQPImD6avm/mLq9xLPfqpvSkIOJ7LNnulG5GwAg8kmUVxiMK1Z3xpufebor/ZIcHE9CJKiG5TBw/erSyGSAfF5fLg5cBlQeTN7285r7gRAiXNtRidqY90vE+XuloPGt4ATfIToY1RkgvUwC2"
+  "bundleUrl": "https://raw.githubusercontent.com/dttg123/msty-project1000/main/updates/DividendOS-web-1.10.0.zip",
+  "sha256": "6958176da6fee4cc0d3a897c7b82eae615e0b63eb79e08c4f68f5f827b63be50",
+  "signature": "hrFeZQQ7MTRXsif1mknsfzvG+0Rxr9PzigtWCohtzhtOpuG2troh0zd6CNyTsg+kMCd4KEX85kW1solrHdoya+HvaThTrlDl1XNXnorPE9HU44NEQEqU5Dn86CsgXR4bWB+mw98R+cTNFyWxDcaqBdjgbWcEtoGQCqMQQEGFBZrMLvGeUx6KRJa+/LHnjhyeCt1ge22SGbl1nGv85sW2eAzSb1WdeS8ctSWmLLr0ACz0NtsuMCcxoHgEN6bHY3h8TeSxqZxukyNiiK2umao/OmCJ7x7I+TG69s7Ro7kIN47FS2TW0HsOnPShfWdRxm4PvDuSRpJJwWeNmG4SKgFMB5OBaIfWAmW00j6jvh7sIGH3cUSrhyMuk7XM33AWYvPJ77vWf4DJCEIsU80VECn4IBPfMm2z1HQUSklp+RsuxtY6rGiVfzJr4h0OhahRQqHxh+Y24OgV1geGetSJbbAC9aC3hZPODJKEQlMO2IVbp8hgR/M7kow2W6GN3HO+eiLu"
 }
