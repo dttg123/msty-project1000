@@ -3,7 +3,7 @@ import {buildCsvExports} from '../backup.js';
 import {validateLedger} from '../modules/validation.js';
 import {blankState} from '../modules/state.js';
 import {createPortfolioEngine} from '../modules/portfolio.js';
-import {parseReferenceExchangeRate,applyRocToBasis,dividendCashBreakdown,economicTotalReturn,tradeCashBreakdown} from '../modules/finance.js';
+import {reportingDividends,parseReferenceExchangeRate,applyRocToBasis,dividendCashBreakdown,economicTotalReturn,tradeCashBreakdown} from '../modules/finance.js';
 
 const buy={id:'buy-1',projectId:'p-msty',date:'2026-01-01',type:'buy',buyType:'direct',shares:10,price:10,feeUSD:2,taxUSD:1};
 const sell={id:'sell-1',projectId:'p-msty',date:'2026-01-03',type:'sell',shares:5,price:12,feeUSD:1,taxUSD:.5};
@@ -58,3 +58,42 @@ batchState.dividends[0].amountUSD=100000;
 assert.equal(batchEngine.computeProject(batchProject).dividendsTotal,100000);
 batchEngine.withCalculationBatch(()=>assert.equal(batchEngine.computeProject(batchProject).dividendsTotal,100000));
 console.log('Read-only render cache PASS: reuse, nested scopes, edits and exception cleanup');
+
+// Summary cards must share the cash engine's explicit-net precedence, even
+// when an imported legacy amount differs. Keep source records untouched.
+const NativeDate=Date,fixedSummaryTime=new Date(2026,9,18,1).getTime();
+try {
+ globalThis.Date=class extends NativeDate {
+  constructor(...args){super(...(args.length?args:[fixedSummaryTime]));}
+  static now(){return fixedSummaryTime;}
+ };
+ const summaryState=blankState(),summaryProject=summaryState.projects[0];
+ summaryProject.distributionFrequency='monthly';summaryProject.distributionFrequencyMode='manual';
+ summaryState.settings.exchangeRate=1500;
+ summaryState.dividends=[
+  {id:'net',projectId:summaryProject.id,date:'2026-10-18',amountUSD:99,netAmountUSD:8.5},
+  {id:'krw',projectId:summaryProject.id,date:'2026-10-18',currency:'KRW',amountUSD:0,amountKRW:1500},
+  {id:'zero',projectId:summaryProject.id,date:'2026-10-18',amountUSD:99,netAmountUSD:0},
+  {id:'future',projectId:summaryProject.id,date:'2026-10-19',amountUSD:99},
+  {id:'forecast',projectId:summaryProject.id,date:'2026-10-18',amountUSD:99,status:'estimated'},
+  {id:'boundary',projectId:summaryProject.id,date:'2025-10-18',amountUSD:20},
+  {id:'inside',projectId:summaryProject.id,date:'2025-10-19',amountUSD:3}
+ ];
+ const original=JSON.stringify(summaryState),summaryEngine=createPortfolioEngine(()=>summaryState,()=>summaryProject.id);
+ const summary=summaryEngine.computeProject(summaryProject),totals=summaryEngine.totals();
+ const report=reportingDividends(summaryState.dividends,1500);
+ assert.equal(report[0].amountUSD,8.5,'graph and recent-receipt projections use explicit net');
+ assert.equal(report[1].amountUSD,1);
+ assert.equal(report[2].amountUSD,0);
+ assert.equal(summary.currentMonthDividends,9.5);
+ assert.equal(summary.yearDividends,9.5);
+ assert.equal(summary.dividendsTotal,32.5);
+ assert.equal(totals.dividendsTotal,32.5);
+ assert.equal(totals.yearDividends,9.5);
+ assert.equal(summary.trailing12Dividends,12.5);
+ assert.equal(summary.trailing12Dividends,summary.analytics.trailingNet,'recent-year card and analytics share local date boundaries');
+ assert.equal(JSON.stringify(summaryState),original);
+ summaryState.dividends=[summaryState.dividends[0]];
+ assert.equal(summaryEngine.computeProject(summaryProject).rawShortMonthlyEstimate,8.5);
+} finally {globalThis.Date=NativeDate;}
+console.log('Summary reconciliation PASS: explicit net, KRW, zero/future/forecast exclusions and KST recent-year boundary');

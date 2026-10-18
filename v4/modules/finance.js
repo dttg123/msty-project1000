@@ -42,7 +42,7 @@ export function isPostedDividend(record, asOf) {
 }
 // View-only conversion: never persist a fabricated USD receipt or fund the USD cash ledger with it.
 export function reportingDividends(rows, rate) {
-    return rows.map(row => row.currency === 'KRW' ? { ...row, currency: 'USD', amountUSD: (dividendCashBreakdown(row).netKRW || 0) / Math.max(.000001, rate), netAmountUSD: undefined, grossAmountUSD: undefined, taxUSD: 0, withholdingTaxUSD: 0, feeUSD: 0, rocPercent: undefined, rocAmountUSD: 0, sharesAtPayment: 0 } : row);
+    return rows.map(row => row.currency === 'KRW' ? { ...row, currency: 'USD', amountUSD: (dividendCashBreakdown(row).netKRW || 0) / Math.max(.000001, rate), netAmountUSD: undefined, grossAmountUSD: undefined, taxUSD: 0, withholdingTaxUSD: 0, feeUSD: 0, rocPercent: undefined, rocAmountUSD: 0, sharesAtPayment: 0 } : { ...row, amountUSD: dividendCashBreakdown(row).netUSD });
 }
 export const OFFICIAL_DISTRIBUTIONS_URL = 'https://raw.githubusercontent.com/dttg123/msty-project1000/main/v4/data/dividend-announcements.json';
 export const MSTY_OFFICIAL_SOURCE = 'https://yieldmaxetfs.com/our-etfs/msty/';

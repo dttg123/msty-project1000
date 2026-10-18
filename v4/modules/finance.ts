@@ -49,7 +49,7 @@ export function isPostedDividend(record:DividendRecord,asOf:string):boolean {
 
 // View-only conversion: never persist a fabricated USD receipt or fund the USD cash ledger with it.
 export function reportingDividends(rows:DividendRecord[],rate:number):DividendRecord[] {
-  return rows.map(row=>row.currency==='KRW'?{...row,currency:'USD',amountUSD:(dividendCashBreakdown(row).netKRW||0)/Math.max(.000001,rate),netAmountUSD:undefined,grossAmountUSD:undefined,taxUSD:0,withholdingTaxUSD:0,feeUSD:0,rocPercent:undefined,rocAmountUSD:0,sharesAtPayment:0}:row);
+  return rows.map(row=>row.currency==='KRW'?{...row,currency:'USD',amountUSD:(dividendCashBreakdown(row).netKRW||0)/Math.max(.000001,rate),netAmountUSD:undefined,grossAmountUSD:undefined,taxUSD:0,withholdingTaxUSD:0,feeUSD:0,rocPercent:undefined,rocAmountUSD:0,sharesAtPayment:0}:{...row,amountUSD:dividendCashBreakdown(row).netUSD});
 }
 
 export interface DividendReplacementRow {date:string;amountKRW?:number;amountUSD?:number;}
