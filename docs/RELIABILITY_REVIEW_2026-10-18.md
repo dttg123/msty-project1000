@@ -107,3 +107,17 @@ FAST, CORE, ordinary browser and Android build in run 39095302257.
 User authorized production deployment. Release 1.12 selects four supplemental
 mobile UI cases; ten duplicated or unchanged long-duration cases remain excluded.
 See RELEASE_1.12.md for scope and 1.12.0.publication.json for artifact binding.
+
+Selected supplemental mobile UI completed: four passed, zero failed, zero skipped
+(13.6 minutes). The 30-year case individually saved 360 trades and 360 dividends
+and passed mutation, restart, portable ZIP restore and undo comparisons. The
+8/9-symbol cross-operation and offline standalone review cases also passed.
+Permanent release APK signing matched certificate
+395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF
+in candidate job 117593781091. Final candidate artifact verification remains a
+merge gate; physical Galaxy/Toss evidence is still pending after update.
+
+Final candidate RELEASE and artifact-bound publication checks passed in job
+117595773377, run 39099854900. All candidate gates are green before production
+merge. The following commit changes documentation/evidence only; runtime, signed
+ZIP/manifest and native input fingerprints are unchanged from the tested source.

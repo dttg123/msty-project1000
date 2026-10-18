@@ -80,11 +80,27 @@
       "jobId": 117580434940
     },
     "supplementalMobileUI": {
-      "status": "required-before-merge",
-      "checks": 4
+      "status": "passed",
+      "checks": 4,
+      "scope": [
+        "hard-8",
+        "hard-9",
+        "30-year-individual-monthly-entry-restore",
+        "offline-review-copy"
+      ],
+      "reportSha256": "e0f444b4ebd9b57c5aa326be7c361e613b4e10fc43098f4fe1eea9ef027fe9b0",
+      "excludedOriginalOptInChecks": 10
     },
     "permanentApkSigning": {
-      "status": "required-before-merge"
+      "status": "passed",
+      "jobId": 117593781091,
+      "artifactId": 12125129704,
+      "certificateSha256": "395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF"
+    },
+    "candidate": {
+      "status": "passed",
+      "runId": 39099854900,
+      "releaseVerificationJobId": 117595773377
     }
   },
   "postPublicationChecks": {
