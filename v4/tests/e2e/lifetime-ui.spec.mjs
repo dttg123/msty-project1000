@@ -3,18 +3,7 @@ import {test,expect} from '@playwright/test';
 
 // Opt-in release QA. Every record goes through the visible form and Save button.
 // A fresh non-persistent localhost browser context has no user account or cloud data.
-async function ledger(page){
-  return page.evaluate(()=>new Promise((resolve,reject)=>{
-    const request=indexedDB.open('DividendOSDB_V4');
-    request.onerror=()=>reject(request.error);
-    request.onsuccess=()=>{
-      const db=request.result,tx=db.transaction('kv','readonly');
-      const get=tx.objectStore('kv').get('stateFundingV1');
-      get.onsuccess=()=>{db.close();resolve(get.result);};
-      get.onerror=()=>{db.close();reject(get.error);};
-    };
-  }));
-}
+async function ledger(page,key='stateFundingV1'){return page.evaluate(async key=>{const {storageGet}=await import('/storage.js');return storageGet(key);},key);}
 
 async function openManual(page,action){
  await page.locator('[data-page="projects"]').first().click();await openRecordAction(page,'add-'+action);

@@ -3,7 +3,7 @@ import { chooseCloudSync, syncSignature } from './modules/cloud-contract.js';
 import { OFFICIAL_DISTRIBUTIONS_URL, parseOfficialDistributionFeed, parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
 import { monthActivity } from './modules/activity.js';
 import { initGoogleAuth, logoutGoogle } from './modules/cloud-api.js';
-import { openStorage, storageGet, storageSet, storageDelete, readLegacyState, storageStatus } from './storage.js';
+import { openStorage, storageGet, storageSet, storageDelete, storageBatch, readLegacyState, storageStatus } from './storage.js';
 import { getCloudDocument, getLegacyCloudDocument, saveCloudDocument, subscribeCloudDocument } from './modules/cloud-api.js';
 import { APP_VERSION, DATA_SCHEMA_VERSION, createStoreZip, buildCsvExportZip, buildPortableBackup, readStateFromBackupFile } from './backup.js';
 import { PAGES, PROJECT_CATEGORIES, PROJECT_COLORS, PROJECT_COLOR_NAMES, SAFETY_KEY, STATE_KEY } from './modules/constants.js';
@@ -304,7 +304,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         refreshSaveStatus();
     }
     function hasMeaningfulData(value = state) { return !!(value && (value.trades?.length || value.dividends?.length || value.splits?.length || value.cashAdjustments?.length || value.projects?.some((p) => n(p.currentPrice) || n(p.monthlyPlanShares) || n(p.initialDividendBalance)))); }
-    const backupStorage = { get: (key) => storageGet('fundingV1:' + key), set: (key, value) => storageSet('fundingV1:' + key, value), remove: (key) => storageDelete('fundingV1:' + key) };
+    const backupStorage = { get: (key) => storageGet('fundingV1:' + key), set: (key, value) => storageSet('fundingV1:' + key, value), remove: (key) => storageDelete('fundingV1:' + key), get batch() { return storageStatus().mode === 'indexeddb' ? (writes) => storageBatch(writes.map(item => ({ ...item, key: 'fundingV1:' + item.key }))) : undefined; } };
     async function refreshAutoBackupStatus() { const entries = await listAutoBackups(backupStorage); autoBackupStatus = { count: entries.length, lastAt: entries[0]?.createdAt || '', error: '' }; return entries; }
     async function autoBackup(reason = 'automatic') {
         if (demoMode || !hasMeaningfulData())
