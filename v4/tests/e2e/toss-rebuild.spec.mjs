@@ -1,17 +1,7 @@
 import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 
-async function readLedger(page,key='stateFundingV1'){
-  return page.evaluate(key=>new Promise((resolve,reject)=>{
-    const request=indexedDB.open('DividendOSDB_V4');
-    request.onerror=()=>reject(request.error);
-    request.onsuccess=()=>{
-      const db=request.result,get=db.transaction('kv','readonly').objectStore('kv').get(key);
-      get.onsuccess=()=>{db.close();resolve(get.result);};
-      get.onerror=()=>{db.close();reject(get.error);};
-    };
-  }),key);
-}
+async function readLedger(page,key='stateFundingV1'){return page.evaluate(async key=>{const {storageGet}=await import('/storage.js');return storageGet(key);},key);}
 
 async function manualForm(page,kind){
  await page.locator('[data-page="projects"]').first().click();await openRecordAction(page,'add-'+kind);
@@ -232,7 +222,7 @@ for(const scenario of ['matched','mismatch','real-oversell','safety-save-failed'
     const {blankState}=await import('/modules/state.js'),{tossCandidateToTrade}=await import('/modules/toss.js');
     const state=blankState();state.trades=orders.map(order=>{const trade=tossCandidateToTrade(order,{projectId:state.projects[0].id,id:order.id,createdAt:'2026-10-01T00:00:00Z'});delete trade.source.filledAt;return trade;});
     state.integrations.toss.sourceLedger.orders=orders;
-    await new Promise((resolve,reject)=>{const request=indexedDB.open('DividendOSDB_V4');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(state,'stateFundingV1');tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>reject(tx.error);};});
+    const {storageGet,storageSet}=await import('/storage.js');await storageGet('stateFundingV1');await storageSet('stateFundingV1',state);
   },orders);
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();const before=await readLedger(page);
   const snapshot={accountScopeId:'0123456789abcdef01234567',syncCursor:{ordersThrough:'2026-02-01'},syncStatus:'complete',failedAccountCount:0,historyTruncated:false,prices:[],dividends:[],accountResults:[],capabilities:{orders:true,holdings:true,dividends:false},holdings:[{symbol:'MSTY',currency:'USD',shares:scenario==='mismatch'?252:251}],orders:[...orders,{id:'new-buy-four',symbol:'MSTY',currency:'USD',date:'2026-02-01',type:'buy',shares:4,price:16,filledAt:'2026-02-01T10:00:00+09:00'}]};

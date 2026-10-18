@@ -93,8 +93,8 @@ test('저장소 오류 후 기본 저장소가 복구돼도 저장한 기록을 
     const storage=await import('/storage.js');
     return {mode:storage.storageStatus().mode,record:await storage.storageGet('fallback-checkpoint')};
   });
-  expect(await read()).toEqual({mode:'localstorage',record:{amountUSD:12.34,source:'fallback'}});
+  expect(await read()).toEqual({mode:'indexeddb',record:{amountUSD:12.34,source:'fallback'}});
   await page.reload();await expect(page.locator('#splashScreen')).toBeHidden();
-  expect(await read()).toEqual({mode:'localstorage',record:{amountUSD:12.34,source:'fallback'}});
+  expect(await read()).toEqual({mode:'indexeddb',record:{amountUSD:12.34,source:'fallback'}});
   expect(errors).toEqual([]);
 });

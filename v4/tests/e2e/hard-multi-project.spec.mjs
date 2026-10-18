@@ -1,7 +1,7 @@
 import {openPortfolioDetail,openRecordAction} from './portfolio-navigation.mjs';
 import {test,expect} from '@playwright/test';
 const noAuth=`export async function initGoogleAuth(){};export async function logoutGoogle(){};export async function getGoogleIdToken(){return null;}export async function getCloudDocument(){return null;}export async function getLegacyCloudDocument(){return null;}export async function saveCloudDocument(){return {revision:1};}export async function subscribeCloudDocument(){return ()=>{};}`;
-async function ledger(page){return page.evaluate(()=>new Promise((resolve,reject)=>{const r=indexedDB.open('DividendOSDB_V4');r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('stateFundingV1');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
+async function ledger(page,key='stateFundingV1'){return page.evaluate(async key=>{const {storageGet}=await import('/storage.js');return storageGet(key);},key);}
 async function manual(page,kind){
  await openRecordAction(page,'add-'+kind);
 }

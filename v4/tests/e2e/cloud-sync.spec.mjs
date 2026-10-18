@@ -10,7 +10,7 @@ export async function getCloudDocument(){return {state:structuredClone(window.__
 export async function getLegacyCloudDocument(){return null;}
 export async function saveCloudDocument(uid,state,options){if(options.expectedRevision!==window.__revision)throw {code:'cloud-conflict'};window.__remote=structuredClone(state);return {revision:++window.__revision};}
 export async function subscribeCloudDocument(){return ()=>{};}`;
-async function ledger(page){return page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4');r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('stateFundingV1');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
+async function ledger(page,key='stateFundingV1'){return page.evaluate(async key=>{const {storageGet}=await import('/storage.js');return storageGet(key);},key);}
 test('로그인과 클라우드 충돌은 분리되고 초기 배당 교체는 기기에 안전 저장된다',async({page},testInfo)=>{
  await page.route('**/modules/cloud-api.js',r=>r.fulfill({contentType:'application/javascript',body:api}));
  await page.route('**/data/dividend-announcements.json',r=>r.abort());

@@ -116,3 +116,29 @@ export function assertCloudRevision(expectedRevision: unknown,actualRevision: un
   if(expected!==actual)throw new CloudConflictError(expected,actual);
   return true;
 }
+
+// Immutable content segments let a revision reuse unchanged records. Publication
+// still uses one compare-and-swap head, so staged writes never become a ledger.
+export const CLOUD_DELTA_STORAGE_FORMAT='delta-v2';
+export interface DeltaManifest {storageFormat:'delta-v2';previousRevisionId?:string;revision:number;revisionId:string;batchId:string;stateHash:string;stateBytes:number;createdAt:string;counts:ReturnType<typeof stateCounts>;segments:Array<{id:string;key:string;index:number;contentId:string;bytes:number}>;}
+export async function prepareDeltaRevision(state:AppState,{expectedRevision=0,createdAt=new Date().toISOString(),batchId=crypto.randomUUID(),previous}:{expectedRevision?:number;createdAt?:string;batchId?:string;previous?:DeltaManifest}={}){
+ const text=canonicalStringify(state),stateBytes=utf8Bytes(text);if(stateBytes>32*1024*1024)throw new Error('클라우드 원장이 32MiB 안전 한도를 초과합니다.');
+ const root=JSON.parse(text) as Record<string,unknown>,arrays:Array<{path:string[];count:number}>=[],parts:StateSegment[]=[];
+ const walk=(item:Record<string,unknown>,path:string[])=>{for(const [key,value]of Object.entries(item)){const next=[...path,key];if(Array.isArray(value)){arrays.push({path:next,count:value.length});parts.push(...chunkRows(JSON.stringify(next),value));item[key]=null;}else if(isRecord(value))walk(value,next);}};walk(root,[]);
+ parts.unshift({id:'header',key:'header',index:0,value:{root,arrays}});
+ const all=[];for(const part of parts){const bytes=utf8Bytes(part);if(bytes>CLOUD_SEGMENT_LIMIT_BYTES)throw new Error('클라우드 단일 기록 안전 크기를 초과합니다.');all.push({...part,contentId:await sha256Hex(part),bytes});}
+ const reusable=new Set(previous?.storageFormat===CLOUD_DELTA_STORAGE_FORMAT&&previous.revision===expectedRevision?previous.segments.map(item=>item.contentId):[]);
+ const revision=expectedRevision+1,manifest:DeltaManifest={storageFormat:CLOUD_DELTA_STORAGE_FORMAT,...(previous?.revisionId?{previousRevisionId:previous.revisionId}:{}),revision,revisionId:`r${String(revision).padStart(8,'0')}-${batchId}`,batchId,stateHash:await sha256Hex(text),stateBytes,createdAt,counts:stateCounts(state),segments:all.map(({id,key,index,contentId,bytes})=>({id,key,index,contentId,bytes}))};
+ if(utf8Bytes(manifest)>CLOUD_SEGMENT_LIMIT_BYTES)throw new Error('클라우드 목차 안전 크기를 초과합니다.');
+ return{manifest,documents:all.filter(item=>!reusable.has(item.contentId))};
+}
+export async function assembleDeltaState(manifest:unknown,documents:unknown):Promise<AppState>{
+ if(!isRecord(manifest)||manifest.storageFormat!==CLOUD_DELTA_STORAGE_FORMAT||!Array.isArray(manifest.segments)||!manifest.segments.every(isRecord)||!Array.isArray(documents)||!documents.every(isRecord))throw new Error('클라우드 분할 형식 오류');
+ if(new Set(manifest.segments.map(item=>item.contentId)).size!==manifest.segments.length||new Set(manifest.segments.map(item=>item.id)).size!==manifest.segments.length)throw new Error('중복된 클라우드 조각 목차');
+ const byHash=new Map(documents.map(item=>[item.contentId,item])),parts:StateSegment[]=[];
+ for(const item of manifest.segments){if(typeof item.contentId!=='string'||!/^[a-f0-9]{64}$/.test(item.contentId))throw new Error('클라우드 조각 주소 오류');const data=byHash.get(item.contentId);if(!data)throw new Error('클라우드 조각 누락');const part={id:data.id,key:data.key,index:data.index,...(data.rows!==undefined?{rows:data.rows}:{value:data.value})};if(await sha256Hex(part)!==item.contentId||part.id!==item.id||part.key!==item.key||part.index!==item.index)throw new Error('클라우드 조각 무결성 오류');parts.push(part as StateSegment);}
+ const header=parts.filter(part=>part.key==='header');if(header.length!==1||!isRecord(header[0].value)||!isRecord(header[0].value.root)||!Array.isArray(header[0].value.arrays))throw new Error('클라우드 원장 목차 오류');
+ const state=structuredClone(header[0].value.root),used=new Set(['header']);
+ for(const spec of header[0].value.arrays){if(!isRecord(spec)||!Array.isArray(spec.path)||!spec.path.every((key:unknown)=>typeof key==='string')||!Number.isInteger(spec.count))throw new Error('클라우드 배열 목차 오류');const path=spec.path as string[],key=JSON.stringify(path),group=parts.filter(part=>part.key===key).sort((a,b)=>a.index-b.index);if(!group.length||group.some((part,index)=>part.index!==index))throw new Error('클라우드 조각 순서 오류');const rows=group.flatMap(part=>part.rows||[]);if(rows.length!==spec.count||used.has(key))throw new Error('클라우드 기록 개수 오류');used.add(key);let target=state;for(const token of path.slice(0,-1)){if(!isRecord(target[token]))throw new Error('클라우드 경로 오류');target=target[token];}target[path.at(-1)!]=rows;}
+ if(parts.some(part=>!used.has(part.key))||await sha256Hex(canonicalStringify(state))!==manifest.stateHash)throw new Error('클라우드 전체 데이터 무결성 오류');return state as unknown as AppState;
+}

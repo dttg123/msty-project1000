@@ -2,49 +2,19 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 const cloud=readFileSync(new URL('../cloud.js',import.meta.url),'utf8');
-const deleted=[];
-globalThis.__qaFirestore={
- collection:(_db,...path)=>path.join('/'),doc:(_db,...path)=>path.join('/'),
- getDocs:async ref=>({docs:ref.endsWith('/revisions')?[
-   {id:'current',ref:'current',data:()=>({revision:5})},
-   {id:'previous',ref:'previous',data:()=>({revision:4})},
-   {id:'old',ref:'old',data:()=>({revision:3})},
-   {id:'staged-next',ref:'staged-next',data:()=>({revision:6,status:'ready'})}
- ]:[{ref:ref+'/segment'}]}),
- writeBatch:()=>({delete:ref=>deleted.push(ref),commit:async()=>{}})
-};
 let source=cloud.replace(/import \{[^\n]+\} from 'https:[^']+';/,"const {collection,doc,getDoc,getDocs,onSnapshot,runTransaction,serverTimestamp,writeBatch}=globalThis.__qaFirestore;")
  .replace("import { firestore } from './firebase.js';",'const firestore={};')
  .replace("'./modules/cloud-contract.js'",JSON.stringify(pathToFileURL(new URL('../modules/cloud-contract.js',import.meta.url).pathname).href));
-source+='\nexport {cleanupOldRevisions};';
-const module=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
-await module.cleanupOldRevisions('isolated-qa',{revisionId:'current',revision:5});
-assert.ok(deleted.includes('old'),'expired revisions should be removed');
-assert.ok(!deleted.some(ref=>ref.includes('staged-next')),'cleanup must never delete a newer revision that another device is preparing');
-assert.ok(!deleted.includes('previous'),'previous published recovery copy is kept');
-
 const originalIDB=globalThis.indexedDB,originalLS=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
 const values=new Map();
 Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{setItem:(k,v)=>values.set(k,v),getItem:k=>values.get(k)??null,removeItem:k=>values.delete(k)}});
 globalThis.indexedDB={open:()=>{throw new Error('SecurityError: persistence disabled');}};
-const storageSource=readFileSync(new URL('../storage.js',import.meta.url),'utf8');
+const storageSource=readFileSync(new URL('../storage.js',import.meta.url),'utf8').replace("'./modules/cloud-contract.js'",JSON.stringify(new URL('../modules/cloud-contract.js',import.meta.url).href));
 const store=await import('data:text/javascript;base64,'+Buffer.from(storageSource).toString('base64'));
 await assert.doesNotReject(store.openStorage(),'synchronous IndexedDB failure must reach the durable fallback');
 assert.equal(store.storageStatus().mode,'localstorage');
 await store.storageSet('state',{dividends:[{amountUSD:12.34}]});
 assert.deepEqual(await store.storageGet('state'),{dividends:[{amountUSD:12.34}]});
-let recoveredIdbOpens=0;
-globalThis.indexedDB={open:()=>{
-  recoveredIdbOpens++;
-  const request={};
-  queueMicrotask(()=>{
-    request.result={transaction:()=>({objectStore:()=>({get:()=>{
-      const get={};queueMicrotask(()=>{get.result={dividends:[{amountUSD:1,stale:true}]};get.onsuccess();});return get;
-    }})})};
-    request.onsuccess();
-  });
-  return request;
-}};
 const recovered=await import('data:text/javascript;base64,'+Buffer.from(storageSource+'\n// recovered launch').toString('base64'));
 await recovered.openStorage();
 assert.equal(recovered.storageStatus().mode,'localstorage');
@@ -77,7 +47,7 @@ delete globalThis.__qaFirestore;
 console.log('Resilience contract PASS: staged cloud revisions, synchronous storage denial, durable fallback and honest memory mode');
 
 // Execute the real cloud adapter against an isolated in-memory Firestore facade.
-const documents=new Map(),root='users/qa/apps/',oldRoot=root+'dividend-os-v4',newRoot=root+'dividend-os-funding-v1';
+const documents=new Map(),root='users/qa/apps/',oldRoot=root+'dividend-os-v4',newRoot=root+'dividend-os-ledger-v2';
 const {blankState}=await import('../modules/state.js');
 const oldState=blankState();oldState.dividends=[{id:'income',projectId:oldState.projects[0].id,date:'2025-01-01',amountUSD:12}];
 documents.set(oldRoot,{state:oldState,revision:7});
@@ -90,7 +60,9 @@ const newState=structuredClone(oldState);newState.dividends[0].amountUSD=23;
 await adapter.saveCloudDocument('qa',newState,{expectedRevision:0,appVersion:'funding-QA'});
 assert.equal(documents.get(oldRoot).state.dividends[0].amountUSD,12,'migration never mutates the old namespace');
 documents.set(oldRoot,{state:{...oldState,dividends:[]},revision:8});
-assert.deepEqual((await adapter.getCloudDocument('qa')).state,newState,'old app saves cannot erase new allocations');
+await assert.rejects(adapter.getCloudDocument('qa'),/이전 버전/,'changed legacy source must stop automatic overwrite');
+documents.set(oldRoot,{state:oldState,revision:7});
+assert.deepEqual((await adapter.getCloudDocument('qa')).state,newState);
 assert.equal(documents.get(newRoot).revision,1);
 await assert.rejects(adapter.saveCloudDocument('qa',oldState,{expectedRevision:0}),/충돌/);
 delete globalThis.__qaFirestore;

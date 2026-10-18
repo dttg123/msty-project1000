@@ -7,7 +7,7 @@ async function receipt(page,amount='12.34'){
  await openPortfolioDetail(page,'records');
  await openRecordAction(page,'add-dividend');await page.locator('#dividendForm [name="date"]').fill('2026-01-02');await page.locator('#dividendForm [name="amountUSD"]').fill(amount);await page.locator('#dividendForm button[type="submit"].primary').click();
 }
-async function ledger(page){return page.evaluate(()=>new Promise(resolve=>{const r=indexedDB.open('DividendOSDB_V4');r.onsuccess=()=>{const db=r.result,q=db.transaction('kv').objectStore('kv').get('stateFundingV1');q.onsuccess=()=>{db.close();resolve(q.result);};};}));}
+async function ledger(page,key='stateFundingV1'){return page.evaluate(async key=>{const {storageGet}=await import('/storage.js');return storageGet(key);},key);}
 
 test('IndexedDB 즉시 거부에도 대체 저장이 작동하고 재시작 후 실제 배당을 유지한다',async({page},info)=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
