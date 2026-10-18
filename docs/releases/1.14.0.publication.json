@@ -62,7 +62,8 @@
     "releaseQa": {
       "status": "passed",
       "suites": 31,
-      "source": "local exact final source; candidate CI must repeat"
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39108059315",
+      "jobId": 117620601546
     },
     "focusedUi": {
       "status": "passed",
@@ -77,15 +78,23 @@
       "observed": "Editor 99 instead of net 8.5; individual receipt 99 and per-share 9.9 instead of 8.5/0.85"
     },
     "ui": {
-      "status": "required-before-merge"
+      "status": "passed",
+      "passed": 270,
+      "skipped": 12,
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39108059315",
+      "jobId": 117618315901
     },
     "androidBackup": {
-      "status": "required-before-merge",
-      "tests": 8
+      "status": "passed",
+      "tests": 8,
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39108059315",
+      "jobId": 117618169207
     },
     "permanentApkSigning": {
-      "status": "required-before-merge",
-      "certificateSha256": "395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF"
+      "status": "passed",
+      "certificateSha256": "395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF",
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39108059315",
+      "jobId": 117618169218
     },
     "optionalExtendedUi": {
       "status": "not-selected",
