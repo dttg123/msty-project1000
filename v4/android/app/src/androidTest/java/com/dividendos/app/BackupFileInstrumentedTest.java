@@ -131,7 +131,11 @@ public class BackupFileInstrumentedTest {
         ContentResolver resolver=context.getContentResolver();
         android.content.ContentValues values=new android.content.ContentValues();
         values.put(MediaStore.Downloads.DISPLAY_NAME,"DividendOS-picker-qa-"+System.nanoTime()+".zip");values.put(MediaStore.Downloads.MIME_TYPE,"application/zip");
+        // A real CREATE_DOCUMENT result already represents a materialized file.
+        // Protect our synthetic MediaStore row from boot-time mounted-volume scans.
+        values.put(MediaStore.Downloads.IS_PENDING,1);
         Uri destination=resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);assertNotNull(destination);
+        try(java.io.OutputStream empty=resolver.openOutputStream(destination,"wt")){assertNotNull(empty);}
         android.content.IntentFilter filter=new android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT);filter.addCategory(android.content.Intent.CATEGORY_OPENABLE);filter.addDataType("application/zip");
         android.app.Instrumentation.ActivityMonitor monitor=instrumentation.addMonitor(filter,new android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,new android.content.Intent().setData(destination)),true);
         byte[] expected=new byte[2*1024*1024];new Random(29).nextBytes(expected);
@@ -142,8 +146,31 @@ public class BackupFileInstrumentedTest {
             assertFalse("Large payload retained across Activity",call.getData().has("base64"));
             assertTrue("System picker was not invoked",monitor.getHits()>0);
             try(InputStream input=resolver.openInputStream(destination)){assertArrayEquals(expected,input.readAllBytes());}
+            android.content.ContentValues ready=new android.content.ContentValues();ready.put(MediaStore.Downloads.IS_PENDING,0);
+            assertEquals(1,resolver.update(destination,ready,null,null));
             assertFalse(new java.io.File(call.getString("backupPath","")).exists());
         } finally {instrumentation.removeMonitor(monitor);resolver.delete(destination,null,null);}
+    }
+    @Test public void pickerRejectsDeletedDestinationWithoutClaimingSuccess() throws Exception {
+        android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
+        ContentResolver resolver=instrumentation.getTargetContext().getContentResolver();
+        android.content.ContentValues values=new android.content.ContentValues();
+        values.put(MediaStore.Downloads.DISPLAY_NAME,"DividendOS-deleted-qa-"+System.nanoTime()+".zip");
+        values.put(MediaStore.Downloads.MIME_TYPE,"application/zip");values.put(MediaStore.Downloads.IS_PENDING,1);
+        Uri destination=resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);assertNotNull(destination);
+        assertEquals(1,resolver.delete(destination,null,null));
+        android.content.IntentFilter filter=new android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT);
+        filter.addCategory(android.content.Intent.CATEGORY_OPENABLE);filter.addDataType("application/zip");
+        android.app.Instrumentation.ActivityMonitor monitor=instrumentation.addMonitor(filter,new android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,new android.content.Intent().setData(destination)),true);
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            CapturedCall call=new CapturedCall(new JSObject().put("filename","DividendOS-deleted.zip").put("base64",Base64.encodeToString(new byte[1024],Base64.NO_WRAP)));
+            scenario.onActivity(activity->((BackupFilePlugin)activity.getBridge().getPlugin("BackupFile").getInstance()).save(call));
+            assertTrue("Deleted destination call timed out",call.done.await(30,TimeUnit.SECONDS));
+            assertNotNull("Missing destination must be rejected",call.error);assertNull(call.result);
+            assertTrue("Underlying error must survive diagnostics",call.error.contains("["));
+            for(int i=0;i<100&&new java.io.File(call.getString("backupPath","")).exists();i++)Thread.sleep(10);
+            assertFalse("Rejected picker leaves staged payload",new java.io.File(call.getString("backupPath","")).exists());
+        } finally {instrumentation.removeMonitor(monitor);}
     }
     @Test public void pickerCancellationRemovesStagedPayload() throws Exception {
         android.app.Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
