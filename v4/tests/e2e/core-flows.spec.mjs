@@ -31,7 +31,7 @@ test('거래 입력이 원장과 보유 수량에 즉시 반영된다',async({pa
   await page.locator('#tradeForm [name="shares"]').fill('1.2345');
   await page.locator('#tradeForm [name="price"]').fill('10.25');
   await page.locator('#tradeForm button[type="submit"].primary').click();
-  await expect(page.locator('.toast')).toContainText('거래를 저장했습니다');
+  await expect(page.locator('.toast')).toContainText('거래를 저장했어요');
   await expect(page.locator('.holding-row strong').first()).not.toHaveText(before||'');
   expect(errors).toEqual([]);
 });
@@ -47,7 +47,7 @@ test('배당 입력은 실제 입금액만 저장하고 예상값으로 부풀�
   await page.locator('#dividendForm [name="amountUSD"]').fill('12.34');
   await expect(page.locator('.dividend-preview')).toContainText('이번 실제 입금');
   await expect(page.locator('.dividend-preview')).toContainText('$12.34');
-  await expect(page.locator('.dividend-preview')).toContainText('실제 입금값만 저장');
+  await expect(page.locator('.dividend-preview')).toContainText('실제 받은 배당으로 저장해요');
   await page.locator('#dividendForm button[type="submit"].primary').click();
   await expect(page.locator('.toast')).toContainText('배당을 저장했습니다');
   await expect(page.locator('#page-projects')).toContainText('$12.34');
