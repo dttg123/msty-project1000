@@ -97,7 +97,7 @@ export function validateLedger(raw) {
             }
             if (key === 'cashAdjustments' && row.purpose === 'dividendUse' && (Number(row.amountUSD) >= 0 || !['isa', 'otherDividend', 'living', 'other'].includes(String(row.destination))))
                 errors.push('배당 사용액과 사용처를 확인해 주세요.');
-            if (key === 'dividends' && (row.currency === 'KRW' ? (!Number.isSafeInteger(row.amountKRW) || Number(row.amountKRW) <= 0 || Number(row.amountKRW) > 1e12 || Number(row.amountUSD) !== 0) : !valid('amountUSD', .00000001)))
+            if (key === 'dividends' && (row.currency === 'KRW' ? (!Number.isSafeInteger(row.amountKRW) || Number(row.amountKRW) <= 0 || Number(row.amountKRW) > 1e12 || Number(row.amountUSD) !== 0) : !valid('amountUSD', row.netAmountUSD !== undefined ? 0 : .00000001)))
                 errors.push('배당 금액이 올바르지 않습니다.');
             if (key === 'dividends' && row.currency !== undefined && !['USD', 'KRW'].includes(String(row.currency)))
                 errors.push('배당 통화를 확인해 주세요.');

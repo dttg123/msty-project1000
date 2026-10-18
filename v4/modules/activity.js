@@ -1,4 +1,5 @@
 import { isDate, n } from './utils.js';
+import { dividendCashBreakdown } from './finance.js';
 export function historicalIncome(rows, mode, year, today) {
     const posted = rows.filter((r) => isDate(r.date) && r.date <= today && n(r.amountUSD) > 0);
     if (mode === 'month' && year)
@@ -17,7 +18,7 @@ export function selectRecords(rows, filter = {}) {
     const query = String(filter.query || '').trim().toLocaleLowerCase();
     return rows.filter((row) => (!filter.month || row.date?.startsWith(filter.month)) &&
         (!filter.kind || row.kind === filter.kind) &&
-        (!query || [row.date, row.note, row.label, row.symbol, row.amountUSD, row.shares, row.price].join(' ').toLocaleLowerCase().includes(query)));
+        (!query || [row.date, row.note, row.label, row.symbol, row.kind === 'dividend' ? (dividendCashBreakdown(row).netKRW ?? dividendCashBreakdown(row).netUSD) : row.amountUSD, row.shares, row.price].join(' ').toLocaleLowerCase().includes(query)));
 }
 // Fixed day ranges avoid a six-row calendar being mislabeled as five weeks.
 export function monthWeeks(rows, month) {

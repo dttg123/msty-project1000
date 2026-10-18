@@ -30,7 +30,7 @@ export function settledBuyDebitUSD(trade:Pick<Trade,'shares'|'price'|'feeUSD'|'t
 
 const hasAmount=(value:unknown):boolean=>value!==undefined&&value!==null&&value!==''&&Number.isFinite(Number(value))&&Number(value)>=0;
 
-export function dividendCashBreakdown(record:DividendRecord):DividendCashBreakdown {
+export function dividendCashBreakdown(record:Partial<DividendRecord>):DividendCashBreakdown {
   const status:DividendStatus=record.status==='confirmed'||record.status==='estimated'?record.status:'actual';
   if(record.currency==='KRW')return {grossUSD:0,withholdingTaxUSD:0,feeUSD:0,netUSD:0,netKRW:finiteNonNegative(record.amountKRW),rocUSD:0,incomeUSD:0,status};
   const legacyNet=finiteNonNegative(record.amountUSD),tax=finiteNonNegative(record.withholdingTaxUSD??record.taxUSD),fee=finiteNonNegative(record.feeUSD);

@@ -1,5 +1,6 @@
 import { PROJECT_COLORS } from './constants.js';
 import { n } from './utils.js';
+import { dividendCashBreakdown } from './finance.js';
 export function createFormatters(getState) {
     function displayCurrency() {
         return getState().settings.displayCurrency === 'KRW' ? 'KRW' : 'USD';
@@ -7,7 +8,7 @@ export function createFormatters(getState) {
     function fmtDividend(row, digits = 2) {
         if (row.currency === 'KRW')
             return displayCurrency() === 'KRW' ? `${Math.round(n(row.amountKRW)).toLocaleString('ko-KR')}원` : `≈ ${fmtMoney(n(row.amountKRW) / Math.max(.000001, n(getState().settings.exchangeRate)), digits)}`;
-        return fmtMoney(row.amountUSD, digits);
+        return fmtMoney(dividendCashBreakdown(row).netUSD, digits);
     }
     function fmtMoney(usd, digits = 2) {
         const state = getState();

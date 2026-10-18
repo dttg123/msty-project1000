@@ -1,6 +1,6 @@
 import { dividendPlanStatus, projectRecovery } from './dividend-plan.js';
 import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
-import { reportingDividends, isPostedDividend } from './finance.js';
+import { reportingDividends, isPostedDividend, dividendCashBreakdown } from './finance.js';
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n, todayISO } from './utils.js';
 import { buildHomeMetrics, nextMilestone, dividendGoalStatus } from './home-metrics.js';
@@ -297,10 +297,10 @@ export function createViews(context) {
             cls = row.type === 'sell' ? 'positive' : '';
         }
         if (row.kind === 'dividend') {
-            const perShare = row.currency !== 'KRW' && n(row.sharesAtPayment) > 0 ? n(row.amountUSD) / n(row.sharesAtPayment) : 0;
+            const perShare = row.currency !== 'KRW' && n(row.sharesAtPayment) > 0 ? dividendCashBreakdown(row).netUSD / n(row.sharesAtPayment) : 0;
             title = '세후배당' + (row.rocPercent !== null && row.rocPercent !== undefined ? ` · ROC ${n(row.rocPercent)}% (${row.rocStatus === 'final' ? '확정' : '추정'})` : '');
             sub = `${fmtDate(row.date)}${perShare ? ` · 주당 ${fmtMoney(perShare, 4)}` : ''}${row.note ? ` · ${esc(row.note)}` : ''}`;
-            value = `+${fmtDividend ? fmtDividend(row) : fmtMoney(row.amountUSD)}`;
+            value = `+${fmtDividend ? fmtDividend(row) : fmtMoney(dividendCashBreakdown(row).netUSD)}`;
             cls = 'positive';
         }
         if (row.kind === 'split') {

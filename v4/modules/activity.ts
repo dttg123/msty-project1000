@@ -3,6 +3,7 @@ export interface ActivityRow {date:string;kind?:string;note?:string;label?:strin
 export interface RecordFilter {month?:string;kind?:string;query?:string;}
 export interface ForecastDividend extends DividendRecord {symbol:string;estimated?:boolean;}
 import { isDate, n } from './utils.js';
+import { dividendCashBreakdown } from './finance.js';
 
 export function historicalIncome(rows: DividendRecord[], mode: string, year: string, today: string) {
   const posted=rows.filter((r)=>isDate(r.date)&&r.date<=today&&n(r.amountUSD)>0);
@@ -17,7 +18,7 @@ export function selectRecords<T extends ActivityRow>(rows: T[], filter: RecordFi
   const query=String(filter.query||'').trim().toLocaleLowerCase();
   return rows.filter((row)=>(!filter.month||row.date?.startsWith(filter.month))&&
     (!filter.kind||row.kind===filter.kind)&&
-    (!query||[row.date,row.note,row.label,row.symbol,row.amountUSD,row.shares,row.price].join(' ').toLocaleLowerCase().includes(query)));
+    (!query||[row.date,row.note,row.label,row.symbol,row.kind==='dividend'?(dividendCashBreakdown(row).netKRW??dividendCashBreakdown(row).netUSD):row.amountUSD,row.shares,row.price].join(' ').toLocaleLowerCase().includes(query)));
 }
 
 // Fixed day ranges avoid a six-row calendar being mislabeled as five weeks.
