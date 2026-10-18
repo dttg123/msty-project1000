@@ -1,0 +1,9 @@
+# DividendOS 1.12
+
+All dividend summary cards, graphs and recent receipt projections now use the financial engine's canonical net amount. Legacy `amountUSD` fields no longer override an explicit `netAmountUSD` in totals. Saved receipts and original currencies are preserved. The recent-year card and detailed analytics use the same local-calendar interval.
+
+The original Android picker test created an unprotected MediaStore row without materializing a file. The failed run's logcat records a mounted-volume media scan deleting an entry between fixture creation and picker write; the fixture URI no longer existed at cleanup. This supports a test destination lifecycle race, rather than a failed write to a stable document. The fixture now materializes its file and keeps it pending until byte-for-byte verification completes. A deterministic deleted-destination test verifies rejection, no success result, preserved diagnostic cause and staging cleanup. Production native backup logic is unchanged. CI passed all eight Android 16 instrumentation tests on the 1.12 source.
+
+The fourteen opt-in UI cases are not fourteen missing core checks. Four mobile cases are selected for this release: eight- and nine-symbol cross-operation scenarios, 30-year monthly individual-entry/restore, and the offline standalone review copy. The ten desktop duplicate and unchanged long-duration funding/high-value repetition cases are excluded from this release; financial engine/storage 30–35-year contracts and ordinary mobile/desktop UI checks still apply. Selected cases must finish before merge; incomplete earlier local execution is not a pass.
+
+Artifact fingerprints and current automated evidence are recorded in docs/releases/1.12.0.publication.json. Physical Galaxy and actual Toss acceptance remain pending after update. No customer account or live cloud ledger is used by synthetic QA.

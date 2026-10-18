@@ -89,3 +89,21 @@ restores the prior behavior; no storage schema or saved receipts are migrated.
 - Google SRE monitoring: https://sre.google/workbook/monitoring/
 - Android core quality: https://developer.android.com/docs/quality-guidelines/core-app-quality
 - W3C WCAG 2.2: https://www.w3.org/TR/WCAG22/
+
+## Resolution and 1.12 release follow-up
+
+The earlier unresolved status above is retained as historical evidence. Full
+first-failure logcat was subsequently downloaded. At 00:42:18.151 the test
+created its MediaStore destination; at 00:42:18.410 the mounted-volume scanner
+deleted an item, and fixture cleanup later deleted zero items. The test had
+created only a public database row, without a real file or IS_PENDING protection.
+This supports deletion of the synthetic destination during Android boot scanning.
+The fixture now creates an actual file and protects it as pending until verified.
+A deterministic deleted-destination case verifies that a vanished URI is rejected
+without success and that staging is removed. Production native backup code was
+not altered. CI source 8244855 passed all eight instrumentation tests, as well as
+FAST, CORE, ordinary browser and Android build in run 39095302257.
+
+User authorized production deployment. Release 1.12 selects four supplemental
+mobile UI cases; ten duplicated or unchanged long-duration cases remain excluded.
+See RELEASE_1.12.md for scope and 1.12.0.publication.json for artifact binding.
