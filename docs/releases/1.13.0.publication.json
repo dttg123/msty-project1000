@@ -62,25 +62,42 @@
     "releaseQa": {
       "status": "passed",
       "suites": 31,
-      "source": "local prior to numeric keyboard restriction; candidate CI reruns all suites on the exact final artifacts"
+      "source": "exact final source locally and candidate CI",
+      "runId": 39105332612,
+      "jobId": 117612243450
     },
     "ui": {
-      "status": "required-before-merge",
-      "newCases": 10,
-      "source": "candidate CI: full mobile/desktop suite; local regression ongoing"
+      "status": "passed",
+      "passed": 248,
+      "optionalSkipped": 12,
+      "runId": 39105332612,
+      "jobId": 117610032877,
+      "focusedLocalPassed": 20,
+      "newCases": 10
     },
     "androidBackup": {
-      "status": "required-before-merge",
-      "tests": 8
+      "status": "passed",
+      "tests": 8,
+      "runId": 39105332612,
+      "jobId": 117609876679
     },
     "permanentApkSigning": {
-      "status": "required-before-merge",
-      "certificateSha256": "395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF"
+      "status": "passed",
+      "certificateSha256": "395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF",
+      "runId": 39105332612,
+      "jobId": 117609876729,
+      "artifactId": 12128126591
     },
     "optionalExtendedUi": {
       "status": "not-selected",
       "count": 12,
       "reason": "No finance, ledger, funding, persistence or native backup logic changes. Existing 30–35-year release engine/storage checks and ordinary multi-project UI regression remain required."
+    },
+    "candidate": {
+      "status": "passed",
+      "runId": 39105332612,
+      "commit": "0275cd49829443b70f9b38428277afdbe1bf9180",
+      "releaseVerificationJobId": 117612243450
     }
   },
   "postPublicationChecks": {
