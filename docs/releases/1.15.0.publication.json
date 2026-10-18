@@ -62,29 +62,57 @@
     "releaseQa": {
       "status": "passed",
       "suites": 31,
-      "source": "local final source; required candidate CI repeats"
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39134977585",
+      "jobId": 117700808283
     },
     "newBoundaryUi": {
       "status": "passed",
       "cases": 38,
-      "source": "32 exact receipt/cloud boundary cases plus 6 reporting/real CSV/ZIP cases; candidate CI repeats"
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39134977585"
     },
     "ui": {
-      "status": "required-before-merge"
+      "status": "passed",
+      "passed": 308,
+      "skipped": 12,
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39134977585",
+      "jobId": 117697805523
     },
     "androidBackup": {
-      "status": "required-before-merge",
-      "tests": 8
+      "status": "passed",
+      "tests": 8,
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39134977585",
+      "jobId": 117697637577
     },
     "permanentApkSigning": {
-      "status": "required-before-merge",
-      "certificateSha256": "395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF"
+      "status": "passed",
+      "certificateSha256": "395FA140653EED5E898E64A5317E503C597A95E7C2550085584DF4327B982BAF",
+      "source": "https://github.com/dttg123/msty-project1000/actions/runs/39134977585",
+      "jobId": 117697637573
     },
     "optionalExtendedUi": {
-      "status": "partially-selected",
+      "status": "completed-with-recorded-timeout",
       "selectedCases": 6,
-      "source": "local hard 8/9-stock and 30-year individual entry, mobile and desktop; in progress",
-      "remainingUnchangedCases": 6
+      "finalSelectedCasesPassed": 6,
+      "initialAttempt": {
+        "passed": 5,
+        "timedOut": 1,
+        "case": "desktop 30-year individual entry",
+        "limitMinutes": 15,
+        "recordsCompleted": 720,
+        "originalResultRetained": true
+      },
+      "standaloneRetry": {
+        "status": "passed",
+        "minutes": 8.1,
+        "sameTestAssertions": true,
+        "same15MinuteLimit": true,
+        "trace": "off",
+        "video": "off",
+        "reducedMotion": "reduce"
+      },
+      "source": "local exact runtime: 8/9-stock hard UI and 30-year individual entry in mobile/desktop; original timeout retained alongside standalone retry",
+      "remainingUnchangedCases": 6,
+      "remainingReason": "Unchanged optional high-value/switching repetitions were not selected. Mandatory 30\u201335-year engine/storage, mixed-currency reporting and new asynchronous boundary tests passed."
     }
   },
   "postPublicationChecks": {
