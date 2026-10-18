@@ -520,10 +520,19 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         modalDirty = false;
         modal.innerHTML = `<button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button><div class="modal-handle"></div>${html}`;
+        const heading = modal.querySelector('h3'), closeButton = modal.querySelector('.modal-close');
+        if (heading && closeButton) {
+            const toolbar = document.createElement('div');
+            toolbar.className = 'modal-toolbar';
+            modal.prepend(toolbar);
+            toolbar.append(heading, closeButton);
+        }
         modal.querySelectorAll('input,select,textarea').forEach((input, index) => { const label = input.closest('div')?.querySelector('label'); if (label) {
             input.id = 'modal-field-' + index;
             label.htmlFor = input.id;
         } });
+        modal.querySelectorAll('input[type="number"]').forEach(input => { if (!input.hasAttribute('inputmode') && input.min !== '' && Number(input.min) >= 0)
+            input.inputMode = 'decimal'; });
         backdrop.classList.add('show');
         modal.scrollTop = 0;
         feedbackPulse('open');
@@ -540,7 +549,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         if (modalDirty) {
             if (!document.querySelector('.modal-unsaved'))
-                document.getElementById('modal').insertAdjacentHTML('beforeend', '<div class="modal-unsaved" role="alert"><p>작성 중인 내용이 있습니다. 저장하지 않고 닫을까요?</p><button class="btn soft" data-keep-modal>계속 작성</button><button class="btn danger" data-discard-modal>닫기</button></div>');
+                document.getElementById('modal').insertAdjacentHTML('beforeend', '<div class="modal-unsaved" role="alert"><p>작성한 내용을 저장하지 않고 닫을까요?</p><button class="btn soft" data-keep-modal>계속 작성</button><button class="btn danger" data-discard-modal>저장 안 하고 닫기</button></div>');
             return;
         }
         closeModal();
@@ -612,8 +621,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     function openProjectForm(project = null) {
         const edit = !!project, returnPage = currentPage, defaultColor = edit ? n(project.colorIndex) : state.projects.length % PROJECT_COLORS.length;
         const frequencyValue = project?.distributionFrequencyMode === 'manual' ? (project.distributionFrequency || 'monthly') : 'auto';
-        openModal(`<h3 class="modal-title">${edit ? '종목 설정' : '종목 추가'}</h3><p class="modal-desc">기록 방식은 같고 종목 성격에 따라 핵심 분석만 달라집니다.</p><form id="projectForm" class="form-grid">
-      <div><label class="input-label">티커</label><input class="input" name="symbol" maxlength="12" required value="${esc(project?.symbol || '')}"></div>
+        openModal(`<h3 class="modal-title">${edit ? '종목 설정' : '종목 추가'}</h3><p class="modal-desc">종목 코드와 목표 수량을 입력해 주세요. 나머지는 나중에 바꿀 수 있어요.</p><form id="projectForm" class="form-grid">
+      <div><label class="input-label">종목 코드 (티커)</label><input class="input" name="symbol" maxlength="12" placeholder="예: MSTY, SCHD" autocapitalize="characters" spellcheck="false" required value="${esc(project?.symbol || '')}"></div>
       <div class="form-grid two"><div><label class="input-label">운용 성격 <small>분석 화면만 변경</small></label><select class="input select" name="category">${PROJECT_CATEGORIES.map(([key, label]) => `<option value="${key}" ${key === (project?.category || 'dividend') ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div><label class="input-label">목표 주수</label><input class="input" name="targetUnits" type="number" min="0.0001" step="0.0001" required value="${n(project?.targetUnits) || 500}"></div></div>
       <details class="form-advanced"><summary>추가 설정 <span>이름 · 월 계획 · 현재가 · 배당 주기</span></summary><div class="form-grid">
         <div><label class="input-label">종목명</label><input class="input" name="name" value="${esc(project?.name || '')}"></div>
@@ -623,7 +632,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         <div><label class="input-label">프로젝트 시작일</label><input class="input" name="projectStart" type="date" value="${project?.projectStart || todayISO()}"></div>
         <fieldset class="color-picker"><legend>그래프 식별 색상</legend>${PROJECT_COLORS.map((colors, index) => `<label><input type="radio" name="colorIndex" value="${index}" ${defaultColor === index ? 'checked' : ''}><span class="color-swatch" style="--swatch-a:${colors[0]};--swatch-b:${colors[1]}"></span><b>${PROJECT_COLOR_NAMES[index]}</b></label>`).join('')}</fieldset>
       </div></details>
-      <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">${edit ? '수정 저장' : '추가'}</button></div>
+      <div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">${edit ? '종목 수정 저장' : '종목 추가하기'}</button></div>
       ${edit && activeProjects().length > 1 ? '<button class="btn soft" type="button" id="archiveProject">프로젝트 보관</button>' : ''}
     </form>`);
         if (returnPage === 'goal')
@@ -665,14 +674,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             archive.onclick = () => confirmAction('프로젝트 보관', `${project.symbol}은 전체 합산에서 숨겨집니다. 기록은 삭제하지 않습니다.`, async () => { project.archived = true; selectedProjectId = activeProjects()[0]?.id || ''; await saveState(true); renderAll(); showPage('projects'); toast('프로젝트를 보관했습니다.'); }, '보관');
     }
     function openTradeForm(record = null) {
-        const project = projectById(record?.projectId || selectedProjectId), edit = !!record;
-        openModal(`<h3 class="modal-title">${project.symbol} ${edit ? '거래 수정' : '거래 입력'}</h3><p class="modal-desc">모든 원본 금액은 USD로 저장됩니다.</p><form id="tradeForm" class="form-grid">
+        const project = projectById(record?.projectId || selectedProjectId), edit = !!record, returnPage = currentPage;
+        openModal(`<h3 class="modal-title">${project.symbol} ${edit ? '거래 수정' : '거래 입력'}</h3><p class="modal-desc">거래내역에서 확인한 달러 금액을 입력해 주세요.</p><form id="tradeForm" class="form-grid">
       <div><label class="input-label">날짜</label><input class="input" name="date" type="date" required value="${record?.date || todayISO()}"></div>
       <div class="form-grid two"><div><label class="input-label">거래</label><select class="input select" name="type"><option value="buy" ${record?.type !== 'sell' ? 'selected' : ''}>매수</option><option value="sell" ${record?.type === 'sell' ? 'selected' : ''}>매도</option></select></div><div data-buy-only><label class="input-label">매수 구분</label><select class="input select" name="buyType"><option value="direct" ${record?.buyType === 'direct' ? 'selected' : ''}>직접매수</option><option value="reinvest" ${record?.buyType === 'reinvest' ? 'selected' : ''}>배당재투자</option><option value="mixed" ${record?.buyType === 'mixed' ? 'selected' : ''}>혼합매수</option><option value="opening" ${record?.buyType === 'opening' ? 'selected' : ''}>초기보유</option></select></div></div>
       <div class="form-grid two"><div><label class="input-label">주수</label><input class="input" name="shares" type="number" min="0.0001" step="0.0001" required value="${n(record?.shares) || 1}"></div><div><label class="input-label">단가 USD</label><input class="input" name="price" type="number" min="0" step="0.0001" required value="${record ? n(record.price) : n(project.currentPrice)}"></div></div>
       <div data-mixed-only><label class="input-label">혼합매수 배당 사용액 USD</label><input class="input" name="reinvestAmountUSD" type="number" min="0" step="0.01" value="${n(record?.reinvestAmountUSD)}"></div>
       <details><summary>추가 정보 (선택)</summary><div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note || '')}"></div></details>
-      <div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="trade:${record.id}">이 거래 기록 삭제</button>` : ''}</form>`);
+      <div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">거래 저장하기</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="trade:${record.id}">이 거래 기록 삭제</button>` : ''}</form>`);
         const tradeForm = document.querySelector('#tradeForm'), typeInput = formControl(tradeForm, 'type'), buyTypeInput = formControl(tradeForm, 'buyType');
         const syncTradeFields = () => { const selling = typeInput.value === 'sell'; tradeForm.querySelector('[data-buy-only]').hidden = selling; tradeForm.querySelector('[data-mixed-only]').hidden = selling || buyTypeInput.value !== 'mixed'; };
         typeInput.onchange = syncTradeFields;
@@ -714,13 +723,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             controls.forEach((el, i) => el.disabled = disabled[i]);
             modalSaving = false;
             return;
-        } modalSaving = false; closeModal(); renderAll(true); showPage('projects'); toast(edit ? '거래를 수정했습니다.' : '거래를 저장했습니다.'); };
+        } modalSaving = false; closeModal(); renderAll(true); showPage(returnPage); toast(edit ? '거래를 수정했어요.' : '거래를 저장했어요.'); };
     }
     function openPriceForm() {
         const project = projectById();
         if (!project)
             return;
-        openModal(`<h3 class="modal-title">${esc(project.symbol)} 현재가 수정</h3><p class="modal-desc">평가금액과 목표 매수금 계산에 사용할 현재가입니다.</p><form id="priceForm" class="form-grid"><div><label class="input-label">현재가 USD</label><input class="input" name="price" type="number" min="0.0001" step="0.0001" inputmode="decimal" required value="${n(project.currentPrice) || ''}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
+        openModal(`<h3 class="modal-title">${esc(project.symbol)} 현재가 수정</h3><p class="modal-desc">평가금액과 목표 매수금 계산에 사용할 현재가입니다.</p><form id="priceForm" class="form-grid"><div><label class="input-label">현재가 USD</label><input class="input" name="price" type="number" min="0.0001" step="0.0001" inputmode="decimal" required value="${n(project.currentPrice) || ''}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">현재가 저장하기</button></div></form>`);
         document.getElementById('priceForm').onsubmit = async (event) => { event.preventDefault(); const price = n(submittedFormData(event).get('price')); if (price <= 0)
             return; project.currentPrice = price; project.priceSource = 'manual'; project.priceUpdatedAt = new Date().toISOString(); await saveState(true); closeModal(); renderAll(true); toast('현재가를 저장했습니다.'); };
     }
@@ -802,7 +811,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function openDividendSchedule(projectId) {
         const project = projectById(projectId), announcement = project.dividendAnnouncement;
-        openModal(`<h3 class="modal-title">${esc(project.symbol)} 공시 일정 기록</h3><p class="modal-desc">운용사·기업 공시에서 확인한 날짜를 직접 기록합니다. 자동 검증된 일정이 아니며 배당 입금 장부와 분리됩니다.</p><form id="dividendScheduleForm" class="form-grid"><label>배당락일<input class="input" name="exDate" type="date" required value="${esc(announcement?.exDate || '')}"></label><label>공시 지급일<input class="input" name="payDate" type="date" required value="${esc(announcement?.payDate || '')}"></label><label>공시 주소<input class="input" name="sourceURL" type="url" required value="${esc(announcement?.sourceURL || '')}" placeholder="https://"></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
+        openModal(`<h3 class="modal-title">${esc(project.symbol)} 공시 일정 기록</h3><p class="modal-desc">운용사·기업 공시에서 확인한 날짜를 직접 기록합니다. 자동 검증된 일정이 아니며 배당 입금 장부와 분리됩니다.</p><form id="dividendScheduleForm" class="form-grid"><label>배당락일<input class="input" name="exDate" type="date" required value="${esc(announcement?.exDate || '')}"></label><label>공시 지급일<input class="input" name="payDate" type="date" required value="${esc(announcement?.payDate || '')}"></label><label>공시 주소<input class="input" name="sourceURL" type="url" required value="${esc(announcement?.sourceURL || '')}" placeholder="https://"></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">일정 저장하기</button></div></form>`);
         document.getElementById('dividendScheduleForm').onsubmit = async (event) => {
             event.preventDefault();
             if (modalSaving)
@@ -832,7 +841,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function openDividendForm(record = null, draft = null) {
         const project = projectById(record?.projectId || selectedProjectId), edit = !!record, calc = computeProject(project), returnPage = currentPage;
-        openModal(`<h3 class="modal-title">${project.symbol} ${edit ? '배당 수정' : '배당 입력'}</h3><p class="modal-desc">실제로 입금된 세후 배당금을 기록합니다.</p><form id="dividendForm" class="form-grid">
+        openModal(`<h3 class="modal-title">${project.symbol} ${edit ? '배당 수정' : '배당 입력'}</h3><p class="modal-desc">계좌에 실제로 들어온 세후 금액을 입력해 주세요.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date || draft?.date || todayISO()}"></div>
       <div><label class="input-label">입금 통화</label><select class="input select" name="currency"><option value="USD" ${record?.currency !== "KRW" ? "selected" : ""}>달러 실입금</option><option value="KRW" ${record?.currency === "KRW" ? "selected" : ""}>원화 확인액 (달러 미확인)</option></select></div><div><label class="input-label">세후 배당 금액</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${record?.currency === 'KRW' ? n(record.amountKRW) : n(record?.amountUSD)}"></div>
       <details class="dividend-extra"><summary>추가 정보 (선택)</summary><p class="tiny muted">배당을 받은 실제 주수를 확인한 경우에만 입력하세요. 입금일 보유 수량만으로 배당 권리를 추정하지 않습니다.</p><div class="form-grid">
@@ -840,15 +849,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         <div class="form-grid two"><div><label class="input-label">ROC 비율 %</label><input class="input" name="rocPercent" type="number" min="0" max="100" step="0.01" value="${record?.rocPercent ?? ''}"></div><div><label class="input-label">ROC 자료</label><select class="input" name="rocStatus"><option value="estimated" ${record?.rocStatus !== 'final' ? 'selected' : ''}>운용사 추정</option><option value="final" ${record?.rocStatus === 'final' ? 'selected' : ''}>확정 자료</option></select></div></div>
         <div><label class="input-label">메모</label><input class="input" name="note" value="${esc(record?.note || '')}"></div>
       </div></details>
-      <div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button>${!edit ? '<button class="btn soft" type="submit" name="next" value="1">저장 후 계속</button>' : ''}<button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="dividend:${record.id}">이 배당 기록 삭제</button>` : ''}</form>`);
+      <div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button>${!edit ? '<button class="btn soft" type="submit" name="next" value="1">저장 후 다음 입금</button>' : ''}<button class="btn primary" type="submit">배당 저장하기</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="dividend:${record.id}">이 배당 기록 삭제</button>` : ''}</form>`);
         const dividendForm = document.querySelector('#dividendForm'), preview = document.createElement('div');
         preview.className = 'dividend-preview';
         preview.setAttribute('aria-live', 'polite');
         dividendForm.querySelector('.modal-actions').before(preview);
         const updatePreview = () => { const form = new FormData(dividendForm), amount = n(form.get('amountUSD')), krw = form.get('currency') === 'KRW', shares = krw ? 0 : n(form.get('sharesAtPayment')); formControl(dividendForm, 'amountUSD').step = krw ? '1' : '0.01'; formControl(dividendForm, 'amountUSD').min = krw ? '1' : '0.01'; if (amount <= 0) {
-            preview.textContent = '실제 입금액을 입력하면 주당 실수령액을 확인할 수 있습니다.';
+            preview.textContent = '입금액을 입력해 주세요. 받은 주수도 입력하면 주당 금액을 볼 수 있어요.';
             return;
-        } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${krw ? Math.round(amount).toLocaleString('ko-KR') + '원' : fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">월·연 예상으로 늘리지 않고 실제 입금값만 저장합니다.</span>`; };
+        } preview.innerHTML = `<strong>이번 실제 입금</strong><br>${krw ? Math.round(amount).toLocaleString('ko-KR') + '원' : fmtMoney(amount, 2)}${shares > 0 ? ` · 주당 ${fmtMoney(amount / shares, 4)}` : ''}<br><span class="tiny muted">이 금액을 실제 받은 배당으로 저장해요.</span>`; };
         formControl(dividendForm, 'date').addEventListener('change', updatePreview);
         dividendForm.addEventListener('input', updatePreview);
         updatePreview();
@@ -921,7 +930,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function openCashForm(record = null) {
         const project = projectById(record?.projectId || selectedProjectId), edit = !!record;
-        openModal(`<h3 class="modal-title">${project.symbol} 잔액 ${edit ? '수정' : '보정'}</h3><p class="modal-desc">실제 사용 가능 배당과 앱 잔액이 다를 때만 더하거나 뺍니다.</p><form id="cashForm" class="form-grid"><div><label class="input-label">날짜</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div><label class="input-label">보정액 USD (+/−)</label><input class="input" name="amountUSD" type="number" step="0.01" value="${n(record?.amountUSD)}" required></div><div><label class="input-label">사유</label><input class="input" name="label" value="${esc(record?.label || '잔액 보정')}" required></div><div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${record.id}">이 보정 기록 삭제</button>` : ''}</form>`);
+        openModal(`<h3 class="modal-title">${project.symbol} 잔액 ${edit ? '수정' : '보정'}</h3><p class="modal-desc">실제 사용 가능 배당과 앱 잔액이 다를 때만 더하거나 뺍니다.</p><form id="cashForm" class="form-grid"><div><label class="input-label">날짜</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div><label class="input-label">보정액 USD (+/−)</label><input class="input" name="amountUSD" type="number" step="0.01" value="${n(record?.amountUSD)}" required></div><div><label class="input-label">사유</label><input class="input" name="label" value="${esc(record?.label || '잔액 보정')}" required></div><div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">보정액 저장하기</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${record.id}">이 보정 기록 삭제</button>` : ''}</form>`);
         document.getElementById('cashForm').onsubmit = async (event) => { event.preventDefault(); const ledgerBefore = computeProject(project); const form = submittedFormData(event), date = String(form.get('date')), amountUSD = n(form.get('amountUSD')); if (!isDate(date) || !amountUSD) {
             toast('날짜와 0이 아닌 보정액을 입력해 주세요.');
             return;
@@ -946,7 +955,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         const available = Math.max(0, (calc.spendableDividendBalance ?? 0) + (edit ? Math.abs(n(record.amountUSD)) : 0));
         const minimum = recovery.locked ? recovery.startDate : '';
-        openModal(`<h3 class="modal-title">${esc(project.symbol)} 배당 사용 ${edit ? '수정' : '기록'}</h3><p class="modal-desc">${esc(project.symbol)} 밖에서 실제로 사용한 배당금을 기록합니다. ISA는 환전 시 빠져나간 실제 달러 금액을 입력하고 원화 입금액은 메모에 남기세요. 받는 종목의 매수를 자동 생성하지 않습니다.</p><form id="withdrawalForm" class="form-grid"><div class="record-detail-grid"><div><span>사용 가능 배당</span><strong>${fmtMoney(available, 2)}</strong></div><div><span>남은 회수 원금</span><strong>${fmtMoney(projectRecovery(calc).remaining, 2)}</strong></div></div><div><label class="input-label">사용일</label><input class="input" name="date" type="date" min="${minimum}" max="${todayISO()}" value="${record?.date || todayISO()}" required></div><div><label class="input-label">사용처</label><select class="input" name="destination">${[['isa', 'ISA'], ['otherDividend', '다른 배당주'], ['living', '생활비'], ['other', '기타']].map(([value, label]) => `<option value="${value}" ${value === (record?.destination || 'isa') ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div><label class="input-label">실제 사용액 USD</label><input class="input" name="amountUSD" type="number" min="0.01" max="${Math.max(.01, round(available, 2))}" step="0.01" value="${edit ? Math.abs(n(record.amountUSD)) : ''}" required></div><div><label class="input-label">메모 · 원화 입금액 (선택)</label><input class="input" name="note" value="${esc(record?.note || '')}" placeholder="예: ISA에 40,000원 입금"></div><div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${esc(record.id)}">이 사용 기록 삭제</button>` : ''}</form>`);
+        openModal(`<h3 class="modal-title">${esc(project.symbol)} 배당 사용 ${edit ? '수정' : '기록'}</h3><p class="modal-desc">${esc(project.symbol)} 밖에서 실제로 사용한 배당금을 기록합니다. ISA는 환전 시 빠져나간 실제 달러 금액을 입력하고 원화 입금액은 메모에 남기세요. 받는 종목의 매수를 자동 생성하지 않습니다.</p><form id="withdrawalForm" class="form-grid"><div class="record-detail-grid"><div><span>사용 가능 배당</span><strong>${fmtMoney(available, 2)}</strong></div><div><span>남은 회수 원금</span><strong>${fmtMoney(projectRecovery(calc).remaining, 2)}</strong></div></div><div><label class="input-label">사용일</label><input class="input" name="date" type="date" min="${minimum}" max="${todayISO()}" value="${record?.date || todayISO()}" required></div><div><label class="input-label">사용처</label><select class="input" name="destination">${[['isa', 'ISA'], ['otherDividend', '다른 배당주'], ['living', '생활비'], ['other', '기타']].map(([value, label]) => `<option value="${value}" ${value === (record?.destination || 'isa') ? 'selected' : ''}>${label}</option>`).join('')}</select></div><div><label class="input-label">실제 사용액 USD</label><input class="input" name="amountUSD" type="number" min="0.01" max="${Math.max(.01, round(available, 2))}" step="0.01" value="${edit ? Math.abs(n(record.amountUSD)) : ''}" required></div><div><label class="input-label">메모 · 원화 입금액 (선택)</label><input class="input" name="note" value="${esc(record?.note || '')}" placeholder="예: ISA에 40,000원 입금"></div><div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime || '')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">사용 내역 저장하기</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="cash:${esc(record.id)}">이 사용 기록 삭제</button>` : ''}</form>`);
         document.getElementById('withdrawalForm').onsubmit = async (event) => {
             event.preventDefault();
             if (!computeProject(project).dividendBalanceConfirmed && !edit) {
@@ -1009,7 +1018,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }
     function openSplitForm(record = null) {
         const project = projectById(record?.projectId || selectedProjectId), edit = !!record;
-        openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균 매수가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from) || 2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to) || 1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">적용</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="split:${record.id}">이 분할 기록 삭제</button>` : ''}</form>`);
+        openModal(`<h3 class="modal-title">${project.symbol} 분할·역분할</h3><p class="modal-desc">예: 2주가 1주가 되면 2 → 1입니다. 보유·평균 매수가·목표가 함께 조정됩니다.</p><form id="splitForm" class="form-grid"><div><label class="input-label">기준일</label><input class="input" name="date" type="date" value="${record?.date || todayISO()}" required></div><div class="form-grid two"><div><label class="input-label">기존 주수</label><input class="input" name="from" type="number" min="0.0001" step="0.0001" value="${n(record?.from) || 2}" required></div><div><label class="input-label">변경 주수</label><input class="input" name="to" type="number" min="0.0001" step="0.0001" value="${n(record?.to) || 1}" required></div></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">분할 반영하기</button></div>${edit ? `<button class="record-delete-link" type="button" data-delete-from-edit="split:${record.id}">이 분할 기록 삭제</button>` : ''}</form>`);
         document.getElementById('splitForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), date = String(form.get('date')), from = n(form.get('from')), to = n(form.get('to')); if (!isDate(date) || from <= 0 || to <= 0) {
             toast('분할 날짜와 비율을 확인해 주세요.');
             return;
@@ -1065,7 +1074,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return;
         }
         const project = projectById(row.projectId), before = computeProject(project);
-        openModal(`<h3 class="modal-title">입출금 시각 확인</h3><p class="modal-desc">${fmtDate(row.date)} · 거래내역에 표시된 시각을 입력하세요. 원본 금액과 날짜는 유지합니다.</p><form id="cashTimeForm" class="form-grid"><label>거래내역 시각<input class="input" name="cashTime" type="time" step="1" value="${esc(row.cashTime || '')}" required></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">저장</button></div></form>`);
+        openModal(`<h3 class="modal-title">입출금 시각 확인</h3><p class="modal-desc">${fmtDate(row.date)} · 거래내역에 표시된 시각을 입력하세요. 원본 금액과 날짜는 유지합니다.</p><form id="cashTimeForm" class="form-grid"><label>거래내역 시각<input class="input" name="cashTime" type="time" step="1" value="${esc(row.cashTime || '')}" required></label><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button><button class="btn primary" type="submit">시각 저장하기</button></div></form>`);
         document.getElementById('cashTimeForm').onsubmit = async (event) => { event.preventDefault(); const form = submittedFormData(event), previous = row.cashTime; row.cashTime = String(form.get('cashTime')); if (hasNewDividendDeficit(before, computeProject(project))) {
             row.cashTime = previous;
             toast('이 시각을 반영하면 출금 당시 배당 잔액이 부족합니다. 다른 입출금 시각도 확인해 주세요.');
@@ -2041,12 +2050,42 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             toast(`${imported}건을 승인 저장했습니다.`);
         };
     }
+    // Home entry always asks for the destination when there is more than one symbol.
+    function openHomeEntry(kind, projectId = '') {
+        if (!['dividend', 'trade'].includes(kind))
+            return;
+        const projects = activeProjects();
+        if (!projects.length) {
+            openProjectForm();
+            return;
+        }
+        const project = projectId ? projects.find(row => row.id === projectId) : projects.length === 1 ? projects[0] : null;
+        if (project) {
+            selectedProjectId = project.id;
+            if (kind === 'dividend')
+                openDividendForm();
+            else
+                openTradeForm();
+            return;
+        }
+        if (projectId)
+            return;
+        openModal(`<h3 class="modal-title">${kind === 'dividend' ? '배당을 받은 종목' : '거래한 종목'}을 선택해 주세요</h3><p class="modal-desc">선택한 종목에 ${kind === 'dividend' ? '입금' : '거래'} 기록을 저장해요.</p><div class="entry-project-list">${projects.map(row => `<button type="button" class="entry-project-option" data-entry-project="${esc(row.id)}" data-entry-kind="${kind}"><span><strong>${esc(row.symbol)}</strong><small>${esc(row.name)}</small></span><span aria-hidden="true">›</span></button>`).join('')}</div>`);
+    }
     function handleClick(event) {
         if (!(event.target instanceof Element))
             return;
         const button = event.target.closest('button,[data-open-project],[data-goal-detail]');
         if (!button)
             return;
+        if (button.dataset.homeEntry) {
+            openHomeEntry(button.dataset.homeEntry);
+            return;
+        }
+        if (button.dataset.entryProject) {
+            openHomeEntry(button.dataset.entryKind || '', button.dataset.entryProject);
+            return;
+        }
         if ('homePortfolio' in button.dataset) {
             portfolioDetail = false;
             renderProjects();

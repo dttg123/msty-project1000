@@ -1,5 +1,5 @@
 import { isRecord } from './modules/utils.js';
-export const APP_VERSION = '1.12.0';
+export const APP_VERSION = '1.13.0';
 export const DATA_SCHEMA_VERSION = 4;
 import { dividendCashBreakdown } from './modules/finance.js';
 import { canonicalStringify, sha256Hex, stateCounts } from './modules/cloud-contract.js';
