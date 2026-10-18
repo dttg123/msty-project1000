@@ -31,7 +31,7 @@ public class BackupFileInstrumentedTest {
         volatile String error;
         CapturedCall(JSObject data) { super(null, "BackupFile", "native-qa", "download", data); }
         @Override public void resolve(JSObject value) { result = value; done.countDown(); }
-        @Override public void reject(String message, Exception cause) { error = message; done.countDown(); }
+        @Override public void reject(String message, Exception cause) { error = message + " [" + cause + "]"; done.countDown(); }
         @Override public void reject(String message) { error = message; done.countDown(); }
     }
     private Uri find(ContentResolver resolver, String filename) {
