@@ -240,6 +240,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         renderRateSettings();
         try {
             const value = await fetchReferenceExchangeRate();
+            // A late reference-rate response must not persist a form's uncommitted ledger.
+            await waitForStateIdle();
             if ((!manual || preserveMode) && state.settings.exchangeRateMode !== 'auto')
                 return;
             const before = clone(state.settings);
@@ -314,7 +316,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         autoBackupPromise = rotateAutoBackups(backupStorage, clone(state), { reason }).then(result => { autoBackupStatus = { count: result.entries.length, lastAt: result.entries[0]?.createdAt || '', error: '' }; return result; }).catch(error => { console.error(error); autoBackupStatus = { ...autoBackupStatus, error: '자동 백업 실패' }; return null; }).finally(() => { autoBackupPromise = null; });
         return autoBackupPromise;
     }
-    async function pushCloudState() {
+    async function pushCloudState({ fromLocalSave = false } = {}) {
+        if (!fromLocalSave)
+            await waitForStateIdle();
         if (demoMode || !currentUser || !cloudReady || applyingCloudState)
             return;
         if (cloudWritePending) {
@@ -339,6 +343,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             sent.meta.lastCloudSaveAt = now;
             const sentSignature = syncSignature(sent);
             const saved = await saveCloudDocument(uid, sent, { expectedRevision: cloudRevision, appVersion: APP_VERSION });
+            if (!fromLocalSave)
+                await waitForStateIdle();
             if (!isCurrent())
                 return;
             cloudRevision = saved.revision;
@@ -355,6 +361,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             cloudWritePending = false;
             console.error(error);
             if (isRecord(error) && error.code === 'cloud-conflict') {
+                if (!fromLocalSave)
+                    await waitForStateIdle();
                 const latest = await getCloudDocument(uid).catch(() => null);
                 if (!isCurrent())
                     return;
@@ -406,7 +414,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             if (cloudReady)
                 setCloudStatus('클라우드 저장 대기', 'cloud-busy');
             if (immediate)
-                await pushCloudState();
+                await pushCloudState({ fromLocalSave: true });
             else
                 cloudTimer = setTimeout(pushCloudState, 1400);
         } };
@@ -416,7 +424,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 feedbackPulse('success');
         }
         else
-            saveTimer = setTimeout(() => run().catch(console.error), 120);
+            saveTimer = setTimeout(() => { void (async () => { await waitForStateIdle(); await run(); })().catch(console.error); }, 120);
     }
     const views = createViews({
         getInteractionPreferences: () => interactionPreferences, getPortfolioDetail: () => portfolioDetail, getPortfolioDetailTab: () => portfolioDetailTab,
@@ -579,7 +587,11 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         Object.assign(target, saved);
     }
     let stateActionRunning = false;
-    async function runStateAction(action) {
+    async function waitForStateIdle() {
+        while (stateActionRunning || modalSaving)
+            await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    async function runStateAction(action, { rethrow = false } = {}) {
         if (stateActionRunning || modalSaving)
             return false;
         const before = clone(state), previousProjectId = selectedProjectId, previousGroup = portfolioGroup;
@@ -605,6 +617,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             portfolioGroup = previousGroup;
             console.error('State action was rolled back', error);
             toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.', { haptic: true });
+            if (rethrow)
+                throw error;
             return false;
         }
         finally {
@@ -1147,7 +1161,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             const badTrade = calc.trades.filter((x) => !isDate(x.date) || n(x.shares) <= 0 || n(x.price) < 0);
             if (badTrade.length)
                 issues.push(`${prefix}잘못된 거래 ${badTrade.length}건`);
-            const badDividend = calc.dividends.filter((x) => !isDate(x.date) || n(x.amountUSD) <= 0);
+            const badDividend = calc.dividends.filter((x) => { const cash = dividendCashBreakdown(x); return !isDate(x.date) || (cash.netKRW ?? cash.netUSD) <= 0 && !(x.currency !== 'KRW' && x.netAmountUSD === 0); });
             if (badDividend.length)
                 issues.push(`${prefix}잘못된 배당 ${badDividend.length}건`);
             const badSplit = projectRows('splits', project.id).filter((x) => !isDate(x.date) || n(x.from) <= 0 || n(x.to) <= 0);
@@ -1161,7 +1175,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 issues.push(`${prefix}중복 가능 거래 ${duplicates}건`);
             const dividendKeys = new Set();
             let duplicateDividends = 0;
-            calc.dividends.forEach((x) => { const key = [x.date, n(x.amountUSD).toFixed(2), n(x.sharesAtPayment).toFixed(4)].join('|'); if (dividendKeys.has(key))
+            calc.dividends.forEach((x) => { const cash = dividendCashBreakdown(x), key = [x.date, x.currency || 'USD', cash.netKRW ?? cash.netUSD, n(x.sharesAtPayment)].join('|'); if (dividendKeys.has(key))
                 duplicateDividends++; dividendKeys.add(key); });
             if (duplicateDividends)
                 issues.push(`${prefix}중복 가능 배당 ${duplicateDividends}건`);
@@ -1381,7 +1395,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         }
         confirmAction('최근 자동 백업 복원', `${entries[0].createdAt.slice(0, 16).replace('T', ' ')} 기록으로 되돌립니다. 현재 기록도 먼저 안전 복사합니다.`, async () => { await storageSet(SAFETY_KEY, clone(state)); state = restored; selectedProjectId = activeProjects()[0]?.id || ''; await saveState(true); renderAll(); showPage('home'); toast('최근 자동 백업을 복원했습니다.'); }, '복원');
     }
-    function exportCSV() { downloadFile(`DividendOS_CSV_${todayISO().replaceAll('-', '')}.zip`, buildCsvExportZip(state)); toast('종목·거래·배당·목표 CSV 4개를 저장했습니다.'); }
+    function exportCSV() { downloadFile(`DividendOS_CSV_${todayISO().replaceAll('-', '')}.zip`, buildCsvExportZip(state)); toast('종목·거래·배당·목표·잔액 보정 CSV 5개를 저장했습니다.'); }
     async function chooseInitialSync(cloudState, review = false) {
         const localHas = hasMeaningfulData(state), cloudHas = hasMeaningfulData(cloudState);
         if (!cloudHas || !cloudState)
@@ -1476,7 +1490,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             renderAll();
             showPage(currentPage);
             document.getElementById('authGate')?.classList.add('hidden');
-            const unsubscribe = await subscribeCloudDocument(user.uid, (data) => {
+            const unsubscribe = await subscribeCloudDocument(user.uid, async (data) => {
+                await waitForStateIdle();
                 if (generation !== cloudConnectGeneration || currentUser?.uid !== user.uid || !data?.state || applyingCloudState || cloudWritePending || n(data.revision) <= cloudRevision)
                     return;
                 let remote;
@@ -1799,7 +1814,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         if (tossSyncRunning)
             return;
         tossSyncRunning = true;
-        const beforeSync = clone(state.integrations.toss), attemptAt = new Date().toISOString();
+        const attemptAt = new Date().toISOString();
         state.integrations.toss.status = 'syncing';
         state.integrations.toss.lastAttemptAt = attemptAt;
         state.integrations.toss.lastError = '';
@@ -1807,11 +1822,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         showPage('settings');
         try {
             const snapshot = await loadSnapshot();
-            await applyTossSnapshot(snapshot, attemptAt);
+            await waitForStateIdle();
+            await runStateAction(() => applyTossSnapshot(snapshot, attemptAt), { rethrow: true });
         }
         catch (error) {
+            await waitForStateIdle();
             console.error(errorPrefix, error);
-            state.integrations.toss = { ...beforeSync, status: 'error', lastAttemptAt: attemptAt, lastError: errorMessage(error) || '토스 조회 파일을 처리하지 못했습니다.' };
+            state.integrations.toss = { ...state.integrations.toss, status: 'error', lastAttemptAt: attemptAt, lastError: errorMessage(error) || '토스 조회 파일을 처리하지 못했습니다.' };
             await saveState();
             renderSettings();
             showPage('settings');
@@ -2584,7 +2601,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
                 setTimeout(() => futureDate.setCustomValidity(''), 1200);
                 return;
             }
-            if (['projectForm', 'priceForm', 'cashForm', 'withdrawalForm', 'fundingForm', 'splitForm', 'recoveryForm', 'tossReviewForm'].includes(form.id) && form.onsubmit && event instanceof SubmitEvent) {
+            if (['projectForm', 'priceForm', 'cashForm', 'withdrawalForm', 'fundingForm', 'splitForm', 'recoveryForm', 'tossReviewForm', 'cashTimeForm'].includes(form.id) && form.onsubmit && event instanceof SubmitEvent) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 const handler = form.onsubmit;
