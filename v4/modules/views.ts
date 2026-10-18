@@ -3,7 +3,7 @@ import type { ProjectCalculation } from './portfolio.js';
 import type { AppState, DividendRecord, Project } from '../types/domain.js';
 
 import { selectRecords, monthWeeks, historicalIncome } from './activity.js';
-import { reportingDividends, isPostedDividend } from './finance.js';
+import { reportingDividends, isPostedDividend, dividendCashBreakdown } from './finance.js';
 import { APP_VERSION } from '../backup.js';
 import { clamp, esc, isDate, n, todayISO } from './utils.js';
 import { buildHomeMetrics, nextMilestone, dividendGoalStatus } from './home-metrics.js';
@@ -285,7 +285,7 @@ export function createViews(context: ViewContext) {
   function recordRow(row: ReturnType<typeof combinedRecords>[number]) {
     let title='',sub='',value='',cls='';const future=String(row.date)>todayISO();
     if(row.kind==='trade'){title=row.type==='buy'&&row.dividendFunding&&row.dividendFunding.sourceFingerprint===row.source?.sourceFingerprint?(row.dividendFunding.amountUSD>0?'매수 · 배당 사용 '+fmtMoney(row.dividendFunding.amountUSD,2):'매수 · 직접 투자'):row.type==='sell'?'매도':row.buyType==='reinvest'?'배당재투자':row.buyType==='mixed'?'혼합매수':row.buyType==='opening'?'초기보유':'직접매수';sub=`${fmtDate(row.date)} · ${fmtShares(row.shares)}주 · 단가 ${fmtMoney(row.price)}${row.source?.provider==='toss'?' · 토스 승인':''}`;value=`${row.type==='sell'?'+':'-'}${fmtMoney(n(row.shares)*n(row.price))}`;cls=row.type==='sell'?'positive':'';}
-    if(row.kind==='dividend'){const perShare=row.currency!=='KRW'&&n(row.sharesAtPayment)>0?n(row.amountUSD)/n(row.sharesAtPayment):0;title='세후배당'+(row.rocPercent!==null&&row.rocPercent!==undefined?` · ROC ${n(row.rocPercent)}% (${row.rocStatus==='final'?'확정':'추정'})`:'');sub=`${fmtDate(row.date)}${perShare?` · 주당 ${fmtMoney(perShare,4)}`:''}${row.note?` · ${esc(row.note)}`:''}`;value=`+${fmtDividend?fmtDividend(row):fmtMoney(row.amountUSD)}`;cls='positive';}
+    if(row.kind==='dividend'){const perShare=row.currency!=='KRW'&&n(row.sharesAtPayment)>0?dividendCashBreakdown(row).netUSD/n(row.sharesAtPayment):0;title='세후배당'+(row.rocPercent!==null&&row.rocPercent!==undefined?` · ROC ${n(row.rocPercent)}% (${row.rocStatus==='final'?'확정':'추정'})`:'');sub=`${fmtDate(row.date)}${perShare?` · 주당 ${fmtMoney(perShare,4)}`:''}${row.note?` · ${esc(row.note)}`:''}`;value=`+${fmtDividend?fmtDividend(row):fmtMoney(dividendCashBreakdown(row).netUSD)}`;cls='positive';}
     if(row.kind==='split'){title=row.type==='reverse'?'역분할':'주식분할';sub=`${fmtDate(row.date)} · ${row.from}:${row.to}`;value='비율 반영';}
     if(row.kind==='cash'){const withdrawal=row.purpose==='recoveryWithdrawal'||row.purpose==='dividendUse';title=withdrawal?esc(row.label||'배당금 인출'):esc(row.label||'배당 잔액 보정');sub=`${fmtDate(row.date)}${withdrawal?' · 원금회수 반영':''}`;value=withdrawal?`-${fmtMoney(Math.abs(n(row.amountUSD)))}`:fmtSignedMoney(row.amountUSD);cls=withdrawal?'':n(row.amountUSD)>=0?'positive':'negative';}
     if(future)sub+=`${sub?' · ':''}미래 기록 · 현재 계산 제외`;

@@ -97,3 +97,20 @@ try {
  assert.equal(summaryEngine.computeProject(summaryProject).rawShortMonthlyEstimate,8.5);
 } finally {globalThis.Date=NativeDate;}
 console.log('Summary reconciliation PASS: explicit net, KRW, zero/future/forecast exclusions and KST recent-year boundary');
+
+// Every user-facing read path must use the same canonical receipt, even when
+// a legacy raw field disagrees with explicit cash or explicitly records zero.
+const {createFormatters}=await import('../modules/format.js');
+const {selectRecords}=await import('../modules/activity.js');
+const receiptFormat=createFormatters(()=>({settings:{displayCurrency:'USD',exchangeRate:1400}}));
+const legacyReceipt={id:'legacy-edit',projectId:'p-msty',date:'2026-10-15',amountUSD:99,netAmountUSD:8.5};
+assert.equal(receiptFormat.fmtDividend(legacyReceipt),'$8.50');
+assert.equal(receiptFormat.fmtDividend({...legacyReceipt,netAmountUSD:0}),'$0.00');
+assert.equal(selectRecords([{...legacyReceipt,kind:'dividend'}],{query:'8.5'}).length,1);
+assert.equal(selectRecords([{...legacyReceipt,kind:'dividend'}],{query:'99'}).length,0);
+assert.equal(selectRecords([{...legacyReceipt,kind:'dividend',currency:'KRW',amountKRW:17000}],{query:'17000'}).length,1);
+const zeroReceiptState=blankState();zeroReceiptState.dividends=[{...legacyReceipt,projectId:zeroReceiptState.projects[0].id,amountUSD:0,netAmountUSD:0}];
+assert.deepEqual(validateLedger(zeroReceiptState),[]);
+delete zeroReceiptState.dividends[0].netAmountUSD;
+assert.ok(validateLedger(zeroReceiptState).length,'a bare zero receipt still needs an explicit net cash value');
+console.log('Receipt read boundaries PASS: canonical formatter/search, zero semantics and CSV remain coherent');

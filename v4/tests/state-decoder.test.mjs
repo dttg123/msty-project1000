@@ -37,10 +37,15 @@ assert.equal(createPortfolioEngine(()=>oldDecoded,()=>oldDecoded.projects[0].id)
 assert.deepEqual(oldDecoded.trades,historical.state.trades);assert.deepEqual(oldDecoded.dividends,historical.state.dividends);
 const transitional=structuredClone(historical.state);transitional.projects[0].afterGoalMode='continue';assert.equal(decodeAppState(transitional).projects[0].afterGoalMode,'reinvest');
 const unknownMode=structuredClone(historical.state);unknownMode.projects[0].afterGoalMode='invalid';assert.throws(()=>decodeAppState(unknownMode),/afterGoalMode/);
-// Prevent explicit any from returning to the runtime sources, including the entry point.
+// A literal HTML input step is not a TypeScript escape hatch. Keep rejecting
+// unquoted type keywords while permitting the exact quoted HTML step value.
+const explicitTypeSource=source=>source.replace(/(['"])any\1/g,"''");
+assert.match(explicitTypeSource('const value: any = 1;'),/\bany\b/);
+assert.match(explicitTypeSource('const value = input as any;'),/\bany\b/);
+assert.doesNotMatch(explicitTypeSource("const step = 'any';"),/\bany\b/);
 const root=resolve(import.meta.dirname,'..');
 for(const dir of [root,resolve(root,'modules'),resolve(root,'types')])for(const name of readdirSync(dir).filter(name=>name.endsWith('.ts'))){
-  const file=resolve(dir,name);assert.doesNotMatch(readFileSync(file,'utf8'),/\bany\b/,`${name} contains an any token`);
+  const file=resolve(dir,name);assert.doesNotMatch(explicitTypeSource(readFileSync(file,'utf8')),/\bany\b/,`${name} contains an explicit any type`);
 }
 console.log('Checked state decoding PASS: legacy numeric strings, zero/null, source identity, corrupted payload rejection, explicit-any gate');
 

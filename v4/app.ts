@@ -4,7 +4,7 @@ import {decodeAppState} from './modules/state-decoder.js';
 import type {User} from 'firebase/auth';
 import type {OfficialDistributionFeed} from './modules/finance.js';
 import {chooseCloudSync, syncSignature} from './modules/cloud-contract.js';
-import { OFFICIAL_DISTRIBUTIONS_URL, parseOfficialDistributionFeed, parseDividendReplacement, reportingDividends, isPostedDividend, fetchReferenceExchangeRate } from './modules/finance.js';
+import { OFFICIAL_DISTRIBUTIONS_URL, parseOfficialDistributionFeed, parseDividendReplacement, reportingDividends, isPostedDividend, dividendCashBreakdown, fetchReferenceExchangeRate } from './modules/finance.js';
 import type {RecordFilter} from './modules/activity.js';
 import type {TossSnapshotPayload} from './toss-client.js';
 import { monthActivity } from './modules/activity.js';
@@ -467,10 +467,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
 
   function openDividendForm(record: DividendRecord|null =null,draft: {date:string}|null =null) {
-    const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project),returnPage=currentPage;
+    const project=projectById(record?.projectId||selectedProjectId),edit=!!record,calc=computeProject(project),returnPage=currentPage,originalCash=record?dividendCashBreakdown(record):null;
     openModal(`<h3 class="modal-title">${project.symbol} ${edit?'배당 수정':'배당 입력'}</h3><p class="modal-desc">계좌에 실제로 들어온 세후 금액을 입력해 주세요.</p><form id="dividendForm" class="form-grid">
       <div><label class="input-label">지급일</label><input class="input" name="date" type="date" required value="${record?.date||draft?.date||todayISO()}"></div>
-      <div><label class="input-label">입금 통화</label><select class="input select" name="currency"><option value="USD" ${record?.currency!=="KRW"?"selected":""}>달러 실입금</option><option value="KRW" ${record?.currency==="KRW"?"selected":""}>원화 확인액 (달러 미확인)</option></select></div><div><label class="input-label">세후 배당 금액</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${record?.currency==='KRW'?n(record.amountKRW):n(record?.amountUSD)}"></div>
+      <div><label class="input-label">입금 통화</label><select class="input select" name="currency"><option value="USD" ${record?.currency!=="KRW"?"selected":""}>달러 실입금</option><option value="KRW" ${record?.currency==="KRW"?"selected":""}>원화 확인액 (달러 미확인)</option></select></div><div><label class="input-label">세후 배당 금액</label><input class="input" name="amountUSD" type="number" min="0.01" step="0.01" required value="${record?.currency==='KRW'?n(originalCash?.netKRW):n(originalCash?.netUSD)}"></div>
       <details class="dividend-extra"><summary>추가 정보 (선택)</summary><p class="tiny muted">배당을 받은 실제 주수를 확인한 경우에만 입력하세요. 입금일 보유 수량만으로 배당 권리를 추정하지 않습니다.</p><div class="form-grid">
         <div class="form-grid two"><div><label class="input-label">지급 기준 주수</label><input class="input" name="sharesAtPayment" type="number" min="0" step="0.0001" value="${record?n(record.sharesAtPayment):0}"></div><div><label class="input-label">기준 주가 USD</label><input class="input" name="referencePrice" type="number" min="0" step="0.0001" value="${record?n(record.referencePrice):n(project.currentPrice)}"></div></div>
         <div class="form-grid two"><div><label class="input-label">ROC 비율 %</label><input class="input" name="rocPercent" type="number" min="0" max="100" step="0.01" value="${record?.rocPercent??''}"></div><div><label class="input-label">ROC 자료</label><select class="input" name="rocStatus"><option value="estimated" ${record?.rocStatus!=='final'?'selected':''}>운용사 추정</option><option value="final" ${record?.rocStatus==='final'?'selected':''}>확정 자료</option></select></div></div>
@@ -478,19 +478,28 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       </div></details>
       <div><label class="input-label">입출금 시각 (선택 · 거래내역 기준)</label><input class="input" name="cashTime" type="time" step="1" value="${esc(record?.cashTime||'')}"></div><div class="modal-actions"><button class="btn soft" type="button" data-close-modal>취소</button>${!edit?'<button class="btn soft" type="submit" name="next" value="1">저장 후 다음 입금</button>':''}<button class="btn primary" type="submit">배당 저장하기</button></div>${edit?`<button class="record-delete-link" type="button" data-delete-from-edit="dividend:${record.id}">이 배당 기록 삭제</button>`:''}</form>`);
     const dividendForm=document.querySelector<HTMLFormElement>('#dividendForm')!,preview=document.createElement('div');preview.className='dividend-preview';preview.setAttribute('aria-live','polite');dividendForm.querySelector('.modal-actions')!.before(preview);
-    const updatePreview=()=>{const form=new FormData(dividendForm),amount=n(form.get('amountUSD')),krw=form.get('currency')==='KRW',shares=krw?0:n(form.get('sharesAtPayment'));(formControl(dividendForm,'amountUSD') as HTMLInputElement).step=krw?'1':'0.01';(formControl(dividendForm,'amountUSD') as HTMLInputElement).min=krw?'1':'0.01';if(amount<=0){preview.textContent='입금액을 입력해 주세요. 받은 주수도 입력하면 주당 금액을 볼 수 있어요.';return;}preview.innerHTML=`<strong>이번 실제 입금</strong><br>${krw?Math.round(amount).toLocaleString('ko-KR')+'원':fmtMoney(amount,2)}${shares>0?` · 주당 ${fmtMoney(amount/shares,4)}`:''}<br><span class="tiny muted">이 금액을 실제 받은 배당으로 저장해요.</span>`;};
+    const updatePreview=()=>{const form=new FormData(dividendForm),amount=n(form.get('amountUSD')),krw=form.get('currency')==='KRW',shares=krw?0:n(form.get('sharesAtPayment'));(formControl(dividendForm,'amountUSD') as HTMLInputElement).step=krw?'1':edit?'any':'0.01';(formControl(dividendForm,'amountUSD') as HTMLInputElement).min=krw?'1':edit?'0':'0.01';if(amount<=0&&!(edit&&!krw&&originalCash?.netUSD===0)){preview.textContent='입금액을 입력해 주세요. 받은 주수도 입력하면 주당 금액을 볼 수 있어요.';return;}preview.innerHTML=`<strong>이번 실제 입금</strong><br>${krw?Math.round(amount).toLocaleString('ko-KR')+'원':fmtMoney(amount,2)}${shares>0?` · 주당 ${fmtMoney(amount/shares,4)}`:''}<br><span class="tiny muted">이 금액을 실제 받은 배당으로 저장해요.</span>`;};
     formControl(dividendForm,'date').addEventListener('change',updatePreview);
     dividendForm.addEventListener('input',updatePreview);updatePreview();
     dividendForm.onsubmit=async (event: Event)=>{
       event.preventDefault();if(modalSaving)return;
       const form=new FormData(dividendForm),date=String(form.get('date')),entered=n(form.get('amountUSD')),krw=form.get('currency')==='KRW',amountUSD=krw?0:entered;
-      if(!isDate(date)||entered<=0||(krw&&!Number.isSafeInteger(entered))){toast('지급일과 배당금을 확인해 주세요.');return;}
+      if(!isDate(date)||entered<0||(entered===0&&(!edit||krw))||(krw&&!Number.isSafeInteger(entered))){toast('지급일과 배당금을 확인해 주세요.');return;}
       const ledgerBefore=computeProject(project);
       const keepEntering=!edit&&(event instanceof SubmitEvent?event.submitter:null)?.getAttribute('name')==='next',before=record?clone(record):null;
       const row: DividendRecord=record||{id:uid('d'),projectId:project.id,symbol:project.symbol,createdAt:new Date().toISOString(),date,amountUSD};
-      assignFields(row,{date,cashTime:String(form.get('cashTime')||'')||undefined,amountUSD,currency:krw?'KRW':'USD',amountKRW:krw?entered:undefined,rocPercent:form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus:form.get('rocStatus')==='final'?'final':'estimated',sharesAtPayment:krw?0:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});
-      if(krw){for(const key of ['grossAmountUSD','netAmountUSD','withholdingTaxUSD','taxUSD','feeUSD','rocAmountUSD'] as const)delete row[key];row.rocPercent=null;row.rocStatus='none';}
-      else if(row.netAmountUSD!==undefined||row.grossAmountUSD!==undefined){row.netAmountUSD=entered;row.grossAmountUSD=entered+n(row.withholdingTaxUSD??row.taxUSD)+n(row.feeUSD);}
+      const amountChanged=!edit||krw!==(record?.currency==='KRW')||entered!==(krw?originalCash?.netKRW:originalCash?.netUSD);
+      const rocPercent=form.get('rocPercent')===''?null:n(form.get('rocPercent')),rocStatus=form.get('rocStatus')==='final'?'final':'estimated';
+      const rocChanged=!edit||rocPercent!==(record?.rocPercent??null)||rocStatus!==(record?.rocStatus==='final'?'final':'estimated');
+      // Metadata-only edits preserve original financial fields, including explicit
+      // zero/net amounts, source gross/tax/fees, and absolute ROC information.
+      assignFields(row,{date,cashTime:String(form.get('cashTime')||'')||undefined,sharesAtPayment:krw?0:Math.max(0,n(form.get('sharesAtPayment'))),referencePrice:Math.max(0,n(form.get('referencePrice'))),note:String(form.get('note')).trim()});
+      if(amountChanged){
+        assignFields(row,{amountUSD,currency:krw?'KRW':'USD',amountKRW:krw?entered:undefined});
+        if(krw){for(const key of ['grossAmountUSD','netAmountUSD','withholdingTaxUSD','taxUSD','feeUSD','rocAmountUSD'] as const)delete row[key];row.rocPercent=null;row.rocStatus='none';}
+        else if(entered===0||row.netAmountUSD!==undefined||row.grossAmountUSD!==undefined){row.netAmountUSD=entered;row.grossAmountUSD=entered+n(originalCash?.withholdingTaxUSD)+n(originalCash?.feeUSD);}
+      }
+      if(!krw&&rocChanged){row.rocPercent=rocPercent;row.rocStatus=rocStatus;delete row.rocAmountUSD;}
       if(!edit)state.dividends.push(row);
       if(hasNewDividendDeficit(ledgerBefore,computeProject(project))){if(edit)restoreRecord(row,before);else state.dividends=state.dividends.filter(item=>item!==row);toast('이 배당을 변경하면 이미 사용한 배당 잔액이 부족합니다. 사용·재투자 기록을 먼저 확인해 주세요.');return;}
       const controls=[...document.getElementById('modal')!.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('input,select,button')],disabled=controls.map((el)=>el.disabled);
@@ -1178,9 +1187,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         void runStateAction(()=>handler.call(form,event) as void|Promise<void>);return;
       }
       if(form.dataset.submitting==='true'){event.preventDefault();event.stopImmediatePropagation();return;}
-      if(form.id==='tradeForm'&&form.onsubmit&&event instanceof SubmitEvent){
+      if(['tradeForm','dividendForm'].includes(form.id)&&form.onsubmit&&event instanceof SubmitEvent){
         event.preventDefault();event.stopImmediatePropagation();const handler=form.onsubmit;form.dataset.submitting='true';
-        void(async()=>{try{await handler.call(form,event);}catch(error){console.error('Trade submission failed',error);}finally{delete form.dataset.submitting;}})();return;
+        void(async()=>{try{await handler.call(form,event);}catch(error){console.error('Record submission failed',error);}finally{delete form.dataset.submitting;}})();return;
       }
       form.dataset.submitting='true';
       setTimeout(()=>{if(!form.isConnected)return;delete form.dataset.submitting;},800);
