@@ -112,7 +112,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 1년 받은 배당/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.14/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.15/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 배포 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);

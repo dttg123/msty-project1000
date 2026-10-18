@@ -162,6 +162,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     exchangeRateBusy=true;exchangeRateError='';lastExchangeRateAttempt=Date.now();renderRateSettings();
     try{
       const value=await fetchReferenceExchangeRate();
+      // A late reference-rate response must not persist a form's uncommitted ledger.
+      await waitForStateIdle();
       if((!manual||preserveMode)&&state.settings.exchangeRateMode!=='auto')return;
       const before=clone(state.settings);
       assignFields(state.settings,{exchangeRate:value.rate,exchangeRateMode:'auto',exchangeRateDate:value.date,exchangeRateUpdatedAt:new Date().toISOString(),exchangeRateSource:'Frankfurter'});
@@ -207,7 +209,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     return autoBackupPromise;
   }
 
-  async function pushCloudState(): Promise<void> {
+  async function pushCloudState({fromLocalSave=false}={}): Promise<void> {
+    if(!fromLocalSave)await waitForStateIdle();
     if(demoMode||!currentUser||!cloudReady||applyingCloudState)return;
     if(cloudWritePending){cloudPushQueued=true;return;}
     if(!navigator.onLine){setCloudStatus('오프라인 · 클라우드 저장 대기','cloud-busy');return;}
@@ -219,12 +222,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const now=new Date().toISOString();state.meta.lastCloudAttemptAt=now;cloudWritePending=true;
       const sent=clone(state);sent.meta.lastCloudSaveAt=now;const sentSignature=syncSignature(sent);
       const saved=await saveCloudDocument(uid,sent,{expectedRevision:cloudRevision,appVersion:APP_VERSION});
+      if(!fromLocalSave)await waitForStateIdle();
       if(!isCurrent())return;cloudRevision=saved.revision;
       cloudWritePending=false;state.meta.lastCloudSaveAt=now;await storageSet(STATE_KEY,state);cloudBaseSignature=sentSignature;await storageSet('cloudSyncFundingBase:'+uid,cloudBaseSignature); setCloudStatus('','cloud-ok');
     } catch (error: unknown) {
       if(!isCurrent())return;
       cloudWritePending=false;console.error(error);
       if(isRecord(error)&&error.code==='cloud-conflict'){
+        if(!fromLocalSave)await waitForStateIdle();
         const latest=await getCloudDocument(uid).catch(()=>null);if(!isCurrent())return;pendingCloudState=null;if(latest?.state){try{pendingCloudState=decodeAppState(latest.state);}catch(error){console.error('Cloud conflict payload rejected',error);}}cloudRevision=Math.max(cloudRevision,n(latest?.revision));cloudReady=false;await autoBackup('cloud-conflict');setCloudStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('다른 기기 변경을 발견해 덮어쓰지 않았습니다.',{haptic:true});renderAll();return;
       }
       setCloudStatus('클라우드 저장 실패','cloud-error');toast('기기에는 저장됐지만 클라우드 저장에 실패했습니다.',{haptic:true});
@@ -232,8 +237,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   }
   async function saveState(immediate =false): Promise<void> {
     state.meta.updatedAt=new Date().toISOString(); clearTimeout(saveTimer); clearTimeout(cloudTimer);
-    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.',{haptic:true});throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(cloudReady)setCloudStatus('클라우드 저장 대기','cloud-busy');if(immediate)await pushCloudState();else cloudTimer=setTimeout(pushCloudState,1400);}};
-    if(immediate){await run();if(storageStatus().durable)feedbackPulse('success');}else saveTimer=setTimeout(()=>run().catch(console.error),120);
+    const run=async()=>{state.meta.lastLocalSaveAt=new Date().toISOString();try{const issues=validateLedger(state);if(issues.length)throw new Error(issues.join(' '));await storageSet(STATE_KEY,state);await autoBackup('ledger-change');}catch (error: unknown){setSaveStatus('저장 실패 · 백업 필요','cloud-error');toast('기기 저장에 실패했습니다. 앱을 닫지 말고 백업해 주세요.',{haptic:true});throw error;}setSaveStatus(storageStatus().durable?'':'임시 저장 · 백업 필요',storageStatus().durable?'':'cloud-error');if(currentUser){if(cloudReady)setCloudStatus('클라우드 저장 대기','cloud-busy');if(immediate)await pushCloudState({fromLocalSave:true});else cloudTimer=setTimeout(pushCloudState,1400);}};
+    if(immediate){await run();if(storageStatus().durable)feedbackPulse('success');}else saveTimer=setTimeout(()=>{void(async()=>{await waitForStateIdle();await run();})().catch(console.error);},120);
   }
 
   const views = createViews({
@@ -333,7 +338,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     Object.assign(target,saved);
   }
   let stateActionRunning=false;
-  async function runStateAction(action: ()=>void|Promise<void>): Promise<boolean> {
+  async function waitForStateIdle():Promise<void>{
+    while(stateActionRunning||modalSaving)await new Promise<void>(resolve=>setTimeout(resolve,25));
+  }
+  async function runStateAction(action: ()=>void|Promise<void>,{rethrow=false}={}): Promise<boolean> {
     if(stateActionRunning||modalSaving)return false;
     const before=clone(state),previousProjectId=selectedProjectId,previousGroup=portfolioGroup;
     const references={projects:[...state.projects],trades:[...state.trades],dividends:[...state.dividends],splits:[...state.splits],cashAdjustments:[...state.cashAdjustments]};
@@ -349,7 +357,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       }
       state={...before,projects:restoreRows(before.projects,references.projects),trades:restoreRows(before.trades,references.trades),dividends:restoreRows(before.dividends,references.dividends),splits:restoreRows(before.splits,references.splits),cashAdjustments:restoreRows(before.cashAdjustments,references.cashAdjustments)};
       selectedProjectId=previousProjectId;portfolioGroup=previousGroup;
-      console.error('State action was rolled back',error);toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.',{haptic:true});return false;
+      console.error('State action was rolled back',error);toast('기기 저장에 실패했습니다. 변경사항은 반영하지 않았습니다. 다시 시도해 주세요.',{haptic:true});if(rethrow)throw error;return false;
     } finally {
       stateActionRunning=false;modalSaving=false;controls.forEach((control,index)=>control.disabled=disabled[index]);
     }
@@ -606,10 +614,10 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(!calc.priceAvailable&&calc.shares>0)issues.push(`${prefix}현재가 미입력으로 평가금액·총손익 계산 대기`);
       const futureCount=(['trades','dividends','splits','cashAdjustments'] as const).reduce((count,key)=>count+projectRows(key,project.id).filter((row)=>String(row.date)>todayISO()).length,0);if(futureCount)issues.push(`${prefix}현재 계산에서 제외된 미래 날짜 기록 ${futureCount}건`);
       const badTrade=calc.trades.filter((x)=>!isDate(x.date)||n(x.shares)<=0||n(x.price)<0);if(badTrade.length)issues.push(`${prefix}잘못된 거래 ${badTrade.length}건`);
-      const badDividend=calc.dividends.filter((x)=>!isDate(x.date)||n(x.amountUSD)<=0);if(badDividend.length)issues.push(`${prefix}잘못된 배당 ${badDividend.length}건`);
+      const badDividend=calc.dividends.filter((x)=>{const cash=dividendCashBreakdown(x);return !isDate(x.date)||(cash.netKRW??cash.netUSD)<=0&&!(x.currency!=='KRW'&&x.netAmountUSD===0);});if(badDividend.length)issues.push(`${prefix}잘못된 배당 ${badDividend.length}건`);
       const badSplit=projectRows('splits',project.id).filter((x)=>!isDate(x.date)||n(x.from)<=0||n(x.to)<=0);if(badSplit.length)issues.push(`${prefix}잘못된 분할 ${badSplit.length}건`);
       const tradeKeys=new Set<string>();let duplicates=0;calc.trades.forEach((x)=>{const key=[x.date,x.type,x.buyType,n(x.shares).toFixed(8),n(x.price).toFixed(8)].join('|');if(tradeKeys.has(key))duplicates++;tradeKeys.add(key);});if(duplicates)issues.push(`${prefix}중복 가능 거래 ${duplicates}건`);
-      const dividendKeys=new Set<string>();let duplicateDividends=0;calc.dividends.forEach((x)=>{const key=[x.date,n(x.amountUSD).toFixed(2),n(x.sharesAtPayment).toFixed(4)].join('|');if(dividendKeys.has(key))duplicateDividends++;dividendKeys.add(key);});if(duplicateDividends)issues.push(`${prefix}중복 가능 배당 ${duplicateDividends}건`);
+      const dividendKeys=new Set<string>();let duplicateDividends=0;calc.dividends.forEach((x)=>{const cash=dividendCashBreakdown(x),key=[x.date,x.currency||'USD',cash.netKRW??cash.netUSD,n(x.sharesAtPayment)].join('|');if(dividendKeys.has(key))duplicateDividends++;dividendKeys.add(key);});if(duplicateDividends)issues.push(`${prefix}중복 가능 배당 ${duplicateDividends}건`);
     }
     return issues;
   }
@@ -714,7 +722,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const backup=await readAutoBackup(backupStorage,entries[0].id);let restored:AppState;try{restored=decodeAppState(isRecord(backup)?backup.state:undefined);}catch{toast('자동 백업을 확인할 수 없습니다.');return;}
     confirmAction('최근 자동 백업 복원',`${entries[0].createdAt.slice(0,16).replace('T',' ')} 기록으로 되돌립니다. 현재 기록도 먼저 안전 복사합니다.`,async()=>{await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects()[0]?.id||'';await saveState(true);renderAll();showPage('home');toast('최근 자동 백업을 복원했습니다.');},'복원');
   }
-  function exportCSV(){downloadFile(`DividendOS_CSV_${todayISO().replaceAll('-','')}.zip`,buildCsvExportZip(state));toast('종목·거래·배당·목표 CSV 4개를 저장했습니다.');}
+  function exportCSV(){downloadFile(`DividendOS_CSV_${todayISO().replaceAll('-','')}.zip`,buildCsvExportZip(state));toast('종목·거래·배당·목표·잔액 보정 CSV 5개를 저장했습니다.');}
 
   async function chooseInitialSync(cloudState: AppState|null,review=false): Promise<string> {
     const localHas=hasMeaningfulData(state),cloudHas=hasMeaningfulData(cloudState);
@@ -750,7 +758,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(choice==='cloud'&&cloudState){await storageSet(SAFETY_KEY,clone(state));await storageSet(STATE_KEY,cloudState);state=cloudState;cloudBaseSignature=syncSignature(state);await storageSet('cloudSyncFundingBase:'+user.uid,cloudBaseSignature);cloudReady=true;setCloudStatus('','cloud-ok');if(usingLegacyCloud||usingSingleDocument)await pushCloudState();}else{cloudReady=true;await pushCloudState();}
       if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;
       selectedProjectId=activeProjects()[0]?.id||'';renderAll();showPage(currentPage);document.getElementById('authGate')?.classList.add('hidden');
-      const unsubscribe=await subscribeCloudDocument(user.uid,(data)=>{
+      const unsubscribe=await subscribeCloudDocument(user.uid,async(data)=>{
+        await waitForStateIdle();
         if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid||!data?.state||applyingCloudState||cloudWritePending||n(data.revision)<=cloudRevision)return;
         let remote:AppState;try{remote=decodeAppState(data.state);}catch(error){console.error(error);cloudReady=false;clearTimeout(cloudTimer);setCloudStatus('클라우드 기록 검증 실패','cloud-error');return;}pendingCloudState=remote;cloudRevision=n(data.revision);cloudReady=false;clearTimeout(cloudTimer);autoBackup('remote-conflict');setCloudStatus('다른 기기 변경 · 확인 필요','cloud-error');toast('기록을 자동 교체하지 않았습니다. 설정에서 클라우드 기록 확인을 눌러 주세요.');renderAll();
       },(error)=>{if(generation!==cloudConnectGeneration||currentUser?.uid!==user.uid)return;console.error(error);cloudReady=false;setCloudStatus('동기화 오류','cloud-error');});
@@ -923,13 +932,15 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   async function runTossImport(loadSnapshot: ()=>Promise<TossSnapshotPayload>,errorPrefix: string): Promise<void> {
     if(tossSyncRunning)return;
     tossSyncRunning=true;
-    const beforeSync=clone(state.integrations.toss),attemptAt=new Date().toISOString();
+    const attemptAt=new Date().toISOString();
     state.integrations.toss.status='syncing';state.integrations.toss.lastAttemptAt=attemptAt;state.integrations.toss.lastError='';renderSettings();showPage('settings');
     try{
       const snapshot=await loadSnapshot();
-      await applyTossSnapshot(snapshot,attemptAt);
+      await waitForStateIdle();
+      await runStateAction(()=>applyTossSnapshot(snapshot,attemptAt),{rethrow:true});
     }catch (error: unknown){
-      console.error(errorPrefix,error);state.integrations.toss={...beforeSync,status:'error',lastAttemptAt:attemptAt,lastError:errorMessage(error)||'토스 조회 파일을 처리하지 못했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
+      await waitForStateIdle();
+      console.error(errorPrefix,error);state.integrations.toss={...state.integrations.toss,status:'error',lastAttemptAt:attemptAt,lastError:errorMessage(error)||'토스 조회 파일을 처리하지 못했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
     }finally{tossSyncRunning=false;if(state.integrations.toss.status==='syncing')state.integrations.toss.status='not_connected';renderSettings();showPage('settings');}
   }
 
@@ -1182,7 +1193,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const form=event.target;if(!(form instanceof HTMLFormElement))return;
       const futureDate=form.id==='dividendScheduleForm'?null:[...form.querySelectorAll<HTMLInputElement>('input[type="date"]')].find((input)=>input.value&&input.value>todayISO());
       if(futureDate){event.preventDefault();event.stopImmediatePropagation();futureDate.setCustomValidity('미래 날짜는 실제 기록으로 저장할 수 없습니다.');futureDate.reportValidity();setTimeout(()=>futureDate.setCustomValidity(''),1200);return;}
-      if(['projectForm','priceForm','cashForm','withdrawalForm','fundingForm','splitForm','recoveryForm','tossReviewForm'].includes(form.id)&&form.onsubmit&&event instanceof SubmitEvent){
+      if(['projectForm','priceForm','cashForm','withdrawalForm','fundingForm','splitForm','recoveryForm','tossReviewForm','cashTimeForm'].includes(form.id)&&form.onsubmit&&event instanceof SubmitEvent){
         event.preventDefault();event.stopImmediatePropagation();const handler=form.onsubmit;
         void runStateAction(()=>handler.call(form,event) as void|Promise<void>);return;
       }
