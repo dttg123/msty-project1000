@@ -1,9 +1,9 @@
 {
   "format": "dividend-os-publication-v1",
   "policy": "automated-before-publication/manual-after-update",
-  "commit": "e024948bda2f60828a8bd87fdbad04057b2718e6",
+  "commit": "8d6387aa3fa9a3bfb95867d1694725dffb87cc2d",
   "appVersion": "1.15.0",
-  "preparedAt": "2026-10-18T14:11:09.635Z",
+  "preparedAt": "2026-10-18T14:12:44.762Z",
   "authorization": {
     "source": "user-request",
     "inAppUpdate": true
@@ -55,7 +55,7 @@
       "toss-client.js": "a299273cc0249f9c9b6151e04042114dd5bcab605c02785e9356cc42befa9623",
       "toss-native.js": "7a8110bdf9c0346fb9ae44c67fcac30b1193bb5d317b5d52e756155c1c643700"
     },
-    "nativeSourceSha256": "4144657c407d4c74c6d38ba66898e13980c126f486a469a6ca5676eaebcaeeba",
+    "nativeSourceSha256": "02fd1407696746f39dafef74c78cd45455ea6836c1b8b0693844714a1bd70eb4",
     "websiteEntrySha256": "ce158f9ee8909669179a0fa18aa1bb3484021843a1ec6ccaa54fde7fed93c4e0"
   },
   "automatedChecks": {
@@ -65,8 +65,9 @@
       "source": "local final source; required candidate CI repeats"
     },
     "newBoundaryUi": {
-      "status": "required-before-merge",
-      "cases": 38
+      "status": "passed",
+      "cases": 38,
+      "source": "32 exact receipt/cloud boundary cases plus 6 reporting/real CSV/ZIP cases; candidate CI repeats"
     },
     "ui": {
       "status": "required-before-merge"
