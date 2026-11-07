@@ -60,8 +60,10 @@ assert.doesNotMatch(elements.get('page-home').innerHTML,/이번 달 종목별 �
 assert.doesNotMatch(elements.get('page-home').innerHTML,/다음 배당/);
 assert.doesNotMatch(elements.get('page-home').innerHTML,/남은 예상|월말 예상/);
 assert.match(elements.get('page-home').innerHTML,/다음 목표/);
-assert.equal((elements.get('page-home').innerHTML.match(/<article class="card/g)||[]).length,5,'home includes stocks and recent income alongside the original income, chart and goal');
+assert.equal((elements.get('page-home').innerHTML.match(/<article class="card/g)||[]).length,4,'home keeps income, stocks, cashflow and goals without a duplicate receipt card');
 assert.doesNotMatch(elements.get('page-home').innerHTML,/[①②③④⑤⑥]/);
+assert.doesNotMatch(elements.get('page-home').innerHTML,/home-recent/);
+assert.match(elements.get('page-home').innerHTML,/data-income-month=/);
 homeMode='year';views.renderHome();
 assert.match(elements.get('page-home').innerHTML,/data-home-year-range="6"/);
 assert.match(elements.get('page-home').innerHTML,/data-home-year-range="10"/);
