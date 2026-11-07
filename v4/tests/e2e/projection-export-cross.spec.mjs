@@ -15,7 +15,7 @@ async function setup(page){
 }
 
 test('home amount and its month detail use the same posted, archived-history and currency rules',async({page})=>{
- const before=await setup(page);await expect(page.locator('.hero-amount')).toHaveText('$1,024.83');await page.locator('.home-recent [data-income-month]').click();await expect(page.locator('.month-actual-summary strong')).toHaveText('$1,024.83');await expect(page.locator('.month-actual-summary small')).toHaveText('4회 입금');await expect(page.locator('#modal')).toContainText('QAOLD');expect(financial(await read(page))).toEqual(financial(before));
+ const before=await setup(page);await expect(page.locator('.hero-amount')).toHaveText('$1,024.83');await page.locator('.month-overview [data-income-month]').click();await expect(page.locator('.month-actual-summary strong')).toHaveText('$1,024.83');await expect(page.locator('.month-actual-summary small')).toHaveText('4회 입금');await expect(page.locator('#modal')).toContainText('QAOLD');expect(financial(await read(page))).toEqual(financial(before));
 });
 
 for(const width of [360,800])test(`mixed receipt CSV and real ZIP restoration retain exact source amounts at ${width}px`,async({page},info)=>{
