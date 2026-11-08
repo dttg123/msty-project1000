@@ -1,4 +1,4 @@
-import { isDate, n } from './utils.js';
+import { isDate, n, todayISO } from './utils.js';
 import { dividendCashBreakdown } from './finance.js';
 const iso = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -61,4 +61,35 @@ export function dividendGoalStatus(settings, monthUSD, yearUSD) {
     const target = Math.max(0, n(settings.targetMonthlyDividend)), rate = Math.max(0, n(settings.exchangeRate));
     const annual = Math.round(Math.max(0, n(yearUSD)) * rate), limit = Math.max(1, n(settings.thresholdKRW)), early = Math.min(limit, Math.max(0, n(settings.warningKRW)));
     return { target, monthActual: Math.max(0, n(monthUSD)), monthPct: target > 0 ? Math.max(0, n(monthUSD)) / target * 100 : null, monthRemaining: Math.max(0, target - n(monthUSD)), annual, limit, early, annualRemaining: Math.max(0, limit - annual), alert: settings.dividendAlertEnabled === false ? 'off' : annual >= limit ? 'reached' : early > 0 && annual >= early ? 'early' : 'normal' };
+}
+export function estimateShareGoal(remaining, monthlyPlan, trades, splits, today = todayISO(), historyComplete = true) {
+    const [year, month] = today.split('-').map(Number);
+    const monthAt = (offset) => new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7);
+    const latest = monthAt(-1), oldest = monthAt(-3);
+    const posted = trades.filter(row => isDate(row.date) && row.date <= today && row.shares > 0);
+    const first = posted.reduce((date, row) => date && date < row.date ? date : row.date, '').slice(0, 7);
+    const splitRows = splits.filter(row => isDate(row.date) && row.date >= oldest && row.date <= today && row.from > 0 && row.to > 0)
+        .sort((a, b) => b.date.localeCompare(a.date));
+    const monthly = new Map();
+    let factor = 1, index = 0;
+    for (const row of posted.filter(row => row.date >= oldest).sort((a, b) => b.date.localeCompare(a.date))) {
+        while (index < splitRows.length && splitRows[index].date > row.date) {
+            const split = splitRows[index++];
+            factor *= split.to / split.from;
+        }
+        if (row.type === 'buy' && row.buyType === 'opening')
+            continue;
+        const key = row.date.slice(0, 7), shares = row.shares * factor * (row.type === 'sell' ? -1 : 1);
+        monthly.set(key, (monthly.get(key) || 0) + shares);
+    }
+    const recent = [oldest, monthAt(-2), latest].map(key => ({ key, shares: monthly.get(key) || 0 }));
+    const recentOne = recent.slice(-1);
+    const windows = historyComplete && first ? (first <= oldest ? [recent, recentOne] : first <= latest ? [recentOne] : []) : [];
+    const candidates = windows.map(months => ({ months, rate: months.reduce((sum, row) => sum + row.shares, 0) / months.length }));
+    // A flat or negative three-month pace falls back to the last completed month.
+    const automatic = candidates.find(({ rate }) => Number.isFinite(rate) && rate > 1e-8);
+    const rate = automatic?.rate ?? monthlyPlan;
+    const count = remaining > 0 && Number.isFinite(rate) && rate > 0 ? Math.max(1, Math.ceil(remaining / rate - 1e-9)) : 0;
+    const eta = count > 0 && count < (10000 - year) * 12 - month + 1 ? monthAt(count) : '';
+    return { eta, rate, months: automatic?.months ?? [], observedMonths: candidates[0]?.months ?? [], thisMonth: monthly.get(today.slice(0, 7)) || 0 };
 }

@@ -19,6 +19,7 @@ import {tradeCashBreakdown,settledBuyDebitUSD} from './modules/finance.js';
 import { createPortfolioEngine } from './modules/portfolio.js';
 import { createFormatters } from './modules/format.js';
 import { createViews } from './modules/views.js';
+import { dividendGoalStatus } from './modules/home-metrics.js';
 import { buildMigrationAudit } from './modules/migration.js';
 import { TOSS_EXCEPTION_FIELDS, tossExceptionKey, dismissTossExceptions, filterDismissedTossExceptions, accountScopeChanged, automaticTossDividendAdoptions, automaticTossImportPlan, buildTossSync, disconnectedTossState, mergeTossCandidates, mergeTossCorrectionCandidates, mergeTossDividendCandidates, mergeTossSourceLedger, nextTossSyncFrom, normalizeTossOrder, normalizeTossDividend, rebuildProjectFromTossSource, refreshTossCandidateConflicts, restoreTossExecutionTimes,scopeAutomaticTossImport, tossCandidateToTrade, tossCandidateToDividend, tossSyncProgress } from './modules/toss.js';
 import { fetchTossSnapshot, isTossBridgeConfigured, readTossSnapshotFile, removeLegacyTossBrowserCredentials } from './toss-client.js';
@@ -212,7 +213,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   async function autoBackup(reason ='automatic'){
     if(demoMode||!hasMeaningfulData())return;
     if(autoBackupPromise)return autoBackupPromise;
-    autoBackupPromise=rotateAutoBackups(backupStorage,clone(state),{reason}).then(result=>{autoBackupStatus={count:result.entries.length,lastAt:result.entries[0]?.createdAt||'',error:''};return result;}).catch(error=>{console.error(error);autoBackupStatus={...autoBackupStatus,error:'자동 백업 실패'};return null;}).finally(()=>{autoBackupPromise=null;});
+    autoBackupPromise=rotateAutoBackups(backupStorage,clone(state),{reason}).then(result=>{autoBackupStatus={count:result.entries.length,lastAt:result.entries[0]?.createdAt||'',error:''};recordBackupResult('auto',false);return result;}).catch(error=>{console.error(error);autoBackupStatus={...autoBackupStatus,error:'자동 백업 실패'};recordBackupResult('auto',true);return null;}).finally(()=>{autoBackupPromise=null;});
     return autoBackupPromise;
   }
 
@@ -281,6 +282,80 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     const confirm=document.getElementById('confirmLegacyMigration');if(confirm)confirm.onclick=()=>{void runStateAction(async()=>{await storageSet(SAFETY_KEY,clone(state));state=preview.candidate;selectedProjectId=state.projects[0]?.id||'';await saveState(true);closeModal();renderAll();showPage('settings');toast('V3.2.1 데이터를 V4에 복사했습니다.');});};
   }
   let renderedProjectId='';
+  type AppAlert={key:string;title:string;detail:string;destination:'annual'|'goal'|'toss'|'backup';projectId?:string};
+  const alertStorageKey=()=>`dividend-os-alerts:${demoMode?'demo':currentUser?.uid||'local'}:${state.meta.createdAt}`;
+  let alertStorageScope='',seenAlerts=new Set<string>(),backupFailures=new Set<string>();
+  function loadAlertStatus(): void {
+    const key=alertStorageKey();if(alertStorageScope===key)return;
+    alertStorageScope=key;seenAlerts=new Set();backupFailures=new Set();
+    try{
+      const saved:unknown=JSON.parse(localStorage.getItem(key)||'null');
+      if(!isRecord(saved))return;
+      if(Array.isArray(saved.seen))seenAlerts=new Set(saved.seen.filter((item):item is string=>typeof item==='string'));
+      if(Array.isArray(saved.backup))backupFailures=new Set(saved.backup.filter((item):item is string=>typeof item==='string'));
+    }catch{}
+  }
+  function persistAlertStatus(): void {
+    try{localStorage.setItem(alertStorageScope,JSON.stringify({seen:[...seenAlerts],backup:[...backupFailures]}));}catch{}
+  }
+  function recordBackupResult(kind:'auto'|'save'|'restore',failed:boolean): void {
+    loadAlertStatus();
+    if(failed===backupFailures.has(kind))return;
+    if(failed)backupFailures.add(kind);
+    else {backupFailures.delete(kind);seenAlerts.delete('backup:'+kind);}
+    persistAlertStatus();refreshAlertBell();
+  }
+  function currentAlerts(): AppAlert[] {
+    loadAlertStatus();
+    const alerts:AppAlert[]=[],settings=state.settings;
+    if(settings.dividendAlertEnabled!==false){
+      const today=todayISO(),year=today.slice(0,4);
+      const report=reportingDividends(state.dividends.filter(row=>row.date.startsWith(year)&&isPostedDividend(row,today)),n(settings.exchangeRate));
+      const amount=report.reduce((sum,row)=>sum+Math.max(0,dividendCashBreakdown(row).netUSD),0),annual=dividendGoalStatus(settings,0,amount);
+      if(annual.alert==='early'||annual.alert==='reached'){
+        const reached=annual.alert==='reached',won=(value:number)=>value.toLocaleString('ko-KR')+'원';
+        alerts.push({key:`annual:${todayISO().slice(0,4)}:${annual.alert}`,title:reached?'연간 배당 기준 도달':'연간 배당 기준에 가까워졌어요',detail:`올해 세후 ${won(annual.annual)} · 기준 ${won(annual.limit)} · 참고 환율 기준`,destination:'annual'});
+      }
+    }
+    for(const project of activeProjects()){
+      const since=settings.goalAlertProjects?.[project.id];
+      if(!since)continue;
+      const calc=computeProject(project);
+      for(const level of [25,50,75,100] as const){
+        const date=calc.milestoneDates[level];
+        if(date&&date>=since)alerts.push({key:`goal:${project.id}:${project.targetUnits}:${level}`,title:`${project.symbol} ${fmtShares(calc.currentTarget*level/100)}주 달성`,detail:fmtDate(date),destination:'goal',projectId:project.id});
+      }
+    }
+    const toss=state.integrations.toss,pending=toss.candidates.length+toss.dividendCandidates.length+toss.correctionCandidates.length+toss.dividendCorrectionCandidates.length;
+    const tossProblem=toss.status==='error'?'토스 조회에 실패했어요.':toss.status==='partial'?'일부 계좌 또는 시세 조회가 실패했어요.':toss.historyTruncated?'거래 조회 기간을 나눠 다시 확인해 주세요.':toss.comparisons.some(row=>{if(!row.supported)return false;const project=findProjectForToss(row);return project&&Math.abs(n(row.shares)-computeProject(project).shares)>1e-6;})?'장부와 토스의 보유 수량을 확인해 주세요.':'';
+    const tossKey='toss:issue';
+    if(tossProblem||pending){
+      if(settings.tossAlertEnabled)alerts.unshift({key:tossKey,title:'토스 확인 필요',detail:[tossProblem,pending?`확인 대기 ${pending}건`:''].filter(Boolean).join(' · '),destination:'toss'});
+    }else if(toss.status!=='syncing'&&seenAlerts.delete(tossKey))persistAlertStatus();
+    if(settings.backupAlertEnabled)for(const kind of backupFailures){
+      const title=kind==='auto'?'자동 백업 실패':kind==='save'?'백업 저장 실패':'백업 복원 실패';
+      alerts.unshift({key:'backup:'+kind,title,detail:'백업·복원에서 확인하고 다시 시도해 주세요.',destination:'backup'});
+    }
+    return alerts;
+  }
+  function refreshAlertBell(): void {
+    const dot=document.getElementById('notificationDot'),button=dot?.parentElement;
+    if(!dot||!button)return;
+    const count=currentAlerts().filter(alert=>!seenAlerts.has(alert.key)).length;
+    dot.hidden=count===0;button.setAttribute('aria-label',count?`알림함 열기 · 읽지 않은 알림 ${count}개`:'알림함 열기');
+  }
+  function openAlerts(): void {
+    const alerts=currentAlerts();
+    openModal(`<h3 class="modal-title">알림함</h3><div class="alert-inbox">
+      ${alerts.map(alert=>`<button type="button" class="list-row alert-inbox-row" data-alert-key="${esc(alert.key)}"><span><strong>${esc(alert.title)}</strong><small>${esc(alert.detail)}</small></span><span aria-hidden="true">${seenAlerts.has(alert.key)?'›':'●'}</span></button>`).join('')||'<p class="empty">확인할 알림이 없어요.</p>'}
+      <div class="action-row">${alerts.some(alert=>!seenAlerts.has(alert.key))?'<button class="btn soft" data-read-all-alerts>모두 읽음</button>':''}<button class="btn soft" data-alert-settings>알림 설정</button></div></div>`);
+  }
+  function showAlertSettings(section:string): void {
+    renderSettings();showPage('settings');
+    const details=document.querySelector<HTMLDetailsElement>(`#page-settings details[data-settings-key="${section}"]`);
+    if(details){details.open=true;details.scrollIntoView({block:'start'});details.querySelector('summary')?.focus({preventScroll:true});}
+  }
+
   function renderAll(displayOnly =false): void {
     const opened=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card[open]')].map(el=>el.dataset.goalProject),scrollY=window.scrollY;
     const projectDetails=renderedProjectId===selectedProjectId?[...document.querySelectorAll<HTMLDetailsElement>('#page-projects details[open]')].map(el=>el.className):[];
@@ -290,7 +365,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('krwBtn')?.classList.toggle('active',displayCurrency()==='KRW');
     document.getElementById('usdBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='USD'));
     document.getElementById('krwBtn')?.setAttribute('aria-pressed',String(displayCurrency()==='KRW'));
-    portfolio.withCalculationBatch(()=>{renderHome();renderProjects();renderGoals();if(!displayOnly)renderSettings();});
+    portfolio.withCalculationBatch(()=>{renderHome();renderProjects();renderGoals();if(!displayOnly)renderSettings();refreshAlertBell();});
     document.querySelectorAll<HTMLDetailsElement>('.goal-step-card').forEach(el=>{el.open=opened.includes(el.dataset.goalProject);});
     document.querySelectorAll<HTMLDetailsElement>('#page-projects details').forEach(el=>{el.open=projectDetails.includes(el.className);});
     document.querySelectorAll<HTMLDetailsElement>('#page-goal .dividend-use-details').forEach(el=>{el.open=goalDetails.includes(el.closest<HTMLElement>('[data-goal-project]')?.dataset.goalProject);});
@@ -301,6 +376,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.querySelectorAll('.page').forEach((el)=>el.classList.toggle('active',el.id===`page-${page}`));
     document.querySelectorAll<HTMLElement>('.nav-btn').forEach((el)=>{const active=el.dataset.page===page;el.classList.toggle('active',active);if(active)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
     if(changed){window.scrollTo({top:0,behavior:'instant'});animateInteraction(document.getElementById(`page-${page}`),'view-enter');}
+    if(changed&&page==='goal')renderGoals();
     if(page==='settings')ensureUiHistory();
     rememberView();
   }
@@ -655,7 +731,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const result=await saveNative({filename:preparedBackupFilename,base64:btoa(binary)});
       if(result?.cancelled)return true;
       if(result?.saved!==true)throw new Error('Android에서 파일 저장 완료를 확인하지 못했습니다.');
-      state.meta.lastBackupAt=new Date().toISOString();try{await saveState(true);}catch{closeModal();toast('ZIP 파일은 저장됐지만 앱의 저장 상태 갱신에 실패했습니다. 다운로드 폴더를 확인해 주세요.');return true;}closeModal();toast(chooseLocation?'선택한 위치에 ZIP 백업을 저장했습니다.':'다운로드 폴더에 ZIP 백업을 저장했습니다.');return true;
+      recordBackupResult('save',false);state.meta.lastBackupAt=new Date().toISOString();try{await saveState(true);}catch{closeModal();toast('ZIP 파일은 저장됐지만 앱의 저장 상태 갱신에 실패했습니다. 다운로드 폴더를 확인해 주세요.');return true;}closeModal();toast(chooseLocation?'선택한 위치에 ZIP 백업을 저장했습니다.':'다운로드 폴더에 ZIP 백업을 저장했습니다.');return true;
     }finally{nativeBackupRunning=false;controls.forEach(button=>button.disabled=false);}
   }
   async function downloadPreparedBackup(): Promise<void> {
@@ -664,7 +740,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(await nativeBackupFile())return;
       if(window?.Capacitor?.isNativePlatform?.()){toast('파일 저장을 지원하는 새 APK로 업데이트해 주세요. 앱은 삭제하지 마세요.');return;}
       downloadFile(preparedBackupFilename,preparedBackup,'application/zip');toast('브라우저에 백업 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
-    }catch (error: unknown){toast('백업 저장에 실패했습니다. 다시 시도해 주세요.');}
+    }catch (error: unknown){recordBackupResult('save',true);toast('백업 저장에 실패했습니다. 다시 시도해 주세요.');}
   }
   async function saveBackupToChosenLocation(): Promise<void> {
     if(!preparedBackup||!preparedBackupFilename){toast('백업을 다시 준비해 주세요.');return;}
@@ -674,7 +750,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       const picker=window.showSaveFilePicker;
       if(typeof picker==='function'){
         const handle=await picker({suggestedName:preparedBackupFilename,types:[{description:'DividendOS ZIP 백업',accept:{'application/zip':['.zip']}}]});
-        const writable=await handle.createWritable();await writable.write(preparedBackup);await writable.close();
+        const writable=await handle.createWritable();await writable.write(preparedBackup);await writable.close();recordBackupResult('save',false);
         closeModal();toast('선택한 위치에 ZIP 백업을 저장했습니다.');return;
       }
       const file=new File([preparedBackup],preparedBackupFilename,{type:'application/zip'}),nav=navigator;
@@ -684,7 +760,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       downloadFile(preparedBackupFilename,preparedBackup,'application/zip');toast('브라우저에 다운로드를 요청했습니다. 다운로드 목록을 확인해 주세요.');
     }catch (error: unknown){
       if(isRecord(error)&&error.name==='AbortError')return;
-      console.error(error);toast(errorMessage(error).includes('APK')?errorMessage(error):'위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
+      recordBackupResult('save',true);console.error(error);toast(errorMessage(error).includes('APK')?errorMessage(error):'위치 선택 저장에 실패했습니다. 아래 다운로드 저장을 사용해 주세요.');
     }
   }
   async function downloadBackup(): Promise<void> {
@@ -700,7 +776,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       preparedBackup=zip;preparedBackupFilename=filename;
       openModal(`<h3 class="modal-title">백업 준비 완료</h3><p class="modal-desc">종목 ${state.projects.length}개 · 거래 ${state.trades.length}건 · 배당 ${state.dividends.length}건<br>저장 위치를 선택하거나 다운로드 폴더에 저장하세요.</p><div class="form-grid"><button class="btn primary backup-download" data-backup-save>저장 위치 선택</button><button class="btn soft backup-download" data-backup-download>다운로드 폴더에 저장</button></div><p class="detail-note">저장을 취소하면 백업 파일을 만들지 않습니다. 저장 완료 후 파일을 확인해 주세요.</p>`);
       state.meta.lastBackupPreparedAt=new Date().toISOString();await saveState(true);
-    }catch (error: unknown){if(revision!==modalRevision)return;console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
+    }catch (error: unknown){if(revision!==modalRevision)return;recordBackupResult('save',true);console.error(error);openModal('<h3 class="modal-title">백업 준비 실패</h3><p class="modal-desc">기록은 그대로 유지됩니다. 연결 상태를 확인하고 다시 시도해 주세요.</p>');}
     finally{backupRunning=false;}
   }
   async function restoreFromFile(file: File): Promise<void> {
@@ -711,9 +787,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       if(issues.length)throw new Error(issues.join(' '));
       const engine=createPortfolioEngine(()=>restored,()=>restored.projects[0].id);
       if(engine.totals().rows.some((c)=>c.oversells.length))throw new Error('보유량을 초과하는 매도 기록이 있습니다.');
-      openModal(`<h3 class="modal-title">백업 복원 확인</h3><p class="modal-desc">종목 ${restored.projects.length}개 · 거래 ${restored.trades.length}건 · 배당 ${restored.dividends.length}건<br>현재 V4 기록을 교체합니다. 현재 기록은 기기에 안전 복사하며 기존 MSTY 원본은 건드리지 않습니다.</p><div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmRestore">확인 후 복원</button></div>`);
-      document.getElementById('confirmRestore')!.onclick=()=>{void runStateAction(async()=>{const previousProjectId=selectedProjectId;await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects().some((project)=>project.id===previousProjectId)?previousProjectId:(activeProjects()[0]?.id||'');await saveState(true);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');});};
-    }catch (error: unknown){toast(errorMessage(error)||'지원되는 DividendOS ZIP이 아닙니다.');}
+      const lastTrade=(value:AppState)=>value.trades.reduce((latest,row)=>row.date>latest?row.date:latest,'');
+      const comparison=`<table class="restore-comparison"><caption>복원 전 비교</caption><thead><tr><th scope="col">기록</th><th scope="col">현재</th><th scope="col">백업</th></tr></thead><tbody>${[
+        ['종목',state.projects.length,restored.projects.length],['거래',state.trades.length,restored.trades.length],
+        ['배당',state.dividends.length,restored.dividends.length],['마지막 거래일',lastTrade(state)||'기록 없음',lastTrade(restored)||'기록 없음']
+      ].map(([label,before,after])=>`<tr><th scope="row">${label}</th><td>${esc(before)}</td><td>${esc(after)}</td></tr>`).join('')}</tbody></table>`;
+      openModal(`<h3 class="modal-title">백업 복원 확인</h3><p class="modal-desc">종목 ${restored.projects.length}개 · 거래 ${restored.trades.length}건 · 배당 ${restored.dividends.length}건<br>현재 V4 기록을 교체하며, 현재 기록은 기기에 안전 복사합니다.</p>${comparison}<div class="modal-actions"><button class="btn soft" data-close-modal>취소</button><button class="btn primary" id="confirmRestore">확인 후 복원</button></div>`);
+      document.getElementById('confirmRestore')!.onclick=()=>{void runStateAction(async()=>{const previousProjectId=selectedProjectId;await storageSet(SAFETY_KEY,clone(state));state=restored;selectedProjectId=activeProjects().some((project)=>project.id===previousProjectId)?previousProjectId:(activeProjects()[0]?.id||'');try{await saveState(true);}catch(error){recordBackupResult('restore',true);throw error;}recordBackupResult('restore',false);closeModal();renderAll();showPage('home');toast('대조를 통과한 백업을 복원했습니다.');});};
+    }catch (error: unknown){recordBackupResult('restore',true);toast(errorMessage(error)||'지원되는 DividendOS ZIP이 아닙니다.');}
   }
   async function restoreSafetyCopy(): Promise<void> {
     const previous=await storageGet(SAFETY_KEY);
@@ -929,6 +1010,19 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     let adoptedDividends=0,automatic: Awaited<ReturnType<typeof tryAutomaticTossImport>>;
     try{
       adoptedDividends=adoptMatchingTossDividends();automatic=await tryAutomaticTossImport();
+      const oldTrades=new Set(beforeAutomaticChanges.trades.map(row=>row.id)),oldDividends=new Map(beforeAutomaticChanges.dividends.map(row=>[row.id,row.source?.provider]));
+      const changes=new Map<string,{projectId:string;buys:number;sells:number;dividends:number;linkedDividends:number}>();
+      function counts(projectId:string){
+        let row=changes.get(projectId);
+        if(!row){row={projectId,buys:0,sells:0,dividends:0,linkedDividends:0};changes.set(projectId,row);}
+        return row;
+      }
+      for(const row of state.trades)if(!oldTrades.has(row.id))counts(row.projectId)[row.type==='buy'?'buys':'sells']++;
+      for(const row of state.dividends){
+        if(!oldDividends.has(row.id))counts(row.projectId).dividends++;
+        else if(row.source?.provider==='toss'&&oldDividends.get(row.id)!=='toss')counts(row.projectId).linkedDividends++;
+      }
+      state.integrations.toss.lastImportSummary={at:result.fetchedAt,projects:[...changes.values()]};
       if(adoptedDividends||automatic.imported)await storageSet(SAFETY_KEY,beforeAutomaticChanges);
       await saveState(true);
     }catch(error: unknown){state=beforeAutomaticChanges;renderAll();throw error;}
@@ -948,7 +1042,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     }catch (error: unknown){
       await waitForStateIdle();
       console.error(errorPrefix,error);state.integrations.toss={...state.integrations.toss,status:'error',lastAttemptAt:attemptAt,lastError:errorMessage(error)||'토스 조회 파일을 처리하지 못했습니다.'};await saveState();renderSettings();showPage('settings');toast(state.integrations.toss.lastError);
-    }finally{tossSyncRunning=false;if(state.integrations.toss.status==='syncing')state.integrations.toss.status='not_connected';renderSettings();showPage('settings');}
+    }finally{tossSyncRunning=false;if(state.integrations.toss.status==='syncing')state.integrations.toss.status='not_connected';renderSettings();refreshAlertBell();showPage('settings');}
   }
 
   async function syncTossReadOnly(): Promise<void> {
@@ -1080,6 +1174,20 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
   function handleClick(event: Event): void {
     if(!(event.target instanceof Element))return;
     const button=event.target.closest<HTMLElement>('button,[data-open-project],[data-goal-detail]');if(!button)return;
+    if('openAlerts'in button.dataset){openAlerts();return;}
+    if('readAllAlerts'in button.dataset){currentAlerts().forEach(alert=>seenAlerts.add(alert.key));persistAlertStatus();refreshAlertBell();openAlerts();return;}
+    if('alertSettings'in button.dataset){closeModal();showAlertSettings('alerts');return;}
+    if(button.dataset.alertKey){
+      const alert=currentAlerts().find(item=>item.key===button.dataset.alertKey);
+      if(!alert){openAlerts();return;}
+      seenAlerts.add(alert.key);persistAlertStatus();refreshAlertBell();closeModal();
+      if(alert.destination==='goal'){
+        showPage('goal');
+        const card=[...document.querySelectorAll<HTMLDetailsElement>('.goal-step-card')].find(el=>el.dataset.goalProject===alert.projectId);
+        if(card){card.open=true;card.scrollIntoView({block:'nearest'});card.querySelector('summary')?.focus({preventScroll:true});}
+      }else showAlertSettings(alert.destination==='annual'?'alerts':alert.destination);
+      return;
+    }
     if(button.dataset.homeEntry){openHomeEntry(button.dataset.homeEntry);return;}
     if(button.dataset.entryProject){openHomeEntry(button.dataset.entryKind||'',button.dataset.entryProject);return;}
     if('homePortfolio'in button.dataset){portfolioDetail=false;renderProjects();showPage('projects');return;}
@@ -1195,6 +1303,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('page-settings')!.addEventListener('toggle',()=>{if(currentPage==='settings')ensureUiHistory();},true);
 
     window.addEventListener('online',()=>{refreshExchangeRate();refreshOfficialDistributions();});
+    window.addEventListener('storage',event=>{if(event.key===alertStorageScope){alertStorageScope='';refreshAlertBell();}});
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshExchangeRate();});
     document.addEventListener('submit',(event: Event)=>{
       const form=event.target;if(!(form instanceof HTMLFormElement))return;
@@ -1218,6 +1327,8 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
       handleClick(event);rememberView();
     });
     window.addEventListener('pagehide',rememberView);
+    window.addEventListener('storage',event=>{if(event.key===alertStorageScope){alertStorageScope='';refreshAlertBell();}});
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(currentPage==='goal')renderGoals();refreshAlertBell();}});
     document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;if(event.target.id!=='historyFilterForm')return;event.preventDefault();const form=submittedFormData(event);historyFilter={month:String(form.get('month')||''),kind:String(form.get('kind')||''),query:String(form.get('query')||'')};historyLimit=10;renderProjects();});
     document.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement||event.target instanceof HTMLSelectElement))return;if(event.target instanceof HTMLInputElement&&event.target.dataset.feedbackSetting){
       const key=event.target.dataset.feedbackSetting;if(key!=='haptics'&&key!=='motion')return;
@@ -1240,7 +1351,14 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
     document.getElementById('dividendReplacementInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)previewDividendReplacement(file);event.target.value='';});
     document.getElementById('restoreInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)restoreFromFile(file);event.target.value='';});
     document.getElementById('tossImportInput')!.addEventListener('change',(event: Event)=>{if(!(event.target instanceof HTMLInputElement))return;const file=event.target.files?.[0];if(file)importTossSnapshotFile(file);event.target.value='';});
-    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(id!=='displaySettingsForm'&&id!=='dividendSettingsForm')return;event.preventDefault();const form=submittedFormData(event);let next: Partial<AppSettings>={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:form.get('appearance')==='dark'?'dark':form.get('appearance')==='light'?'light':'system'};message='화면 설정을 저장했습니다.';}else{const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend'))),warningKRW,thresholdKRW,dividendAlertEnabled:form.get('dividendAlertEnabled')!=='off'};message='배당 기준을 저장했습니다.';}if(Object.entries(next).every(([key,value])=>Object.entries(state.settings).some(([setting,current])=>setting===key&&current===value))){toast('바뀐 설정이 없습니다.');return;}const beforeSettings=clone(state.settings);Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();}).catch(()=>{state.settings=beforeSettings;applyTheme(state.settings.appearance);renderAll();showPage('settings');});});
+    document.addEventListener('submit',(event: Event)=>{if(!(event.target instanceof HTMLFormElement))return;const id=event.target.id;if(!['displaySettingsForm','dividendSettingsForm','alertSettingsForm'].includes(id))return;event.preventDefault();const form=submittedFormData(event);let next: Partial<AppSettings>={},message='';if(id==='displaySettingsForm'){next={exchangeRate:Math.max(0,n(form.get('exchangeRate'))),exchangeRateMode:form.get('exchangeRateMode')==='auto'?'auto':'manual',appearance:form.get('appearance')==='dark'?'dark':form.get('appearance')==='light'?'light':'system'};message='화면 설정을 저장했습니다.';}else if(id==='dividendSettingsForm'){next={targetMonthlyDividend:Math.max(0,n(form.get('targetMonthlyDividend')))};message='배당 기준을 저장했습니다.';}else{
+      const thresholdKRW=Math.max(1,n(form.get('thresholdKRW'))),warningKRW=Math.min(thresholdKRW,Math.max(0,n(form.get('warningKRW'))));
+      const chosen=new Set(form.getAll('goalProject'));
+      const goalAlertProjects=Object.fromEntries(activeProjects().filter(project=>chosen.has(project.id)).map(project=>[project.id,state.settings.goalAlertProjects?.[project.id]||todayISO()]));
+      for(const project of state.projects)if(project.archived&&state.settings.goalAlertProjects?.[project.id])goalAlertProjects[project.id]=state.settings.goalAlertProjects[project.id];
+      next={warningKRW,thresholdKRW,dividendAlertEnabled:form.has('annual'),goalAlertProjects,tossAlertEnabled:form.has('toss'),backupAlertEnabled:form.has('backup')};
+      message='알림 설정을 저장했어요.';
+    }if(Object.entries(next).every(([key,value])=>Object.entries(state.settings).some(([setting,current])=>setting===key&&JSON.stringify(current)===JSON.stringify(value)))){toast('바뀐 설정이 없습니다.');return;}const beforeSettings=clone(state.settings);Object.assign(state.settings,next);if(id==='displaySettingsForm')applyTheme(state.settings.appearance);saveState(true).then(()=>{if(id==='alertSettingsForm'){const newGoals=currentAlerts().filter(alert=>alert.projectId&&!beforeSettings.goalAlertProjects?.[alert.projectId]);if(newGoals.length){newGoals.forEach(alert=>seenAlerts.add(alert.key));persistAlertStatus();}}renderAll();showPage('settings');toast(message);if(id==='displaySettingsForm'&&state.settings.exchangeRateMode==='auto')refreshExchangeRate();}).catch(()=>{state.settings=beforeSettings;applyTheme(state.settings.appearance);renderAll();showPage('settings');});});
     matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',()=>{if(state.settings.appearance==='system')applyTheme('system');});
     window.addEventListener('online',()=>{if(currentUser)pushCloudState();});window.addEventListener('offline',()=>{if(currentUser)setCloudStatus('오프라인 · 클라우드 저장 대기','cloud-busy');});
   }
