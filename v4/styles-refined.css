@@ -959,3 +959,9 @@ html[data-theme="dark"]{--bg:#12151c;--surface:#1d222d;--surface-strong:#272e3c;
 .modal-toolbar>.modal-close{position:static;float:none;flex:0 0 44px;width:44px;height:44px}
 .modal-toolbar+.modal-handle{display:none}
 .modal{scroll-padding-top:88px}
+
+/* 1.16: clearer status and valuation context on narrow and enlarged layouts. */
+.valuation-guide{margin-block:12px}.valuation-guide>summary{min-height:44px;display:flex;align-items:center}
+.portfolio-summary .value-caption small{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.portfolio-status-strip{flex-wrap:wrap}.portfolio-status-strip .phase-pill{white-space:normal;text-align:left;overflow-wrap:anywhere;max-width:100%}
+.management-status{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}.management-status p{line-height:1.6;overflow-wrap:anywhere}

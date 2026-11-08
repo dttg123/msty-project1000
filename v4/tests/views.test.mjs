@@ -60,10 +60,9 @@ assert.doesNotMatch(elements.get('page-home').innerHTML,/이번 달 종목별 �
 assert.doesNotMatch(elements.get('page-home').innerHTML,/다음 배당/);
 assert.doesNotMatch(elements.get('page-home').innerHTML,/남은 예상|월말 예상/);
 assert.match(elements.get('page-home').innerHTML,/다음 목표/);
-assert.equal((elements.get('page-home').innerHTML.match(/<article class="card/g)||[]).length,4,'home keeps income, stocks, cashflow and goals without a duplicate receipt card');
+assert.doesNotMatch(elements.get('page-home').innerHTML,/home-recent|<h3>최근 입금/);
+assert.equal((elements.get('page-home').innerHTML.match(/<article class="card/g)||[]).length,4,'home retains income, stocks, cashflow and goal without a duplicate recent receipt');
 assert.doesNotMatch(elements.get('page-home').innerHTML,/[①②③④⑤⑥]/);
-assert.doesNotMatch(elements.get('page-home').innerHTML,/home-recent/);
-assert.match(elements.get('page-home').innerHTML,/data-income-month=/);
 homeMode='year';views.renderHome();
 assert.match(elements.get('page-home').innerHTML,/data-home-year-range="6"/);
 assert.match(elements.get('page-home').innerHTML,/data-home-year-range="10"/);
@@ -114,7 +113,7 @@ assert.doesNotMatch(elements.get('page-goal').innerHTML,/<details class="card go
 assert.match(elements.get('page-goal').innerHTML,/최근 1년 받은 배당/);
 assert.match(elements.get('page-goal').innerHTML,/필요 매수금/);
 assert.match(elements.get('page-goal').innerHTML,/계획상 달성 시점/);
-assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.15/);
+assert.match(elements.get('page-settings').innerHTML,/DividendOS 1\.16/);
 assert.match(elements.get('page-settings').innerHTML,/현재 0\.12\.9 · 배포 0\.13\.0/);
 assert.match(elements.get('page-settings').innerHTML,/data-install-hot-update/);
 assert.match(elements.get('page-settings').innerHTML,/id="displaySettingsForm"/);
