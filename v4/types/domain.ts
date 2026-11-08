@@ -228,6 +228,7 @@ export interface TossIntegrationState {
   historyTruncated: boolean;
   dismissedExceptionKeys?: string[];
   syncMilestones?: string[];
+  lastImportSummary?: {at:string;projects:Array<{projectId:string;buys:number;sells:number;dividends:number;linkedDividends:number}>};
   [key: string]: unknown;
 }
 
@@ -259,6 +260,9 @@ export interface AppSettings {
   warningKRW: number;
   thresholdKRW: number;
   dividendAlertEnabled?: boolean;
+  goalAlertProjects?: Record<string,string>;
+  tossAlertEnabled?: boolean;
+  backupAlertEnabled?: boolean;
   appearance: 'system' | 'light' | 'dark';
   exchangeRateDate?: string;
   exchangeRateUpdatedAt?: string;

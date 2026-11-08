@@ -58,7 +58,7 @@ const manifest=JSON.parse(readFileSync(resolve(root,'manifest.webmanifest'),'utf
 assert.equal(manifest.name,'DividendOS');assert.equal(manifest.short_name,'DividendOS');
 for(const file of ['index.html','manifest.webmanifest','app.ts','modules/state.ts'])assert.doesNotMatch(readFileSync(resolve(root,file),'utf8'),/PROJECT\s*1000|MSTY\s*1000|1000주/i,`${file} contains retired product branding`);
 assert.ok(readFileSync(resolve(root,'modules/views.ts'),'utf8').includes('tabindex="0" role="button"'));
-assert.ok(readFileSync(resolve(root,'modules/views.ts'),'utf8').includes('name="thresholdKRW" type="number" min="0" step="10000"'));
+assert.match(readFileSync(resolve(root,'modules/views.ts'),'utf8'),/id="alertSettingsForm"[\s\S]*name="thresholdKRW" min="1"/);
 assert.ok(app.includes("prepareLegacyMigration"));
 assert.ok(app.includes("V3.2.1 데이터를 V4에 복사했습니다."));
 assert.ok(app.includes("storage.js"));

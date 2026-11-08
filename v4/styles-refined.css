@@ -965,3 +965,29 @@ html[data-theme="dark"]{--bg:#12151c;--surface:#1d222d;--surface-strong:#272e3c;
 .portfolio-summary .value-caption small{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
 .portfolio-status-strip{flex-wrap:wrap}.portfolio-status-strip .phase-pill{white-space:normal;text-align:left;overflow-wrap:anywhere;max-width:100%}
 .management-status{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}.management-status p{line-height:1.6;overflow-wrap:anywhere}
+
+.notification-bell{position:relative}
+.notification-bell span:not([hidden]){position:absolute;top:8px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--accent,#8d71ff)}
+.alert-inbox{display:grid;gap:10px}
+.alert-inbox-row{width:100%;text-align:left;justify-content:space-between}
+.alert-inbox-row small{display:block;color:var(--muted);margin-top:4px}
+.alert-toggle{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer}
+.alert-toggle input{width:19px;height:19px;accent-color:var(--accent,#8d71ff)}
+.alert-toggle small{color:var(--muted);overflow-wrap:anywhere}
+.alert-project-options{border:1px solid var(--line);border-radius:12px;margin:0;padding:8px 12px}
+.goal-estimate-details{padding:6px 0 12px;color:var(--muted);font-size:.8125rem}
+.goal-estimate-details summary{cursor:pointer;min-height:44px;align-content:center}
+.goal-estimate-details ul{display:flex;gap:12px;flex-wrap:wrap;padding:0;list-style:none}
+.goal-estimate-details p{margin:6px 0}
+.restore-comparison{width:100%;border-collapse:collapse;font-size:.875rem}
+.restore-comparison caption{text-align:left;font-weight:650;margin-bottom:6px}
+.restore-comparison th,.restore-comparison td{text-align:left;padding:8px 5px;border-bottom:1px solid var(--line)}
+.toss-import-summary{border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
+.toss-import-summary p{margin:5px 0}
+.app:has(#page-projects.active .project-detail-heading) .project-detail-heading{padding-right:171px}
+@media(max-width:600px){
+  .app:has(#page-projects.active .project-detail-heading) .topbar-actions{position:static;justify-content:flex-end;gap:3px}
+  .app:has(#page-projects.active .project-detail-heading) .topbar .save-pill{position:static;max-width:180px;white-space:normal}
+  .app:has(#page-projects.active .project-detail-heading) .project-detail-heading{padding-right:0}
+  .topbar-actions .top-icon-btn{width:40px}
+}

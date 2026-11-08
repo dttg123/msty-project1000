@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { blankProject, blankState } from '../modules/state.js';
 import { createPortfolioEngine } from '../modules/portfolio.js';
-import { buildHomeMetrics, nextMilestone, dividendGoalStatus } from '../modules/home-metrics.js';
+import { buildHomeMetrics, nextMilestone, dividendGoalStatus, estimateShareGoal } from '../modules/home-metrics.js';
 
 const state=blankState(),project=state.projects[0];
 project.id='p-msty'; project.targetUnits=1000; project.distributionFrequency='weekly';
@@ -51,3 +51,21 @@ assert.equal(buildHomeMetrics([],history.slice(4),new Date('2026-10-18T12:00:00'
 assert.equal(buildHomeMetrics([],history.slice(2),new Date('2026-10-18T12:00:00')).pace.change,null);
 assert.equal(buildHomeMetrics([],history.slice(0,3),new Date('2026-10-18T12:00:00')).pace.monthly,0);
 console.log('Completed-month pace PASS: current month excluded, dates explicit, short history suppressed');
+
+const buy=(date,shares,buyType='direct')=>({date,shares,buyType,type:'buy'});
+const opening=buy('2026-07-01',237,'opening');
+const paceTrades=[opening,buy('2026-08-10',8),buy('2026-10-10',22),buy('2026-11-01',3)];
+const originalPace=estimateShareGoal(233,2,paceTrades,[],'2026-11-09');
+assert.equal(originalPace.eta,'2028-11');
+assert.deepEqual(originalPace.months.map(row=>row.shares),[8,0,22]);
+assert.equal(originalPace.thisMonth,3);
+const paused=estimateShareGoal(233,2,[opening,buy('2026-08-10',10),buy('2026-09-10',10),buy('2026-10-10',10)],[],'2026-12-01');
+assert.equal(paused.eta,'2029-11');
+assert.deepEqual(paused.months.map(row=>row.shares),[10,10,0]);
+const oneMonth=estimateShareGoal(20,2,[buy('2026-10-10',10),{date:'2026-10-11',shares:2,type:'sell'}],[{date:'2026-11-01',from:2,to:1}],'2026-11-09');
+assert.equal(oneMonth.months.length,1);
+assert.equal(oneMonth.rate,4);
+assert.equal(oneMonth.eta,'2027-04');
+assert.equal(estimateShareGoal(20,2,[buy('2026-11-09',10)],[],'2026-11-09').eta,'2027-09');
+assert.equal(estimateShareGoal(20,0,[opening],[],'2026-11-09').eta,'');
+assert.equal(estimateShareGoal(20,2,paceTrades,[],'2026-11-09',false).months.length,0);
