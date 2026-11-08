@@ -278,6 +278,13 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             return '연결 확인 중';
         return state.meta.lastCloudSaveAt ? '클라우드 저장 완료' : '클라우드 기록 확인 완료';
     }
+    function getLocalSaveSummary() {
+        if (localSaveIssue)
+            return localSaveIssue;
+        if (!storageStatus().durable)
+            return '임시 저장 · 백업 필요';
+        return state.meta.lastLocalSaveAt ? '기기 저장 완료' : '아직 저장한 기록 없음';
+    }
     function refreshSaveStatus() {
         const text = localSaveIssue || (currentUser && cloudStatusKind !== 'cloud-ok' ? cloudStatusText : '');
         const kind = localSaveIssue ? localSaveIssueKind : cloudStatusKind;
@@ -291,6 +298,9 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
             if (target)
                 target.textContent = id === 'cloudSectionSummary' ? getSaveSummary().replace(/^클라우드 /, '') : getSaveSummary();
         }
+        const localSummary = document.getElementById('localSaveSummary');
+        if (localSummary)
+            localSummary.textContent = getLocalSaveSummary();
         const savedAt = document.getElementById('cloudSavedAt');
         if (savedAt)
             savedAt.textContent = currentUser && state.meta.lastCloudSaveAt ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'short', timeStyle: 'short' }).format(new Date(state.meta.lastCloudSaveAt)) : '기록 없음';
@@ -430,7 +440,7 @@ import { confirmHotUpdateReady, hotUpdateStatus as fetchHotUpdateStatus, install
         getInteractionPreferences: () => interactionPreferences, getPortfolioDetail: () => portfolioDetail, getPortfolioDetailTab: () => portfolioDetailTab,
         getPortfolioIncomeMonth: (projectId) => portfolioIncomeSelection.projectId === projectId ? portfolioIncomeSelection.month : '',
         getState: () => state, getSelectedProjectId: () => selectedProjectId, setSelectedProjectId: (value) => { selectedProjectId = value; },
-        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getCombinedRefreshStatus: () => ({ busy: combinedRefreshBusy, summary: combinedRefreshSummary }), getSaveSummary, getCloudNeedsReview: () => !!pendingCloudState && !cloudReady, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
+        getChartMode: () => chartMode, getChartSelection: () => chartSelection, getHomeCashflowMode: () => homeCashflowMode, getHomeYearRange: () => homeYearRange, getHistoryFilter: () => historyFilter, getChartMonth: () => chartMonth, getChartYear: () => chartYear, getHistoryLimit: () => historyLimit, getCashflowMonthKey: () => cashflowMonthKey, getPortfolioGroup: () => portfolioGroup, setPortfolioGroup: (value) => { portfolioGroup = value; }, getCurrentUser: () => currentUser, getAutoBackupStatus: () => autoBackupStatus, getNativeTossStatus: () => nativeTossStatus, getAppUpdateStatus: () => appUpdateStatus, getExchangeRateStatus: () => ({ busy: exchangeRateBusy, error: exchangeRateError }), getCombinedRefreshStatus: () => ({ busy: combinedRefreshBusy, summary: combinedRefreshSummary }), getSaveSummary, getLocalSaveSummary, getCloudNeedsReview: () => !!pendingCloudState && !cloudReady, getOfficialDistributionStatus: () => ({ feed: officialFeed, busy: officialBusy, error: officialError }), isTossBridgeConfigured,
         activeProjects, projectById, projectRows, computeProject, recoveryStats, totals,
         displayCurrency, fmtMoney, fmtDividend, fmtSignedMoney, fmtShares, fmtPct, fmtDate, signClass, projectColors
     });
